@@ -1,0 +1,57 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+
+  lint:
+    timeout-minutes: 10
+    name: lint
+    runs-on: ubuntu-latest # standard GitHub-hosted runners are free in public repos
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: python3 -m pip install -e '.[dev]'
+
+      - name: Run Linters
+        run: LINT_FIX=0 ./scripts/lint.sh
+
+  test:
+    timeout-minutes: 10
+    name: test
+    runs-on: ubuntu-latest # standard GitHub-hosted runners are free in public repos
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: python3 -m pip install -e '.[dev]'
+
+      - name: Run Tests
+        run: ./scripts/covgate.sh
+
+  surface-lint:
+    # yamllint disable-line rule:line-length
+    uses: mirurobotics/workflows/.github/workflows/surface-lint.yml@aba8fd51d888a53d082843f81d4f788e7d1caae0
+    with:
+      runs-on: ubuntu-latest # standard GitHub-hosted runners are free in public repos
