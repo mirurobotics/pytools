@@ -28,6 +28,7 @@ def test_has_nolint_on_lines_searches_the_range(
         ("# nolint: other, funclen", True),
         ("# nolint: funclen  # reason", True),
         ("# nolint: funclen reason", True),
+        ("# noqa: E501  # nolint: funclen", True),
         ("# nolint: other", False),
         ("# nolint: funclens", False),
         ("# nolint: other  # funclen", False),

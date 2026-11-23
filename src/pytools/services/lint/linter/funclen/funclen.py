@@ -32,7 +32,8 @@ def _check_function(
     count = _count_lines(func, file.lines)
     if count <= max_len:
         return None
-    if has_nolint_on_lines(file.comments, Rule.FUNCLEN, func.lineno - 1, func.lineno):
+    first = min((dec.lineno for dec in func.decorator_list), default=func.lineno)
+    if has_nolint_on_lines(file.comments, Rule.FUNCLEN, first - 1, func.lineno):
         return None
     message = f"function {func.name} is {count} lines (limit {max_len})"
     return Diagnostic(file.path, func.lineno, message)

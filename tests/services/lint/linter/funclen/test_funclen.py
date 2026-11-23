@@ -120,6 +120,9 @@ def test_check_reports_nested_functions_in_line_order(parse: Parse) -> None:
     [
         pytest.param(_NOLINT_ON_DEF_LINE, id="def-line"),
         pytest.param("# nolint: funclen\n" + _THREE_LINES, id="line-above"),
+        pytest.param(
+            "# nolint: funclen\n@decorator\n" + _THREE_LINES, id="above-decorators"
+        ),
     ],
 )
 def test_check_skips_function_with_nolint(parse: Parse, source: str) -> None:
@@ -132,6 +135,7 @@ def test_check_skips_function_with_nolint(parse: Parse, source: str) -> None:
         pytest.param("# nolint: other\n", 2, id="other-rule"),
         pytest.param('x = "# nolint: funclen"\n', 2, id="in-string"),
         pytest.param("# nolint: funclen\n\n", 3, id="two-lines-above"),
+        pytest.param("@decorator\n", 2, id="decorated"),
     ],
 )
 def test_check_reports_function_without_its_nolint(

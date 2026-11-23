@@ -16,7 +16,7 @@ def has_nolint_on_lines(
 
 
 def _is_nolint_for(comment: str, rule: Rule) -> bool:
-    match = _NOLINT.match(comment)
+    match = _NOLINT.search(comment)
     if match is None:
         return False
     entries = (entry.split() for entry in match.group(1).split(","))
