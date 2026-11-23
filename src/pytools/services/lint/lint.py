@@ -5,6 +5,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from pytools.services.lint import external
+from pytools.services.lint.linter.rules import Config
+from pytools.services.lint.linter.run import run_linter
 
 
 class LintError(Exception):
@@ -17,6 +19,7 @@ class LintOptions:
 
     paths: list[str]
     fix: bool
+    linter_config: Config
 
 
 @dataclass(frozen=True)
@@ -27,7 +30,7 @@ class _StepResult:
 
 
 def run_lint(opts: LintOptions) -> None:
-    """Run ruff check, ruff format and mypy, raising LintError if any fails."""
+    """Run every lint step, raising LintError if any fails."""
     start = time.monotonic()
     results = _run_steps(opts)
     _print_timings(results, time.monotonic() - start)
@@ -39,11 +42,23 @@ def run_lint(opts: LintOptions) -> None:
 
 def _run_steps(opts: LintOptions) -> list[_StepResult]:
     steps = [
+        ("custom linter", lambda: _run_custom_linter(opts)),
         ("ruff check", lambda: external.run_ruff_check(opts.paths, fix=opts.fix)),
         ("ruff format", lambda: external.run_ruff_format(opts.paths, fix=opts.fix)),
         ("mypy", lambda: external.run_mypy(opts.paths)),
     ]
     return [_timed_run(name, run) for name, run in steps]
+
+
+def _run_custom_linter(opts: LintOptions) -> None:
+    total = 0
+    for path in opts.paths:
+        count = run_linter(path, opts.linter_config)
+        if count:
+            _write(f"{count} violation(s) found in {path}.")
+        total += count
+    if total:
+        raise LintError(f"custom linter found {total} violation(s)")
 
 
 def _timed_run(name: str, run: Callable[[], None]) -> _StepResult:
@@ -52,7 +67,7 @@ def _timed_run(name: str, run: Callable[[], None]) -> _StepResult:
     failed = False
     try:
         run()
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, LintError):
         failed = True
     return _StepResult(name, time.monotonic() - start, failed=failed)
 

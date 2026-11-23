@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 
+from pytools.services.lint.config import LinterFlags, build_linter_config
 from pytools.services.lint.lint import LintError, LintOptions, run_lint
+from pytools.services.lint.linter.rules import UnknownRuleError
 
 _DESCRIPTION = (
-    "Run the full Python lint suite: ruff check, ruff format and mypy. "
-    "By default, runs in fix mode. Use --no-fix for CI (check-only) mode."
+    "Run the full Python lint suite: custom linter, ruff check, ruff format and "
+    "mypy. By default, runs in fix mode. Use --no-fix for CI (check-only) mode."
 )
 
 
@@ -34,6 +36,7 @@ def _bind_lint_flags(parser: argparse.ArgumentParser) -> None:
         default=True,
         help="auto-fix violations (--no-fix for CI check-only mode)",
     )
+    _bind_linter_config_flags(parser)
 
 
 def _parse_paths(raw: str) -> list[str]:
@@ -43,9 +46,32 @@ def _parse_paths(raw: str) -> list[str]:
     return paths
 
 
+def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--max-func-len",
+        type=int,
+        default=30,
+        help="maximum function length (code lines; a multi-line literal counts once)",
+    )
+    parser.add_argument(
+        "--exclude",
+        default="",
+        help="comma-separated rules to exclude (empty=run all)",
+    )
+    parser.add_argument("--rule", help="only run a specific rule")
+
+
 def _run(args: argparse.Namespace) -> None:
-    opts = LintOptions(paths=args.paths, fix=args.fix)
     try:
-        run_lint(opts)
-    except LintError as err:
+        run_lint(_lint_options(args))
+    except (LintError, UnknownRuleError) as err:
         raise SystemExit(str(err)) from err
+
+
+def _lint_options(args: argparse.Namespace) -> LintOptions:
+    flags = LinterFlags(
+        max_func_len=args.max_func_len, exclude=args.exclude, rule=args.rule
+    )
+    return LintOptions(
+        paths=args.paths, fix=args.fix, linter_config=build_linter_config(flags)
+    )
