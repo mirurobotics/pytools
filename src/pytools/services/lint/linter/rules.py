@@ -2,6 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
+from pytools.services.lint.linter.filelen import filelen
 from pytools.services.lint.linter.funclen import funclen
 
 
@@ -10,6 +11,7 @@ class Config:
     """Custom linter configuration."""
 
     max_func_len: int
+    max_file_len: int
     exclude: frozenset[Rule]
 
 
@@ -27,4 +29,5 @@ def _rule_checkers(
 ) -> dict[Rule, Callable[[CheckInput], list[Diagnostic]]]:
     return {
         Rule.FUNCLEN: lambda file: funclen.check(file, config.max_func_len),
+        Rule.FILELEN: lambda file: filelen.check(file, config.max_file_len),
     }

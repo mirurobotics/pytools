@@ -53,6 +53,12 @@ def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
         default=30,
         help="maximum function length (code lines; a multi-line literal counts once)",
     )
+    parser.add_argument(
+        "--max-file-len",
+        type=_parse_limit,
+        default=300,
+        help="maximum file length (non-blank, non-comment)",
+    )
     rules = parser.add_mutually_exclusive_group()
     rules.add_argument(
         "--exclude",
@@ -95,5 +101,7 @@ def _run(args: argparse.Namespace) -> None:
 
 def _lint_options(args: argparse.Namespace) -> LintOptions:
     exclude = args.exclude if args.rule is None else frozenset(Rule) - {args.rule}
-    config = Config(max_func_len=args.max_func_len, exclude=exclude)
+    config = Config(
+        max_func_len=args.max_func_len, max_file_len=args.max_file_len, exclude=exclude
+    )
     return LintOptions(paths=args.paths, fix=args.fix, linter_config=config)

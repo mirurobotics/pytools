@@ -9,6 +9,7 @@ class Rule(StrEnum):
     """A custom linter rule name."""
 
     FUNCLEN = "funclen"
+    FILELEN = "filelen"
 
 
 @dataclass(frozen=True)
