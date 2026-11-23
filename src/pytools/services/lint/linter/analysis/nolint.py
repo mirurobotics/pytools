@@ -1,3 +1,4 @@
+import ast
 import re
 
 from pytools.services.lint.linter.analysis.analysis import (
@@ -12,22 +13,24 @@ from pytools.services.lint.linter.analysis.comments import Comment
 _NOLINT = re.compile(r"#\s*nolint:([^#]*)")
 
 
-def has_def_nolint(file: CheckInput, func: Function, rule: Rule) -> bool:
-    """Report whether a nolint for rule sits on func's decorators or signature.
+def has_def_nolint(
+    file: CheckInput, node: Function | ast.ClassDef, rule: Rule
+) -> bool:
+    """Report whether a nolint for rule sits on node's decorators or signature.
 
     A comment-only line just above them counts too.
     """
-    first = start_line(func)
+    first = start_line(node)
     if first > 1 and not is_code_line(file, first - 1):
         first -= 1
-    return has_nolint_on_lines(file.comments, rule, first, _signature_end(file, func))
+    return has_nolint_on_lines(file.comments, rule, first, _signature_end(file, node))
 
 
-def _signature_end(file: CheckInput, func: Function) -> int:
-    line = start_line(func.body[0]) - 1
-    while line > func.lineno and not is_code_line(file, line):
+def _signature_end(file: CheckInput, node: Function | ast.ClassDef) -> int:
+    line = start_line(node.body[0]) - 1
+    while line > node.lineno and not is_code_line(file, line):
         line -= 1
-    return max(line, func.lineno)
+    return max(line, node.lineno)
 
 
 def has_nolint_on_lines(

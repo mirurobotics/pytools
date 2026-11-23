@@ -55,6 +55,23 @@ def f():
         ({_LONG} := 2): 3,
     }}
 """
+_NOLINT_ON_MAPPING_REST = f"""\
+def f():
+    match a:
+        case {{
+            "k": 1,
+            **{_LONG}  # nolint: namelen
+        }}:
+            pass
+"""
+_MULTILINE_MATCH_AS = """\
+def f():
+    match a:
+        case (
+            [b]
+        ) as {}:
+            pass
+"""
 _MULTILINE_EXCEPT = """\
 def f():
     try:
@@ -137,6 +154,7 @@ def test_check_reports_a_name_once_per_scope(
             id="except",
         ),
         pytest.param(_MULTILINE_EXCEPT, 6, 20, id="multiline-except"),
+        pytest.param(_MULTILINE_MATCH_AS, 5, 20, id="multiline-match-as"),
         pytest.param(
             "def f():\n    match a:\n        case [{}]:\n            pass\n",
             3,
@@ -160,6 +178,11 @@ def test_check_reports_a_name_once_per_scope(
         pytest.param("def f(**{}):\n    pass\n", 1, 20, id="var-keyword"),
         pytest.param("f = lambda {}: 1\n", 1, 20, id="lambda-parameter"),
         pytest.param("a = [1 for {} in b]\n", 1, 20, id="comprehension-target"),
+        pytest.param("def f[{}]():\n    pass\n", 1, 20, id="type-parameter"),
+        pytest.param("def f[**{}]():\n    pass\n", 1, 20, id="param-spec"),
+        pytest.param("def f[*{}]():\n    pass\n", 1, 20, id="type-var-tuple"),
+        pytest.param("class A[{}]:\n    pass\n", 1, 20, id="class-type-parameter"),
+        pytest.param("type A[{}] = int\n", 1, 20, id="alias-type-parameter"),
         pytest.param("def {}():\n    pass\n", 1, 30, id="function"),
         pytest.param("async def {}():\n    pass\n", 1, 30, id="async-function"),
         pytest.param("def f():\n    def {}():\n        pass\n", 2, 30, id="inner-def"),
@@ -198,6 +221,11 @@ def test_check_binds_walrus_in_the_outer_scope(parse: Parse, template: str) -> N
         pytest.param("from a import {}\n", id="from-import"),
         pytest.param("def f():\n    global {}\n", id="global"),
         pytest.param("def f():\n    def g():\n        nonlocal {}\n", id="nonlocal"),
+        pytest.param("def f():\n    global {0}\n    {0} = 1\n", id="global-assigned"),
+        pytest.param(
+            "def f():\n    def g():\n        nonlocal {0}\n        {0} = 1\n",
+            id="nonlocal-assigned",
+        ),
         pytest.param("def f(a):\n    a.{} = 1\n", id="attribute-target"),
         pytest.param("def f():\n    return {}\n", id="read"),
     ],
@@ -214,7 +242,15 @@ def test_check_ignores_names_it_does_not_bind(parse: Parse, template: str) -> No
             f"@decorator\ndef {_LONG}():  # nolint: namelen\n    pass\n",
             id="def-line",
         ),
+        pytest.param(
+            f"@decorator  # nolint: namelen\ndef {_LONG}():\n    pass\n",
+            id="decorator-line",
+        ),
+        pytest.param(
+            f"# nolint: namelen\nclass {_LONG}:\n    pass\n", id="line-above-class"
+        ),
         pytest.param(_NOLINT_ON_PARAMETER, id="parameter-line"),
+        pytest.param(_NOLINT_ON_MAPPING_REST, id="mapping-rest-line"),
         pytest.param(_NOLINT_ON_FIRST_IN_DICT, id="first-binding-in-dict"),
     ],
 )
