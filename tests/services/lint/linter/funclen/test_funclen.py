@@ -14,10 +14,32 @@ def f():
     c = 3
 """
 _NESTED = """\
-def outer():
+def a():
+    def a_inner():
+        x = 1
+        y = 2
+
+    return a_inner
+
+
+def b():
+    x = 1
+    y = 2
+"""
+_NOLINT_AFTER_SIGNATURE = """\
+def f(
+    a: int,
+) -> int:  # nolint: funclen
+    b = 1
+    c = 2
+    return a
+"""
+_NOLINT_ON_OUTER = """\
+def outer():  # nolint: funclen
     def inner():
         a = 1
         b = 2
+        c = 3
 
     return inner
 """
@@ -108,8 +130,9 @@ def test_check_reports_functions_over_the_limit(
 
 def test_check_reports_nested_functions_in_line_order(parse: Parse) -> None:
     assert funclen.check(parse(_NESTED), 1) == [
-        Diagnostic("a.py", 1, "function outer is 4 lines (limit 1)"),
-        Diagnostic("a.py", 2, "function inner is 2 lines (limit 1)"),
+        Diagnostic("a.py", 1, "function a is 4 lines (limit 1)"),
+        Diagnostic("a.py", 2, "function a_inner is 2 lines (limit 1)"),
+        Diagnostic("a.py", 9, "function b is 2 lines (limit 1)"),
     ]
 
 
@@ -121,6 +144,7 @@ def test_check_reports_nested_functions_in_line_order(parse: Parse) -> None:
         pytest.param(
             "# nolint: funclen\n@decorator\n" + _THREE_LINES, id="above-decorators"
         ),
+        pytest.param(_NOLINT_AFTER_SIGNATURE, id="after-signature"),
     ],
 )
 def test_check_skips_function_with_nolint(parse: Parse, source: str) -> None:
@@ -141,6 +165,12 @@ def test_check_reports_function_without_its_nolint(
 ) -> None:
     diags = funclen.check(parse(prefix + _THREE_LINES), 2)
     assert diags == [Diagnostic("a.py", line, "function f is 3 lines (limit 2)")]
+
+
+def test_check_reports_function_under_a_nolinted_def(parse: Parse) -> None:
+    assert funclen.check(parse(_NOLINT_ON_OUTER), 2) == [
+        Diagnostic("a.py", 2, "function inner is 3 lines (limit 2)")
+    ]
 
 
 @pytest.mark.parametrize(

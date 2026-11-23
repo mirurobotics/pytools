@@ -30,11 +30,18 @@ def _check_function(
     count = _count_lines(func, file.lines)
     if count <= max_len:
         return None
-    first = min((dec.lineno for dec in func.decorator_list), default=func.lineno)
-    if has_nolint_on_lines(file.comments, Rule.FUNCLEN, first - 1, func.lineno):
+    if _has_nolint(file, func):
         return None
     message = f"function {func.name} is {count} lines (limit {max_len})"
     return Diagnostic(file.path, func.lineno, message)
+
+
+def _has_nolint(file: CheckInput, func: _Function) -> bool:
+    first = min((dec.lineno for dec in func.decorator_list), default=func.lineno)
+    if first > 1 and not _is_code_line(file.lines[first - 2]):
+        first -= 1
+    last = max(func.body[0].lineno - 1, func.lineno)
+    return has_nolint_on_lines(file.comments, Rule.FUNCLEN, first, last)
 
 
 def _count_lines(func: _Function, lines: list[str]) -> int:

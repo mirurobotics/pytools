@@ -37,6 +37,15 @@ def test_run_linter_prints_diagnostics_and_returns_count(
     assert count == 2
 
 
+def test_run_linter_reads_file_with_byte_order_mark(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bom_file = tmp_path / "bom.py"
+    bom_file.write_text(_TWO_LONG_FUNCTIONS, encoding="utf-8-sig")
+    assert run_linter([str(bom_file)], _CONFIG) == 2
+    assert capsys.readouterr().err == ""
+
+
 @pytest.mark.parametrize(
     "content",
     [

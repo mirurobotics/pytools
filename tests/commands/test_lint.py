@@ -1,4 +1,5 @@
 import argparse
+from enum import StrEnum
 
 import pytest
 
@@ -7,6 +8,12 @@ from pytools.commands.lint import add_lint_command
 from pytools.services.lint.lint import LintError, LintOptions
 from pytools.services.lint.linter.analysis.analysis import Rule
 from pytools.services.lint.linter.rules import Config
+
+
+class _TwoRules(StrEnum):
+    FUNCLEN = "funclen"
+    OTHER = "other"
+
 
 _DEFAULT_CONFIG = Config(max_func_len=30, exclude=frozenset())
 
@@ -115,8 +122,15 @@ def test_lint_handler_exits_on_lint_error(monkeypatch: pytest.MonkeyPatch) -> No
             ["--max-func-len", "5", "--exclude", "funclen"],
             Config(max_func_len=5, exclude=frozenset({Rule.FUNCLEN})),
         ),
-        (["--rule", "funclen"], _DEFAULT_CONFIG),
     ],
 )
 def test_lint_options_builds_linter_config(argv: list[str], expected: Config) -> None:
     assert lint._lint_options(_parse(argv)).linter_config == expected
+
+
+def test_lint_options_excludes_every_other_rule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(lint, "Rule", _TwoRules)
+    config = lint._lint_options(_parse(["--rule", "funclen"])).linter_config
+    assert config.exclude == frozenset({_TwoRules.OTHER})

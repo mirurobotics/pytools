@@ -14,7 +14,7 @@ def run_linter(files: list[str], config: Config) -> int:
 
 def _process_file(path: Path, config: Config) -> int:
     try:
-        source = path.read_text(encoding="utf-8")
+        source = path.read_text(encoding="utf-8-sig")
         tree = ast.parse(source, filename=str(path))
     except (OSError, SyntaxError, UnicodeDecodeError) as err:
         sys.stderr.write(f"warning: {path}: {err}\n")
