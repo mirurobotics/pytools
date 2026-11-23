@@ -52,7 +52,7 @@ class DeclaredName:
 
     text: str
     line: int
-    last_line: int  # where a nolint for the name may still sit
+    last_line: int  # where a nolint may still sit, unless the name is a def or class
     kind: NameKind
     node: ast.AST
 
