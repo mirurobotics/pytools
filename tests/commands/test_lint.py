@@ -133,4 +133,4 @@ def test_lint_options_excludes_every_other_rule(
 ) -> None:
     monkeypatch.setattr(lint, "Rule", _TwoRules)
     config = lint._lint_options(_parse(["--rule", "funclen"])).linter_config
-    assert config.exclude == frozenset({_TwoRules.OTHER})
+    assert {str(rule) for rule in config.exclude} == {"other"}
