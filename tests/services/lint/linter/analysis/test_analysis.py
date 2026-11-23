@@ -18,6 +18,7 @@ b = 2  # trailing
 c = '''
 # not a comment
 '''
+# spaced \t
 """
 
 
@@ -34,6 +35,7 @@ def test_diagnostic_str() -> None:
         pytest.param(3, False, id="comment-only"),
         pytest.param(4, True, id="trailing-comment"),
         pytest.param(6, True, id="hash-in-string"),
+        pytest.param(8, False, id="comment-with-trailing-whitespace"),
     ],
 )
 def test_is_code_line(parse: Parse, number: int, expected: bool) -> None:
