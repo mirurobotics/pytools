@@ -1,4 +1,5 @@
 import argparse
+import dataclasses
 from enum import StrEnum
 
 import pytest
@@ -15,8 +16,22 @@ class _TwoRules(StrEnum):
     OTHER = "other"
 
 
-_DEFAULT_CONFIG = Config(
-    max_func_len=30, max_file_len=300, max_nest_depth=2, exclude=frozenset()
+_DEFAULT_CONFIG = Config()
+_EVERY_FLAG_ARGV = [
+    "--max-func-len",
+    "5",
+    "--max-file-len",
+    "7",
+    "--max-nest-depth",
+    "3",
+    "--exclude",
+    "funclen",
+]
+_EVERY_FLAG_CONFIG = Config(
+    max_func_len=5,
+    max_file_len=7,
+    max_nest_depth=3,
+    exclude=frozenset({Rule.FUNCLEN}),
 )
 
 
@@ -150,28 +165,21 @@ def test_lint_handler_exits_on_lint_error(monkeypatch: pytest.MonkeyPatch) -> No
     ("argv", "expected"),
     [
         ([], _DEFAULT_CONFIG),
-        (
-            [
-                "--max-func-len",
-                "5",
-                "--max-file-len",
-                "7",
-                "--max-nest-depth",
-                "3",
-                "--exclude",
-                "funclen",
-            ],
-            Config(
-                max_func_len=5,
-                max_file_len=7,
-                max_nest_depth=3,
-                exclude=frozenset({Rule.FUNCLEN}),
-            ),
-        ),
+        (_EVERY_FLAG_ARGV, _EVERY_FLAG_CONFIG),
     ],
 )
 def test_lint_options_builds_linter_config(argv: list[str], expected: Config) -> None:
     assert lint._lint_options(_parse(argv)).linter_config == expected
+
+
+def test_lint_options_sets_every_config_field() -> None:
+    config = lint._lint_options(_parse(_EVERY_FLAG_ARGV)).linter_config
+    unset = [
+        field.name
+        for field in dataclasses.fields(Config)
+        if getattr(config, field.name) == getattr(_DEFAULT_CONFIG, field.name)
+    ]
+    assert unset == []
 
 
 def test_lint_options_excludes_every_other_rule(

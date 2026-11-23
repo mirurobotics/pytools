@@ -50,26 +50,26 @@ def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--max-func-len",
         type=_parse_limit,
-        default=30,
+        default=Config.max_func_len,
         help="maximum function length (code lines; a multi-line literal counts once)",
     )
     parser.add_argument(
         "--max-file-len",
         type=_parse_limit,
-        default=300,
+        default=Config.max_file_len,
         help="maximum file length (non-blank, non-comment)",
     )
     parser.add_argument(
         "--max-nest-depth",
         type=_parse_limit,
-        default=2,
+        default=Config.max_nest_depth,
         help="maximum nesting depth within functions",
     )
     rules = parser.add_mutually_exclusive_group()
     rules.add_argument(
         "--exclude",
         type=_parse_rules,
-        default=frozenset(),
+        default=Config.exclude,
         help="comma-separated rules to exclude",
     )
     rules.add_argument("--rule", type=_parse_rule, help="only run a specific rule")
