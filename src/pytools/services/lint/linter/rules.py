@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
 from pytools.services.lint.linter.filelen import filelen
 from pytools.services.lint.linter.funclen import funclen
+from pytools.services.lint.linter.namelen import namelen
 from pytools.services.lint.linter.nestdepth import nestdepth
 
 
@@ -33,4 +34,5 @@ def _rule_checkers(
         Rule.FUNCLEN: lambda file: funclen.check(file, config.max_func_len),
         Rule.FILELEN: lambda file: filelen.check(file, config.max_file_len),
         Rule.NESTDEPTH: lambda file: nestdepth.check(file, config.max_nest_depth),
+        Rule.NAMELEN: namelen.check,
     }
