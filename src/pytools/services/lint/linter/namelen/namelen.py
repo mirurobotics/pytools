@@ -9,9 +9,9 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
 
-MAX_NAME_LEN = 30
-MAX_LOCAL_NAME_LEN = 20
-MAX_TEST_NAME_LEN = 50
+_MAX_NAME_LEN = 30
+_MAX_LOCAL_NAME_LEN = 20
+_MAX_TEST_NAME_LEN = 50
 
 _SCOPES = (
     ast.FunctionDef,
@@ -47,7 +47,7 @@ def _declared_names(tree: ast.Module) -> list[_Name]:
 
 def _first_bindings(scope: ast.AST) -> list[_Name]:
     is_local = not isinstance(scope, ast.Module | ast.ClassDef)
-    limit = MAX_LOCAL_NAME_LEN if is_local else MAX_NAME_LEN
+    limit = _MAX_LOCAL_NAME_LEN if is_local else _MAX_NAME_LEN
     firsts: dict[str, _Name] = {}
     # A nested scope binds its name here, so it is yielded but not entered.
     for node in walk_outside(ast.iter_child_nodes(scope), _SCOPES):
@@ -60,10 +60,10 @@ def _first_bindings(scope: ast.AST) -> list[_Name]:
 def _binding(node: ast.AST, limit: int) -> _Name | None:
     if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
         is_test = node.name.startswith("test_")
-        func_limit = MAX_TEST_NAME_LEN if is_test else MAX_NAME_LEN
+        func_limit = _MAX_TEST_NAME_LEN if is_test else _MAX_NAME_LEN
         return _Name(node.name, node.lineno, func_limit)
     if isinstance(node, ast.ClassDef):
-        return _Name(node.name, node.lineno, MAX_NAME_LEN)
+        return _Name(node.name, node.lineno, _MAX_NAME_LEN)
     if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
         return _Name(node.id, node.lineno, limit)
     if isinstance(node, ast.arg):
