@@ -1,0 +1,199 @@
+from collections.abc import Callable
+
+import pytest
+
+from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
+from pytools.services.lint.linter.namelen import namelen
+
+Parse = Callable[[str], CheckInput]
+
+_LOCAL_AT = "a" * 20
+_LOCAL_OVER = "a" * 21
+_NAME_AT = "a" * 30
+_NAME_OVER = "a" * 31
+_TEST_AT = "test_" + "a" * 45
+_TEST_OVER = "test_" + "a" * 46
+_LONG = "x" * 31
+
+_REBOUND = f"""\
+def f():
+    {_LOCAL_OVER} = 1
+    {_LOCAL_OVER} = 2
+"""
+_NESTED = f"""\
+def outer():
+    def inner():
+        {_LOCAL_OVER} = 1
+
+    {_LOCAL_OVER} = 2
+"""
+_COMPREHENSION = f"""\
+def f():
+    {_LOCAL_OVER} = 1
+    return [{_LOCAL_OVER} for {_LOCAL_OVER} in a]
+"""
+_LAMBDA = f"""\
+def f():
+    {_LOCAL_OVER} = 1
+    return lambda {_LOCAL_OVER}: {_LOCAL_OVER}
+"""
+_NOLINT_ON_PARAMETER = f"""\
+def f(
+    {_LONG},  # nolint: namelen
+):
+    pass
+"""
+
+
+def _diag(line: int, name: str, limit: int) -> Diagnostic:
+    message = f'name "{name}" is {len(name)} chars (limit {limit})'
+    return Diagnostic("a.py", line, message)
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(f"def f():\n    {_LOCAL_AT} = 1\n", [], id="local-at"),
+        pytest.param(
+            f"def f():\n    {_LOCAL_OVER} = 1\n",
+            [_diag(2, _LOCAL_OVER, 20)],
+            id="local-over",
+        ),
+        pytest.param(f"{_NAME_AT} = 1\n", [], id="module-at"),
+        pytest.param(
+            f"{_NAME_OVER} = 1\n", [_diag(1, _NAME_OVER, 30)], id="module-over"
+        ),
+        pytest.param(f"def {_TEST_AT}():\n    pass\n", [], id="test-at"),
+        pytest.param(
+            f"def {_TEST_OVER}():\n    pass\n",
+            [_diag(1, _TEST_OVER, 50)],
+            id="test-over",
+        ),
+    ],
+)
+def test_check_reports_names_over_their_limit(
+    parse: Parse, source: str, expected: list[Diagnostic]
+) -> None:
+    assert namelen.check(parse(source)) == expected
+
+
+def test_check_reports_first_binding_in_a_scope(parse: Parse) -> None:
+    assert namelen.check(parse(_REBOUND)) == [_diag(2, _LOCAL_OVER, 20)]
+
+
+@pytest.mark.parametrize(
+    ("source", "lines"),
+    [
+        pytest.param(_NESTED, [3, 5], id="nested-function"),
+        pytest.param(_COMPREHENSION, [2, 3], id="comprehension"),
+        pytest.param(_LAMBDA, [2, 3], id="lambda"),
+    ],
+)
+def test_check_reports_a_name_once_per_scope(
+    parse: Parse, source: str, lines: list[int]
+) -> None:
+    expected = [_diag(line, _LOCAL_OVER, 20) for line in lines]
+    assert namelen.check(parse(source)) == expected
+
+
+@pytest.mark.parametrize(
+    ("template", "line", "limit"),
+    [
+        pytest.param("def f():\n    {} = 1\n", 2, 20, id="assign"),
+        pytest.param("def f():\n    {}: int = 1\n", 2, 20, id="annotated"),
+        pytest.param("def f():\n    {} += 1\n", 2, 20, id="augmented"),
+        pytest.param("def f():\n    a, *{} = b\n", 2, 20, id="unpacking"),
+        pytest.param(
+            "def f():\n    if ({} := g()):\n        pass\n", 2, 20, id="walrus"
+        ),
+        pytest.param("def f():\n    for {} in a:\n        pass\n", 2, 20, id="for"),
+        pytest.param("def f():\n    with a as {}:\n        pass\n", 2, 20, id="with"),
+        pytest.param(
+            "def f():\n    try:\n        pass\n    except E as {}:\n        pass\n",
+            4,
+            20,
+            id="except",
+        ),
+        pytest.param(
+            "def f():\n    match a:\n        case [{}]:\n            pass\n",
+            3,
+            20,
+            id="match-capture",
+        ),
+        pytest.param(
+            "def f():\n    match a:\n        case [*{}]:\n            pass\n",
+            3,
+            20,
+            id="match-star",
+        ),
+        pytest.param(
+            "def f():\n    match a:\n        case {{**{}}}:\n            pass\n",
+            3,
+            20,
+            id="match-mapping-rest",
+        ),
+        pytest.param("def f({}):\n    pass\n", 1, 20, id="parameter"),
+        pytest.param("def f(*{}):\n    pass\n", 1, 20, id="var-positional"),
+        pytest.param("def f(**{}):\n    pass\n", 1, 20, id="var-keyword"),
+        pytest.param("f = lambda {}: 1\n", 1, 20, id="lambda-parameter"),
+        pytest.param("a = [1 for {} in b]\n", 1, 20, id="comprehension-target"),
+        pytest.param("def {}():\n    pass\n", 1, 30, id="function"),
+        pytest.param("async def {}():\n    pass\n", 1, 30, id="async-function"),
+        pytest.param("def f():\n    def {}():\n        pass\n", 2, 30, id="inner-def"),
+        pytest.param("class {}:\n    pass\n", 1, 30, id="class"),
+        pytest.param("{} = 1\n", 1, 30, id="module-name"),
+        pytest.param("class A:\n    {} = 1\n", 2, 30, id="class-name"),
+    ],
+)
+def test_check_reports_each_binding_kind(
+    parse: Parse, template: str, line: int, limit: int
+) -> None:
+    diags = namelen.check(parse(template.format(_LONG)))
+    assert diags == [_diag(line, _LONG, limit)]
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        pytest.param("import {}\n", id="import"),
+        pytest.param("import a as {}\n", id="import-as"),
+        pytest.param("from a import {}\n", id="from-import"),
+        pytest.param("def f():\n    global {}\n", id="global"),
+        pytest.param("def f():\n    def g():\n        nonlocal {}\n", id="nonlocal"),
+        pytest.param("def f(a):\n    a.{} = 1\n", id="attribute-target"),
+        pytest.param("def f():\n    return {}\n", id="read"),
+    ],
+)
+def test_check_ignores_names_it_does_not_bind(parse: Parse, template: str) -> None:
+    assert namelen.check(parse(template.format(_LONG))) == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param(f"{_LONG} = 1  # nolint: namelen\n", id="binding-line"),
+        pytest.param(
+            f"@decorator\ndef {_LONG}():  # nolint: namelen\n    pass\n",
+            id="def-line",
+        ),
+        pytest.param(_NOLINT_ON_PARAMETER, id="parameter-line"),
+    ],
+)
+def test_check_skips_name_with_nolint(parse: Parse, source: str) -> None:
+    assert namelen.check(parse(source)) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "line"),
+    [
+        pytest.param(f"{_LONG} = 1  # nolint: other\n", 1, id="other-rule"),
+        pytest.param(f"# nolint: namelen\n{_LONG} = 1\n", 2, id="line-above"),
+        pytest.param(
+            f"{_LONG} = 1\n{_LONG} = 2  # nolint: namelen\n", 1, id="later-binding"
+        ),
+    ],
+)
+def test_check_reports_name_without_its_nolint(
+    parse: Parse, source: str, line: int
+) -> None:
+    assert namelen.check(parse(source)) == [_diag(line, _LONG, 30)]
