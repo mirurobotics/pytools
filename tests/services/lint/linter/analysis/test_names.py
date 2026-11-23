@@ -25,6 +25,13 @@ except (
 ) as name:
     pass
 """
+_SAME_LINE_EXCEPT = """\
+try:
+    pass
+except (
+    E
+) as name: pass
+"""
 _MULTILINE_MATCH_AS = """\
 match a:
     case (
@@ -66,6 +73,7 @@ def test_declared_names_gives_each_kind_in_line_order(parse: Parse) -> None:
     [
         pytest.param("name = 1\n", 1, 1, id="binding"),
         pytest.param(_MULTILINE_EXCEPT, 5, 5, id="except-header-end"),
+        pytest.param(_SAME_LINE_EXCEPT, 5, 5, id="except-same-line-body"),
         pytest.param(_MULTILINE_MATCH_AS, 4, 4, id="match-as-pattern-end"),
         pytest.param(_MAPPING_REST, 2, 5, id="mapping-rest-pattern"),
     ],

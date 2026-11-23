@@ -19,6 +19,11 @@ match a:
     }:
         pass
 """
+_WRAPPED_DEF = """\
+def name(
+    first,
+): return first  # nolint: varname
+"""
 
 
 @pytest.mark.parametrize(
@@ -30,6 +35,7 @@ match a:
         pytest.param(
             "# nolint: varname\ndef name():\n    pass\n", True, id="line-above-def"
         ),
+        pytest.param(_WRAPPED_DEF, True, id="wrapped-def-same-line-body"),
     ],
 )
 def test_has_name_nolint_searches_the_name_lines(
