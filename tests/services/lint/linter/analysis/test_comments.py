@@ -1,4 +1,4 @@
-from pytools.services.lint.linter.analysis.comments import collect_comments
+from pytools.services.lint.linter.analysis.comments import Comment, collect_comments
 
 _SOURCE = """\
 # top
@@ -13,8 +13,8 @@ def f():
 
 def test_collect_comments_maps_lines_to_comments() -> None:
     assert collect_comments(_SOURCE) == {
-        1: "# top",
-        2: "# trailing",
-        5: "# inside",
-        7: "# spaced",
+        1: Comment(0, "# top"),
+        2: Comment(23, "# trailing"),
+        5: Comment(4, "# inside"),
+        7: Comment(0, "# spaced \t"),
     }

@@ -7,6 +7,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     is_code_line,
     start_line,
 )
+from pytools.services.lint.linter.analysis.comments import Comment
 
 _NOLINT = re.compile(r"#\s*nolint:([^#]*)")
 
@@ -30,12 +31,13 @@ def _signature_end(file: CheckInput, func: Function) -> int:
 
 
 def has_nolint_on_lines(
-    comments: dict[int, str], rule: Rule, first: int, last: int
+    comments: dict[int, Comment], rule: Rule, first: int, last: int
 ) -> bool:
     """Report whether a nolint comment naming rule sits on a line in [first, last]."""
     return any(
-        _is_nolint_for(comments.get(number, ""), rule)
+        _is_nolint_for(comments[number].text, rule)
         for number in range(first, last + 1)
+        if number in comments
     )
 
 

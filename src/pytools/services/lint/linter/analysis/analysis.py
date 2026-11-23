@@ -2,6 +2,8 @@ import ast
 from dataclasses import dataclass
 from enum import StrEnum
 
+from pytools.services.lint.linter.analysis.comments import Comment
+
 type Function = ast.FunctionDef | ast.AsyncFunctionDef
 
 
@@ -19,7 +21,7 @@ class CheckInput:
     path: str
     tree: ast.Module
     lines: list[str]
-    comments: dict[int, str]
+    comments: dict[int, Comment]
 
 
 @dataclass(frozen=True)
@@ -36,9 +38,11 @@ class Diagnostic:
 
 def is_code_line(file: CheckInput, number: int) -> bool:
     """Report whether line number holds more than whitespace and a comment."""
-    stripped = file.lines[number - 1].strip()
+    line = file.lines[number - 1]
     comment = file.comments.get(number)
-    return bool(stripped) and (comment is None or not stripped.startswith(comment))
+    if comment is not None:
+        line = line[: comment.column]
+    return bool(line.strip())
 
 
 def start_line(node: ast.stmt) -> int:
