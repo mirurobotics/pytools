@@ -45,6 +45,13 @@ def f():
         }:
             pass
 """
+_NOLINT_IN_EXCEPT_BODY = """\
+try:
+    pass
+except E as n:
+    # nolint: varname
+    pass
+"""
 
 
 def _diag(line: int, name: str) -> Diagnostic:
@@ -69,7 +76,7 @@ def test_check_reports_names_under_three_chars(
 
 @pytest.mark.parametrize("name", ["_", "i", "a", "b", "ok", "id", "db"])
 def test_check_allows_listed_names(parse: Parse, name: str) -> None:
-    assert varname.check(parse(f"def f({name}):\n    {name} = 1\n")) == []
+    assert varname.check(parse(f"{name} = 1\ndef f({name}):\n    pass\n")) == []
 
 
 def test_check_reports_first_binding_in_a_scope(parse: Parse) -> None:
@@ -79,6 +86,7 @@ def test_check_reports_first_binding_in_a_scope(parse: Parse) -> None:
 @pytest.mark.parametrize(
     ("template", "line"),
     [
+        pytest.param("def f():\n    {}: int = 1\n", 2, id="annotated"),
         pytest.param("def f():\n    {} += 1\n", 2, id="augmented"),
         pytest.param("def f():\n    a, *{} = b\n", 2, id="unpacking"),
         pytest.param("def f():\n    if ({} := g()):\n        pass\n", 2, id="walrus"),
@@ -155,6 +163,8 @@ def test_check_skips_name_with_nolint(parse: Parse, source: str) -> None:
     [
         pytest.param("n = 1  # nolint: namelen\n", 1, id="other-rule"),
         pytest.param("# nolint: varname\nn = 1\n", 2, id="line-above"),
+        pytest.param("n = 1\nn = 2  # nolint: varname\n", 1, id="later-binding"),
+        pytest.param(_NOLINT_IN_EXCEPT_BODY, 3, id="except-body"),
     ],
 )
 def test_check_reports_name_without_its_nolint(
