@@ -260,3 +260,13 @@ def test_check_tells_elif_from_if_in_else(
     parse: Parse, source: str, lines: list[int]
 ) -> None:
     assert nestdepth.check(parse(source), 1) == _diags(lines)
+
+
+def test_check_walks_a_long_elif_chain(parse: Parse) -> None:
+    branches = "".join(f"    elif a == {i}:\n        pass\n" for i in range(1, 1500))
+    source = (
+        "def f():\n    if a == 0:\n        pass\n"
+        + branches
+        + "    else:\n        if b:\n            pass\n"
+    )
+    assert nestdepth.check(parse(source), 1) == _diags([3003])
