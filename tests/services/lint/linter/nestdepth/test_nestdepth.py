@@ -30,6 +30,13 @@ def outer():
                 if c:
                     pass
 """
+_THREE_LEVELS = """\
+def f():
+    if a:
+        if b:
+            if c:
+                pass
+"""
 _MODULE_LEVEL = """\
 if a:
     if b:
@@ -148,6 +155,9 @@ def f():
     elif b:
         if c:
             pass
+    elif e:
+        if f:
+            pass
     else:
         if d:
             pass
@@ -181,6 +191,14 @@ def test_check_reports_statements_over_the_limit(
     parse: Parse, max_depth: int, lines: list[int]
 ) -> None:
     assert nestdepth.check(parse(_TWO_LEVELS), max_depth) == _diags(lines)
+
+
+def test_check_reports_depth_and_limit(parse: Parse) -> None:
+    message = (
+        "nesting depth is 3 (limit 2) — consider early returns or extracting a helper"
+    )
+    diags = nestdepth.check(parse(_THREE_LEVELS), 2)
+    assert diags == [Diagnostic("a.py", 4, message)]
 
 
 def test_check_reports_each_over_limit_statement_once(parse: Parse) -> None:
@@ -234,7 +252,7 @@ def test_check_counts_clauses_at_their_statement_depth(
 @pytest.mark.parametrize(
     ("source", "lines"),
     [
-        pytest.param(_ELIF, [5, 8], id="elif"),
+        pytest.param(_ELIF, [5, 8, 11], id="elif"),
         pytest.param(_IF_IN_ELSE, [5], id="if-in-else"),
     ],
 )

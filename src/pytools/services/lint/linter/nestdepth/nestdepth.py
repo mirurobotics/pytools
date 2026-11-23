@@ -9,7 +9,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 
 
 def check(file: CheckInput, max_depth: int) -> list[Diagnostic]:
-    """Report statements nested over max_depth levels inside a function."""
+    """Report statements whose block nests past max_depth levels inside a function."""
     message = (
         f"nesting depth is {max_depth + 1} (limit {max_depth})"
         " — consider early returns or extracting a helper"
@@ -33,9 +33,9 @@ def _too_deep(body: list[ast.stmt], levels_left: int) -> Iterator[ast.stmt]:
 
 
 def _nested_blocks(stmt: ast.stmt) -> list[list[ast.stmt]]:
-    if isinstance(stmt, ast.If) and _has_elif(stmt):
-        return [stmt.body, *_nested_blocks(stmt.orelse[0])]
-    if isinstance(stmt, ast.If | ast.For | ast.AsyncFor | ast.While):
+    if isinstance(stmt, ast.If):
+        return _if_chain_blocks(stmt)
+    if isinstance(stmt, ast.For | ast.AsyncFor | ast.While):
         return [stmt.body, stmt.orelse]
     if isinstance(stmt, ast.With | ast.AsyncWith):
         return [stmt.body]
@@ -47,6 +47,19 @@ def _nested_blocks(stmt: ast.stmt) -> list[list[ast.stmt]]:
     return []
 
 
-def _has_elif(stmt: ast.If) -> bool:
+def _if_chain_blocks(stmt: ast.If) -> list[list[ast.stmt]]:
+    # A loop, not recursion, so a long elif chain can't hit the recursion limit.
+    blocks = [stmt.body]
+    while (branch := _elif(stmt)) is not None:
+        stmt = branch
+        blocks.append(stmt.body)
+    blocks.append(stmt.orelse)
+    return blocks
+
+
+def _elif(stmt: ast.If) -> ast.If | None:
     # An elif sits at its if's column; a block under else is indented.
-    return bool(stmt.orelse) and stmt.orelse[0].col_offset == stmt.col_offset
+    branch = stmt.orelse[0] if stmt.orelse else None
+    if isinstance(branch, ast.If) and branch.col_offset == stmt.col_offset:
+        return branch
+    return None
