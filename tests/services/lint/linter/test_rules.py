@@ -9,19 +9,26 @@ Parse = Callable[[str], CheckInput]
 
 _SOURCE = """\
 def f():
-    a = 1
-    b = 2
+    if a:
+        if b:
+            pass
 """
-_FUNCLEN = Diagnostic("a.py", 1, "function f is 2 lines (limit 1)")
-_FILELEN = Diagnostic("a.py", 1, "file is 3 lines (limit 1)")
+_FUNCLEN = Diagnostic("a.py", 1, "function f is 3 lines (limit 1)")
+_FILELEN = Diagnostic("a.py", 1, "file is 4 lines (limit 1)")
+_NESTDEPTH = Diagnostic(
+    "a.py",
+    3,
+    "nesting depth is 2 (limit 1) — consider early returns or extracting a helper",
+)
 
 
 @pytest.mark.parametrize(
     ("exclude", "expected"),
     [
-        pytest.param(frozenset(), [_FUNCLEN, _FILELEN], id="none"),
-        pytest.param(frozenset({Rule.FUNCLEN}), [_FILELEN], id="funclen"),
-        pytest.param(frozenset({Rule.FILELEN}), [_FUNCLEN], id="filelen"),
+        pytest.param(frozenset(), [_FUNCLEN, _FILELEN, _NESTDEPTH], id="none"),
+        pytest.param(frozenset({Rule.FUNCLEN}), [_FILELEN, _NESTDEPTH], id="funclen"),
+        pytest.param(frozenset({Rule.FILELEN}), [_FUNCLEN, _NESTDEPTH], id="filelen"),
+        pytest.param(frozenset({Rule.NESTDEPTH}), [_FUNCLEN, _FILELEN], id="nestdepth"),
     ],
 )
 def test_run_checks_honors_exclude(
