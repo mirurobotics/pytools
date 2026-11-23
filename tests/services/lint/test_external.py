@@ -3,6 +3,7 @@ import sys
 from collections.abc import Callable
 from functools import partial
 from importlib.resources import files
+from pathlib import Path
 
 import pytest
 
@@ -16,18 +17,43 @@ _MYPY = ["--config-file", str(_CONFIG_DIR / "mypy.ini")]
 _PATHS = ["src", "tests"]
 
 
-@pytest.fixture
-def run_calls(monkeypatch: pytest.MonkeyPatch) -> list[Call]:
-    """Record each subprocess.run call instead of running the tool."""
+def _fake_run(
+    monkeypatch: pytest.MonkeyPatch, returncode: int, stdout: str = ""
+) -> list[Call]:
     calls: list[Call] = []
 
-    def fake_run(command: list[str], **kwargs: object) -> None:
+    def fake_run(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
         calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, returncode, stdout=stdout)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     return calls
 
 
+def test_list_python_files_lists_py_files_relative_to_cwd(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    cwd = Path.cwd()
+    listed = [cwd / "src" / "a.py", cwd / "stub.pyi", cwd.parent / "b.py"]
+    calls = _fake_run(monkeypatch, 0, "".join(f"{path}\n" for path in listed))
+    python_files = external.list_python_files(_PATHS)
+    command = [sys.executable, "-m", "ruff", "check", "--show-files", *_RUFF, *_PATHS]
+    kwargs = {"stdout": subprocess.PIPE, "text": True, "check": False}
+    assert python_files == [str(Path("src", "a.py")), str(Path("..", "b.py"))]
+    assert calls == [(command, kwargs)]
+
+
+def test_list_python_files_returns_none_when_ruff_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _fake_run(monkeypatch, 2)
+    assert external.list_python_files(_PATHS) is None
+
+
+@pytest.mark.parametrize(("returncode", "passed"), [(0, True), (1, False)])
 @pytest.mark.parametrize(
     ("runner", "tool_args"),
     [
@@ -51,8 +77,12 @@ def run_calls(monkeypatch: pytest.MonkeyPatch) -> list[Call]:
     ],
 )
 def test_runner_runs_tool_with_shared_config(
-    run_calls: list[Call], runner: Callable[[], None], tool_args: list[str]
+    monkeypatch: pytest.MonkeyPatch,
+    runner: Callable[[], bool],
+    tool_args: list[str],
+    returncode: int,
+    passed: bool,
 ) -> None:
-    runner()
+    calls = _fake_run(monkeypatch, returncode)
     command = [sys.executable, "-m", *tool_args, *_PATHS]
-    assert run_calls == [(command, {"check": True})]
+    assert (runner(), calls) == (passed, [(command, {"check": False})])
