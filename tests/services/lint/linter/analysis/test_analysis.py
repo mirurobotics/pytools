@@ -53,7 +53,7 @@ def test_functions_lists_nested_and_async_by_line(parse: Parse) -> None:
     assert names == ["method", "inner", "b", "c"]
 
 
-def test_walk_outside_yields_in_source_order(parse: Parse) -> None:
+def test_walk_outside_yields_depth_first(parse: Parse) -> None:
     nodes = walk_outside(parse(_WALK).tree.body, ())
     names = [node.id for node in nodes if isinstance(node, ast.Name)]
     assert names == ["a", "b", "c", "d"]

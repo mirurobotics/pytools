@@ -52,7 +52,7 @@ def functions(tree: ast.Module) -> list[Function]:
 def walk_outside(
     nodes: Iterable[ast.AST], stop: tuple[type[ast.AST], ...]
 ) -> Iterator[ast.AST]:
-    """Yield nodes and their descendants in source order, not entering stop nodes."""
+    """Yield nodes and their descendants depth-first, not entering stop nodes."""
     pending = list(nodes)[::-1]
     while pending:
         node = pending.pop()
