@@ -64,7 +64,10 @@ def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def _parse_limit(raw: str) -> int:
-    limit = int(raw)
+    try:
+        limit = int(raw)
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(f"expected an integer, got {raw!r}") from err
     if limit <= 0:
         raise argparse.ArgumentTypeError(f"expected a positive limit, got {limit}")
     return limit

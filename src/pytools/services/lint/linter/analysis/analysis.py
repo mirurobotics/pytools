@@ -29,3 +29,9 @@ class Diagnostic:
 
     def __str__(self) -> str:
         return f"{self.path}:{self.line}: {self.message}"
+
+
+def is_code_line(line: str) -> bool:
+    """Report whether line holds more than whitespace and a comment."""
+    stripped = line.strip()
+    return bool(stripped) and not stripped.startswith("#")

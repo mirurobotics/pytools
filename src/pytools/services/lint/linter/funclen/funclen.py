@@ -1,8 +1,13 @@
 import ast
 from collections.abc import Iterator
 
-from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
-from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
+from pytools.services.lint.linter.analysis.analysis import (
+    CheckInput,
+    Diagnostic,
+    Rule,
+    is_code_line,
+)
+from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 
 type _Function = ast.FunctionDef | ast.AsyncFunctionDef
 
@@ -30,31 +35,10 @@ def _check_function(
     count = _count_lines(func, file.lines)
     if count <= max_len:
         return None
-    if _has_nolint(file, func):
+    if has_def_nolint(file, func, Rule.FUNCLEN):
         return None
     message = f"function {func.name} is {count} lines (limit {max_len})"
     return Diagnostic(file.path, func.lineno, message)
-
-
-def _has_nolint(file: CheckInput, func: _Function) -> bool:
-    first = _start_line(func)
-    if first > 1 and not _is_code_line(file.lines[first - 2]):
-        first -= 1
-    last = _signature_end(file, func)
-    return has_nolint_on_lines(file.comments, Rule.FUNCLEN, first, last)
-
-
-def _start_line(node: ast.stmt) -> int:
-    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-        return min((dec.lineno for dec in node.decorator_list), default=node.lineno)
-    return node.lineno
-
-
-def _signature_end(file: CheckInput, func: _Function) -> int:
-    line = _start_line(func.body[0]) - 1
-    while line > func.lineno and not _is_code_line(file.lines[line - 1]):
-        line -= 1
-    return max(line, func.lineno)
 
 
 def _count_lines(func: _Function, lines: list[str]) -> int:
@@ -65,7 +49,7 @@ def _count_lines(func: _Function, lines: list[str]) -> int:
     code_lines = [
         number
         for number in range(body[0].lineno, _end_line(func) + 1)
-        if number not in skip and _is_code_line(lines[number - 1])
+        if number not in skip and is_code_line(lines[number - 1])
     ]
     return len(code_lines)
 
@@ -92,8 +76,3 @@ def _nodes_outside_literals(body: list[ast.stmt]) -> Iterator[ast.AST]:
 
 def _end_line(node: ast.expr | ast.stmt) -> int:
     return node.end_lineno or node.lineno
-
-
-def _is_code_line(line: str) -> bool:
-    stripped = line.strip()
-    return bool(stripped) and not stripped.startswith("#")
