@@ -20,11 +20,7 @@ def has_name_nolint(file: CheckInput, name: DeclaredName, rule: Rule) -> bool:
     node = name.node
     if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
         return has_def_nolint(file, node, rule)
-    last = name.line
-    if isinstance(node, ast.MatchMapping):
-        # A mapping rest has no position of its own.
-        last = node.end_lineno or name.line
-    return has_nolint_on_lines(file.comments, rule, name.line, last)
+    return has_nolint_on_lines(file.comments, rule, name.line, name.last_line)
 
 
 def has_def_nolint(file: CheckInput, node: Function | ast.ClassDef, rule: Rule) -> bool:

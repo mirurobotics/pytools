@@ -52,6 +52,7 @@ class DeclaredName:
 
     text: str
     line: int
+    last_line: int  # where a nolint for the name may still sit
     kind: NameKind
     node: ast.AST
 
@@ -156,15 +157,17 @@ def _binding(
     if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
         is_test = node.name.startswith("test_")
         func_kind = NameKind.TEST_FUNC if is_test else NameKind.FUNC
-        return DeclaredName(node.name, node.lineno, func_kind, node)
+        return DeclaredName(node.name, node.lineno, node.lineno, func_kind, node)
     if isinstance(node, ast.ClassDef):
-        return DeclaredName(node.name, node.lineno, NameKind.CLASS, node)
+        return DeclaredName(node.name, node.lineno, node.lineno, NameKind.CLASS, node)
     if isinstance(node, _TYPE_PARAMS):
-        return DeclaredName(node.name, node.lineno, NameKind.TYPE_PARAM, node)
+        return DeclaredName(
+            node.name, node.lineno, node.lineno, NameKind.TYPE_PARAM, node
+        )
     if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-        return DeclaredName(node.id, node.lineno, var_kind, node)
+        return DeclaredName(node.id, node.lineno, node.lineno, var_kind, node)
     if isinstance(node, ast.arg):
-        return DeclaredName(node.arg, node.lineno, var_kind, node)
+        return DeclaredName(node.arg, node.lineno, node.lineno, var_kind, node)
     return _clause_binding(file, node, var_kind)
 
 
@@ -173,10 +176,15 @@ def _clause_binding(
 ) -> DeclaredName | None:
     if isinstance(node, ast.ExceptHandler) and node.name:
         # An except alias has no position of its own; it ends the clause header.
-        return DeclaredName(node.name, header_end(file, node), var_kind, node)
+        line = header_end(file, node)
+        return DeclaredName(node.name, line, line, var_kind, node)
     if isinstance(node, ast.MatchAs | ast.MatchStar) and node.name:
         # The name ends a capture pattern, which can span lines.
-        return DeclaredName(node.name, node.end_lineno or node.lineno, var_kind, node)
+        line = node.end_lineno or node.lineno
+        return DeclaredName(node.name, line, line, var_kind, node)
     if isinstance(node, ast.MatchMapping) and node.rest:
-        return DeclaredName(node.rest, node.lineno, var_kind, node)
+        # A mapping rest has no position of its own, so a nolint may sit on
+        # any line of the pattern.
+        last_line = node.end_lineno or node.lineno
+        return DeclaredName(node.rest, node.lineno, last_line, var_kind, node)
     return None
