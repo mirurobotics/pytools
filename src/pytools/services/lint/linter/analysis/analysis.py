@@ -83,11 +83,22 @@ def start_line(node: ast.stmt) -> int:
 def header_end(
     file: CheckInput, node: Function | ast.ClassDef | ast.ExceptHandler
 ) -> int:
-    """Return the last code line of node's header, the line before its body."""
-    line = start_line(node.body[0]) - 1
+    """Return the last code line of node's header.
+
+    A body that starts after the colon shares the header's last line.
+    """
+    first = node.body[0]
+    if _follows_code(file, first):
+        return first.lineno
+    line = start_line(first) - 1
     while line > node.lineno and not is_code_line(file, line):
         line -= 1
-    return max(line, node.lineno)
+    return line
+
+
+def _follows_code(file: CheckInput, stmt: ast.stmt) -> bool:
+    prefix = file.lines[stmt.lineno - 1].encode()[: stmt.col_offset]
+    return bool(prefix.strip())
 
 
 def function_body_lines(file: CheckInput) -> set[int]:

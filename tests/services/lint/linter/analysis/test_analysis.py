@@ -106,6 +106,11 @@ def test_is_code_line(parse: Parse, number: int, expected: bool) -> None:
     [
         pytest.param(_FUNCTION_BODIES, {4, 5, 9, 10}, id="bodies"),
         pytest.param("def f(): pass\nLIMIT = 1\n", set(), id="one-line-def"),
+        pytest.param(
+            "def f(\n    first,\n): return first\nLIMIT = 1\n",
+            set(),
+            id="wrapped-one-line-def",
+        ),
         pytest.param("LIMIT = 1\n", set(), id="no-functions"),
     ],
 )

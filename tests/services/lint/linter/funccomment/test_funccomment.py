@@ -53,6 +53,11 @@ _ONE_LINE_DEF = """\
 def helper(): pass  # trailing
 # after the def
 """
+_WRAPPED_ONE_LINE_DEF = """\
+def helper(
+    first,
+): return first  # trailing
+"""
 _MODULE_AND_CLASS = """\
 # above a function
 def helper():
@@ -110,6 +115,7 @@ def test_check_reports_body_comments(
         pytest.param(_SIGNATURE, id="signature"),
         pytest.param("def helper():  # note\n    pass\n", id="header-line"),
         pytest.param(_ONE_LINE_DEF, id="one-line-def"),
+        pytest.param(_WRAPPED_ONE_LINE_DEF, id="wrapped-one-line-def"),
         pytest.param(_MODULE_AND_CLASS, id="module-and-class"),
         pytest.param(_NEXT_METHOD, id="above-next-method"),
     ],
