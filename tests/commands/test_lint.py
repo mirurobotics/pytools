@@ -55,6 +55,13 @@ def test_add_lint_command_parses_max_func_len() -> None:
     assert _parse(["--max-func-len", "50"]).max_func_len == 50
 
 
+@pytest.mark.parametrize("raw", ["0", "-1", "ten"])
+def test_add_lint_command_rejects_bad_max_func_len(raw: str) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        _parse(["--max-func-len", raw])
+    assert excinfo.value.code == 2
+
+
 def test_add_lint_command_rejects_exclude_with_rule() -> None:
     with pytest.raises(SystemExit) as excinfo:
         _parse(["--exclude", "funclen", "--rule", "funclen"])
@@ -105,8 +112,8 @@ def test_lint_handler_exits_on_lint_error(monkeypatch: pytest.MonkeyPatch) -> No
     [
         ([], _DEFAULT_CONFIG),
         (
-            ["--max-func-len", "0", "--exclude", "funclen"],
-            Config(max_func_len=0, exclude=frozenset({Rule.FUNCLEN})),
+            ["--max-func-len", "5", "--exclude", "funclen"],
+            Config(max_func_len=5, exclude=frozenset({Rule.FUNCLEN})),
         ),
         (["--rule", "funclen"], _DEFAULT_CONFIG),
     ],

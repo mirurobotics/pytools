@@ -98,8 +98,6 @@ def f():
         pytest.param(
             2, [Diagnostic("a.py", 1, "function f is 3 lines (limit 2)")], id="over"
         ),
-        pytest.param(0, [], id="zero-disables"),
-        pytest.param(-1, [], id="negative-disables"),
     ],
 )
 def test_check_reports_functions_over_the_limit(

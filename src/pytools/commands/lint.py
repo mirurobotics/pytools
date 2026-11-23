@@ -7,7 +7,7 @@ from pytools.services.lint.linter.analysis.analysis import Rule
 from pytools.services.lint.linter.rules import Config
 
 _DESCRIPTION = (
-    "Run the full Python lint suite: custom linter, ruff check, ruff format and "
+    "Run the full Python lint suite: ruff check, ruff format, custom linter and "
     "mypy. By default, runs in fix mode. Use --no-fix for CI (check-only) mode."
 )
 
@@ -49,7 +49,7 @@ def _parse_paths(raw: str) -> list[str]:
 def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--max-func-len",
-        type=int,
+        type=_parse_limit,
         default=30,
         help="maximum function length (code lines; a multi-line literal counts once)",
     )
@@ -61,6 +61,13 @@ def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
         help="comma-separated rules to exclude",
     )
     rules.add_argument("--rule", type=_parse_rule, help="only run a specific rule")
+
+
+def _parse_limit(raw: str) -> int:
+    limit = int(raw)
+    if limit <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive limit, got {limit}")
+    return limit
 
 
 def _parse_rules(raw: str) -> frozenset[Rule]:

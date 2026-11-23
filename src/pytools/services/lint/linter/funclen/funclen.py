@@ -11,8 +11,6 @@ _LITERALS = (ast.Constant, ast.JoinedStr, ast.List, ast.Tuple, ast.Set, ast.Dict
 
 def check(file: CheckInput, max_len: int) -> list[Diagnostic]:
     """Report functions over max_len code lines; a multi-line literal counts as one."""
-    if max_len <= 0:
-        return []
     diags = [_check_function(file, func, max_len) for func in _functions(file.tree)]
     return [diag for diag in diags if diag is not None]
 

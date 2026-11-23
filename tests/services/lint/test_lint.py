@@ -19,16 +19,16 @@ _FILES = ["src/a.py", "tests/test_a.py"]
 _CONFIG = Config(max_func_len=30, exclude=frozenset())
 _VIOLATIONS = 2
 _SUCCESS_OUTPUT = (
-    "Running custom linter...\n"
     "Running ruff check...\n"
     "Running ruff format...\n"
+    "Running custom linter...\n"
     "Running mypy...\n"
     "\n"
     "Timings\n"
     "-------\n"
-    "custom linter       0.0s\n"
     "ruff check          0.0s\n"
     "ruff format         0.0s\n"
+    "custom linter       0.0s\n"
     "mypy                0.0s\n"
     "total               0.0s\n"
     "Lint complete\n"
@@ -78,10 +78,10 @@ def test_run_lint_runs_every_step(
     calls = _fake_external(monkeypatch, failing=set())
     lint.run_lint(LintOptions(paths=_PATHS, fix=fix, linter_config=_CONFIG))
     assert calls == [
-        ("list python files", _PATHS, None),
-        ("custom linter", _FILES, _CONFIG),
         ("ruff check", _PATHS, fix),
         ("ruff format", _PATHS, fix),
+        ("list python files", _PATHS, None),
+        ("custom linter", _FILES, _CONFIG),
         ("mypy", _PATHS, None),
     ]
     assert capsys.readouterr().out == _SUCCESS_OUTPUT
@@ -94,10 +94,10 @@ def test_run_lint_collects_failures_from_every_step(
     with pytest.raises(LintError):
         lint.run_lint(LintOptions(paths=_PATHS, fix=True, linter_config=_CONFIG))
     assert [call[0] for call in calls] == [
-        "list python files",
-        "custom linter",
         "ruff check",
         "ruff format",
+        "list python files",
+        "custom linter",
         "mypy",
     ]
     assert "Lint complete" not in capsys.readouterr().out
@@ -110,7 +110,7 @@ def test_run_lint_fails_custom_linter_on_violations(
     with pytest.raises(LintError):
         lint.run_lint(LintOptions(paths=_PATHS, fix=True, linter_config=_CONFIG))
     out = capsys.readouterr().out
-    assert out.startswith("Running custom linter...\n2 violation(s) found.\n")
+    assert "Running custom linter...\n2 violation(s) found.\n" in out
 
 
 def test_run_lint_fails_custom_linter_when_files_are_not_listed(
@@ -120,9 +120,9 @@ def test_run_lint_fails_custom_linter_when_files_are_not_listed(
     with pytest.raises(LintError):
         lint.run_lint(LintOptions(paths=_PATHS, fix=True, linter_config=_CONFIG))
     assert [call[0] for call in calls] == [
-        "list python files",
         "ruff check",
         "ruff format",
+        "list python files",
         "mypy",
     ]
 

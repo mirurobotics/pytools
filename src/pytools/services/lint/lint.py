@@ -41,9 +41,9 @@ def run_lint(opts: LintOptions) -> None:
 
 def _run_steps(opts: LintOptions) -> list[_StepResult]:
     steps = [
-        ("custom linter", lambda: _run_custom_linter(opts)),
         ("ruff check", lambda: external.run_ruff_check(opts.paths, fix=opts.fix)),
         ("ruff format", lambda: external.run_ruff_format(opts.paths, fix=opts.fix)),
+        ("custom linter", lambda: _run_custom_linter(opts)),
         ("mypy", lambda: external.run_mypy(opts.paths)),
     ]
     return [_timed_run(name, run) for name, run in steps]
