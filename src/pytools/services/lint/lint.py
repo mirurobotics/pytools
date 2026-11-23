@@ -51,6 +51,8 @@ def _run_steps(opts: LintOptions) -> list[_StepResult]:
 
 def _run_custom_linter(opts: LintOptions) -> bool:
     files = external.list_python_files(opts.paths)
+    if files is None:
+        return False
     count = run_linter(files, opts.linter_config)
     if count:
         _write(f"{count} violation(s) found.")

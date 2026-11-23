@@ -6,13 +6,15 @@ from pathlib import Path
 _CONFIG_DIR = files("pytools.services.lint")
 
 
-def list_python_files(paths: list[str]) -> list[str]:
-    """List the .py files under paths that ruff lints, relative to the working dir."""
+def list_python_files(paths: list[str]) -> list[str] | None:
+    """List the .py files under paths that ruff lints, or None if ruff fails."""
     with as_file(_CONFIG_DIR / "ruff.toml") as config:
         args = ["check", "--show-files", "--config", str(config), *paths]
         listed = subprocess.run(  # noqa: S603
-            _command("ruff", args), capture_output=True, text=True, check=True
+            _command("ruff", args), stdout=subprocess.PIPE, text=True, check=False
         )
+    if listed.returncode != 0:
+        return None
     listed_files = (Path(line) for line in listed.stdout.splitlines())
     return [
         str(file.relative_to(Path.cwd(), walk_up=True))
