@@ -58,7 +58,5 @@ def _groups(lines: list[int]) -> list[list[int]]:
 
 
 def _first_prose(file: CheckInput, group: list[int]) -> int | None:
-    prose = (
-        number for number in group if not is_directive(file.comments[number].text)
-    )
+    prose = (number for number in group if not is_directive(file.comments[number].text))
     return next(prose, None)
