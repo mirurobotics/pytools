@@ -23,3 +23,9 @@ pytools = "pytools.__main__:main"
 
 [tool.hatch.version]
 source = "vcs"
+
+[tool.pytest.ini_options]
+addopts = "--cov=pytools --cov-report=term-missing"
+
+[tool.coverage.report]
+fail_under = 80
