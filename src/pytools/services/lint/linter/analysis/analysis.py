@@ -87,3 +87,13 @@ def header_end(
     while line > node.lineno and not is_code_line(file, line):
         line -= 1
     return max(line, node.lineno)
+
+
+def module_header_end(file: CheckInput) -> int:
+    """Return the first statement's line, or the last line of a module without one.
+
+    Lines up to it are the module header: shebang, encoding, license and
+    file-wide directives.
+    """
+    body = file.tree.body
+    return start_line(body[0]) if body else len(file.lines)

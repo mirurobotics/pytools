@@ -8,7 +8,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     functions,
     header_end,
     is_code_line,
-    start_line,
+    module_header_end,
 )
 
 _MESSAGE = (
@@ -38,11 +38,7 @@ def _statement_starts(tree: ast.Module) -> set[int]:
 
 
 def _candidate_lines(file: CheckInput) -> list[int]:
-    # The lines before the first statement are the module header: shebang,
-    # encoding, license and file-wide directives.
-    body = file.tree.body
-    header_last = start_line(body[0]) if body else len(file.lines)
-    skipped = set(range(1, header_last + 1))
+    skipped = set(range(1, module_header_end(file) + 1))
     for func in functions(file.tree):
         skipped.update(_body_lines(file, func))
     outside = [number for number in sorted(file.comments) if number not in skipped]
