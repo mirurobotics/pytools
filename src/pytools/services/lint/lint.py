@@ -27,7 +27,7 @@ class _StepResult:
 
 
 def run_lint(opts: LintOptions) -> None:
-    """Run ruff format, ruff check and mypy, raising LintError if any fails."""
+    """Run ruff check, ruff format and mypy, raising LintError if any fails."""
     start = time.monotonic()
     results = _run_steps(opts)
     _print_timings(results, time.monotonic() - start)
@@ -39,8 +39,8 @@ def run_lint(opts: LintOptions) -> None:
 
 def _run_steps(opts: LintOptions) -> list[_StepResult]:
     steps = [
-        ("ruff format", lambda: external.run_ruff_format(opts.paths, fix=opts.fix)),
         ("ruff check", lambda: external.run_ruff_check(opts.paths, fix=opts.fix)),
+        ("ruff format", lambda: external.run_ruff_format(opts.paths, fix=opts.fix)),
         ("mypy", lambda: external.run_mypy(opts.paths)),
     ]
     return [_timed_run(name, run) for name, run in steps]

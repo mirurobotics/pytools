@@ -5,7 +5,7 @@ import argparse
 from pytools.services.lint.lint import LintError, LintOptions, run_lint
 
 _DESCRIPTION = (
-    "Run the full Python lint suite: ruff format, ruff check and mypy. "
+    "Run the full Python lint suite: ruff check, ruff format and mypy. "
     "By default, runs in fix mode. Use --no-fix for CI (check-only) mode."
 )
 
