@@ -10,8 +10,17 @@ from pytools.services.lint.linter.analysis.analysis import (
     start_line,
 )
 from pytools.services.lint.linter.analysis.comments import Comment
+from pytools.services.lint.linter.analysis.names import DeclaredName
 
 _NOLINT = re.compile(r"#\s*nolint:([^#]*)")
+
+
+def has_name_nolint(file: CheckInput, name: DeclaredName, rule: Rule) -> bool:
+    """Report whether a nolint for rule sits where name is declared."""
+    node = name.node
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        return has_def_nolint(file, node, rule)
+    return has_nolint_on_lines(file.comments, rule, name.line, name.last_line)
 
 
 def has_def_nolint(file: CheckInput, node: Function | ast.ClassDef, rule: Rule) -> bool:
