@@ -6,6 +6,7 @@ from pytools.services.lint.linter.filelen import filelen
 from pytools.services.lint.linter.funclen import funclen
 from pytools.services.lint.linter.namelen import namelen
 from pytools.services.lint.linter.nestdepth import nestdepth
+from pytools.services.lint.linter.straycomment import straycomment
 from pytools.services.lint.linter.varname import varname
 
 
@@ -37,4 +38,5 @@ def _rule_checkers(
         Rule.NESTDEPTH: lambda file: nestdepth.check(file, config.max_nest_depth),
         Rule.NAMELEN: namelen.check,
         Rule.VARNAME: varname.check,
+        Rule.STRAYCOMMENT: straycomment.check,
     }

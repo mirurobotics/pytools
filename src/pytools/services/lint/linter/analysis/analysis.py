@@ -16,6 +16,7 @@ class Rule(StrEnum):
     NESTDEPTH = "nestdepth"
     NAMELEN = "namelen"
     VARNAME = "varname"
+    STRAYCOMMENT = "straycomment"
 
 
 @dataclass(frozen=True)
