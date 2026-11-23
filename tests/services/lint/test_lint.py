@@ -16,7 +16,7 @@ Call = tuple[str, list[str], bool | Config | None]
 
 _PATHS = ["src", "tests"]
 _FILES = ["src/a.py", "tests/test_a.py"]
-_CONFIG = Config(max_func_len=30, exclude=frozenset())
+_CONFIG = Config(max_func_len=30, max_file_len=300, exclude=frozenset())
 _VIOLATIONS = 2
 _SUCCESS_OUTPUT = (
     "Running ruff check...\n"

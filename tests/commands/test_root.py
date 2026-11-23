@@ -4,7 +4,7 @@ from pytools.commands.root import run
 from pytools.services.lint.lint import LintOptions
 from pytools.services.lint.linter.rules import Config
 
-_CONFIG = Config(max_func_len=30, exclude=frozenset())
+_CONFIG = Config(max_func_len=30, max_file_len=300, exclude=frozenset())
 
 
 def test_run_dispatches_to_lint(lint_calls: list[LintOptions]) -> None:
