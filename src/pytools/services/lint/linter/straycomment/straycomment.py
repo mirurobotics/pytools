@@ -5,6 +5,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
     Function,
+    elif_branch,
     functions,
     header_end,
     is_code_line,
@@ -34,20 +35,10 @@ def _statement_starts(tree: ast.Module) -> set[int]:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
         for dec in node.decorator_list
     ]
-    ifs = [node for node in nodes if isinstance(node, ast.If)]
-    elifs = {node.orelse[0].lineno for node in ifs if _has_elif(node)}
+    branches = [elif_branch(node) for node in nodes if isinstance(node, ast.If)]
+    elifs = {branch.lineno for branch in branches if branch is not None}
     starts = {node.lineno for node in nodes} | {dec.lineno for dec in decorators}
     return starts - elifs
-
-
-def _has_elif(node: ast.If) -> bool:
-    # An elif parses as the only statement of the else branch, at the if's column.
-    orelse = node.orelse
-    return (
-        len(orelse) == 1
-        and isinstance(orelse[0], ast.If)
-        and orelse[0].col_offset == node.col_offset
-    )
 
 
 def _candidate_lines(file: CheckInput) -> list[int]:
