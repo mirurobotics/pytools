@@ -67,6 +67,15 @@ class Point:
     def method(self):
         pass
 """
+_NEXT_METHOD = """\
+class Point:
+    def first(self):
+        pass
+
+    # about second
+    def second(self):
+        pass
+"""
 _HASH_IN_STRING = """\
 def helper():
     label = "# not a comment"
@@ -102,6 +111,7 @@ def test_check_reports_body_comments(
         pytest.param("def helper():  # note\n    pass\n", id="header-line"),
         pytest.param(_ONE_LINE_DEF, id="one-line-def"),
         pytest.param(_MODULE_AND_CLASS, id="module-and-class"),
+        pytest.param(_NEXT_METHOD, id="above-next-method"),
     ],
 )
 def test_check_skips_comments_outside_bodies(parse: Parse, source: str) -> None:
@@ -122,8 +132,15 @@ def test_check_skips_comments_outside_bodies(parse: Parse, source: str) -> None:
         "# ruff: noqa",
     ],
 )
-def test_check_skips_directives(parse: Parse, directive: str) -> None:
-    source = f"def helper():\n    {directive}\n    return 1\n"
+@pytest.mark.parametrize(
+    "template",
+    [
+        pytest.param("def helper():\n    {}\n    return 1\n", id="own-line"),
+        pytest.param("def helper():\n    return 1  {}\n", id="trailing"),
+    ],
+)
+def test_check_skips_directives(parse: Parse, directive: str, template: str) -> None:
+    source = template.format(directive)
     assert funccomment.check(parse(source)) == []
 
 
