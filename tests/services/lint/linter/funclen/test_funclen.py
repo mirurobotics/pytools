@@ -44,6 +44,17 @@ def outer():
 
     return inner
 """
+_NOLINT_ON_DECORATED_INNER = """\
+def outer():
+    # nolint: funclen
+    @decorator
+    def inner():
+        a = 1
+        b = 2
+        c = 3
+
+    return inner
+"""
 _NOLINT_ON_OUTER = """\
 def outer():  # nolint: funclen
     def inner():
@@ -197,6 +208,11 @@ def test_check_reports_function_without_its_nolint(
             _NOLINT_ON_INNER,
             Diagnostic("a.py", 1, "function outer is 5 lines (limit 2)"),
             id="inner-nolinted",
+        ),
+        pytest.param(
+            _NOLINT_ON_DECORATED_INNER,
+            Diagnostic("a.py", 1, "function outer is 6 lines (limit 2)"),
+            id="decorated-inner-nolinted",
         ),
     ],
 )

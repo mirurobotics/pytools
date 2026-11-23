@@ -4,13 +4,12 @@ from collections.abc import Iterator
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
+    Function,
     Rule,
     is_code_line,
     start_line,
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
-
-type _Function = ast.FunctionDef | ast.AsyncFunctionDef
 
 _LITERALS = (ast.Constant, ast.JoinedStr, ast.List, ast.Tuple, ast.Set, ast.Dict)
 
@@ -21,7 +20,7 @@ def check(file: CheckInput, max_len: int) -> list[Diagnostic]:
     return [diag for diag in diags if diag is not None]
 
 
-def _functions(tree: ast.Module) -> list[_Function]:
+def _functions(tree: ast.Module) -> list[Function]:
     functions = [
         node
         for node in ast.walk(tree)
@@ -31,7 +30,7 @@ def _functions(tree: ast.Module) -> list[_Function]:
 
 
 def _check_function(
-    file: CheckInput, func: _Function, max_len: int
+    file: CheckInput, func: Function, max_len: int
 ) -> Diagnostic | None:
     count = _count_lines(func, file.lines)
     if count <= max_len:
@@ -42,7 +41,7 @@ def _check_function(
     return Diagnostic(file.path, func.lineno, message)
 
 
-def _count_lines(func: _Function, lines: list[str]) -> int:
+def _count_lines(func: Function, lines: list[str]) -> int:
     body = func.body[1:] if ast.get_docstring(func) is not None else func.body
     if not body:
         return 0

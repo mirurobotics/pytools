@@ -2,6 +2,8 @@ import ast
 from dataclasses import dataclass
 from enum import StrEnum
 
+type Function = ast.FunctionDef | ast.AsyncFunctionDef
+
 
 class Rule(StrEnum):
     """A custom linter rule name."""
