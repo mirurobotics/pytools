@@ -92,6 +92,10 @@ match value:
         pass
 """
 _CLASS_TAIL = """\
+def helper():
+    pass
+
+
 class Point:
     first = 1
 
@@ -122,6 +126,14 @@ _HEADER = """\
 # ruff: noqa: S101
 
 import os
+"""
+_IF_UNDER_ELSE = """\
+if ready:
+    pass
+else:
+    # Above an if, not an elif.
+    if done:
+        pass
 """
 _FUNCTION_BODIES = """\
 def helper():
@@ -202,7 +214,7 @@ def test_check_reports_comments_above_clause_headers(
 
 
 def test_check_reports_class_body_tail(parse: Parse) -> None:
-    assert straycomment.check(parse(_CLASS_TAIL)) == _diags(4)
+    assert straycomment.check(parse(_CLASS_TAIL)) == _diags(8)
 
 
 @pytest.mark.parametrize(
@@ -210,6 +222,7 @@ def test_check_reports_class_body_tail(parse: Parse) -> None:
     [
         pytest.param(_ATTACHED, id="attached"),
         pytest.param("def helper(): pass  # trailing\n", id="one-line-def-trailing"),
+        pytest.param(_IF_UNDER_ELSE, id="if-under-else"),
         pytest.param(_HEADER, id="module-header"),
         pytest.param("# a note\n# another note\n", id="comment-only-module"),
         pytest.param(_FUNCTION_BODIES, id="function-bodies"),

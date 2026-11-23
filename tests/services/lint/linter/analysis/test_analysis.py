@@ -91,6 +91,7 @@ def test_is_code_line(parse: Parse, number: int, expected: bool) -> None:
     ("source", "expected"),
     [
         pytest.param(_MODULE_HEADER, 4, id="first-statement"),
+        pytest.param("@cache\n\ndef f():\n    pass\n", 1, id="decorated"),
         pytest.param("", 1, id="empty"),
         pytest.param("# a note\n# another note\n", 3, id="comment-only"),
     ],
