@@ -22,7 +22,7 @@ def h():
 """
 
 
-def test_run_linter_prints_diagnostics_and_returns_count(
+def test_run_linter_prints_and_counts_diagnostics(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     long_file = tmp_path / "long.py"

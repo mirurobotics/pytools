@@ -1,5 +1,4 @@
 import ast
-from collections.abc import Iterator
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
@@ -9,6 +8,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     functions,
     is_code_line,
     start_line,
+    walk_outside,
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 
@@ -47,7 +47,7 @@ def _count_lines(file: CheckInput, func: Function) -> int:
 
 
 def _literal_tail_lines(body: list[ast.stmt]) -> set[int]:
-    nodes = list(_nodes_outside_literals(body))
+    nodes = list(walk_outside(body, _LITERALS))
     literals = [node for node in nodes if isinstance(node, _LITERALS)]
     skip = {
         line for lit in literals for line in range(lit.lineno + 1, _end_line(lit) + 1)
@@ -55,15 +55,6 @@ def _literal_tail_lines(body: list[ast.stmt]) -> set[int]:
     code_starts = {getattr(node, "lineno", None) for node in nodes}
     closing_lines = {_end_line(lit) for lit in literals}
     return skip - (closing_lines & code_starts)
-
-
-def _nodes_outside_literals(body: list[ast.stmt]) -> Iterator[ast.AST]:
-    pending: list[ast.AST] = list(body)
-    while pending:
-        node = pending.pop()
-        yield node
-        if not isinstance(node, _LITERALS):
-            pending.extend(ast.iter_child_nodes(node))
 
 
 def _end_line(node: ast.expr | ast.stmt) -> int:

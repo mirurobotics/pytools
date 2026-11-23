@@ -1,3 +1,4 @@
+import ast
 from collections.abc import Callable
 
 import pytest
@@ -7,6 +8,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     Diagnostic,
     functions,
     is_code_line,
+    walk_outside,
 )
 
 Parse = Callable[[str], CheckInput]
@@ -25,6 +27,10 @@ async def b():
 def c():
     pass
 """
+_WALK = """\
+a = [b]
+c = d
+"""
 _SOURCE = """\
 a = 1
 
@@ -42,9 +48,21 @@ def test_diagnostic_str() -> None:
     assert str(diag) == "src/a.py:42: function f is 31 lines"
 
 
-def test_functions_lists_nested_and_async_in_line_order(parse: Parse) -> None:
+def test_functions_lists_nested_and_async_by_line(parse: Parse) -> None:
     names = [func.name for func in functions(parse(_FUNCTIONS).tree)]
     assert names == ["method", "inner", "b", "c"]
+
+
+def test_walk_outside_yields_depth_first(parse: Parse) -> None:
+    nodes = walk_outside(parse(_WALK).tree.body, ())
+    names = [node.id for node in nodes if isinstance(node, ast.Name)]
+    assert names == ["a", "b", "c", "d"]
+
+
+def test_walk_outside_does_not_enter_stop_nodes(parse: Parse) -> None:
+    nodes = walk_outside(parse(_WALK).tree.body, (ast.List,))
+    kinds = [type(node) for node in nodes if not isinstance(node, ast.expr_context)]
+    assert kinds == [ast.Assign, ast.Name, ast.List, ast.Assign, ast.Name, ast.Name]
 
 
 @pytest.mark.parametrize(

@@ -113,7 +113,7 @@ def test_run_lint_fails_custom_linter_on_violations(
     assert "Running custom linter...\n2 violation(s) found.\n" in out
 
 
-def test_run_lint_fails_custom_linter_when_files_are_not_listed(
+def test_run_lint_fails_custom_linter_on_list_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = _fake_external(monkeypatch, failing={"list python files"})
