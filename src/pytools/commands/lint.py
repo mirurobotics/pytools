@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import argparse
 
-from pytools.services.lint.config import LinterFlags, build_linter_config
 from pytools.services.lint.lint import LintError, LintOptions, run_lint
-from pytools.services.lint.linter.rules import UnknownRuleError
+from pytools.services.lint.linter.analysis.analysis import Rule
+from pytools.services.lint.linter.rules import Config
 
 _DESCRIPTION = (
     "Run the full Python lint suite: custom linter, ruff check, ruff format and "
@@ -53,25 +53,37 @@ def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
         default=30,
         help="maximum function length (code lines; a multi-line literal counts once)",
     )
-    parser.add_argument(
+    rules = parser.add_mutually_exclusive_group()
+    rules.add_argument(
         "--exclude",
-        default="",
-        help="comma-separated rules to exclude (empty=run all)",
+        type=_parse_rules,
+        default=frozenset(),
+        help="comma-separated rules to exclude",
     )
-    parser.add_argument("--rule", help="only run a specific rule")
+    rules.add_argument("--rule", type=_parse_rule, help="only run a specific rule")
+
+
+def _parse_rules(raw: str) -> frozenset[Rule]:
+    return frozenset(
+        _parse_rule(name.strip()) for name in raw.split(",") if name.strip()
+    )
+
+
+def _parse_rule(raw: str) -> Rule:
+    try:
+        return Rule(raw)
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(f"unknown lint rule: {raw!r}") from err
 
 
 def _run(args: argparse.Namespace) -> None:
     try:
         run_lint(_lint_options(args))
-    except (LintError, UnknownRuleError) as err:
+    except LintError as err:
         raise SystemExit(str(err)) from err
 
 
 def _lint_options(args: argparse.Namespace) -> LintOptions:
-    flags = LinterFlags(
-        max_func_len=args.max_func_len, exclude=args.exclude, rule=args.rule
-    )
-    return LintOptions(
-        paths=args.paths, fix=args.fix, linter_config=build_linter_config(flags)
-    )
+    exclude = args.exclude if args.rule is None else frozenset(Rule) - {args.rule}
+    config = Config(max_func_len=args.max_func_len, exclude=exclude)
+    return LintOptions(paths=args.paths, fix=args.fix, linter_config=config)

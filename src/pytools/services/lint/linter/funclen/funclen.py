@@ -1,7 +1,7 @@
 import ast
 from collections.abc import Iterator
 
-from pytools.services.lint.linter.analysis.analysis import Diagnostic
+from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
 from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
 
 type _Function = ast.FunctionDef | ast.AsyncFunctionDef
@@ -9,12 +9,11 @@ type _Function = ast.FunctionDef | ast.AsyncFunctionDef
 _LITERALS = (ast.Constant, ast.JoinedStr, ast.List, ast.Tuple, ast.Set, ast.Dict)
 
 
-def check(path: str, tree: ast.Module, source: str, max_len: int) -> list[Diagnostic]:
+def check(file: CheckInput, max_len: int) -> list[Diagnostic]:
     """Report functions over max_len code lines; a multi-line literal counts as one."""
     if max_len <= 0:
         return []
-    lines = source.split("\n")
-    diags = [_check_function(path, func, lines, max_len) for func in _functions(tree)]
+    diags = [_check_function(file, func, max_len) for func in _functions(file.tree)]
     return [diag for diag in diags if diag is not None]
 
 
@@ -28,15 +27,15 @@ def _functions(tree: ast.Module) -> list[_Function]:
 
 
 def _check_function(
-    path: str, func: _Function, lines: list[str], max_len: int
+    file: CheckInput, func: _Function, max_len: int
 ) -> Diagnostic | None:
-    count = _count_lines(func, lines)
+    count = _count_lines(func, file.lines)
     if count <= max_len:
         return None
-    if has_nolint_on_lines(lines, "funclen", func.lineno - 1, func.lineno):
+    if has_nolint_on_lines(file.comments, Rule.FUNCLEN, func.lineno - 1, func.lineno):
         return None
     message = f"function {func.name} is {count} lines (limit {max_len})"
-    return Diagnostic(path, func.lineno, message)
+    return Diagnostic(file.path, func.lineno, message)
 
 
 def _count_lines(func: _Function, lines: list[str]) -> int:

@@ -1,4 +1,3 @@
-import subprocess
 import sys
 import time
 from collections.abc import Callable
@@ -50,26 +49,19 @@ def _run_steps(opts: LintOptions) -> list[_StepResult]:
     return [_timed_run(name, run) for name, run in steps]
 
 
-def _run_custom_linter(opts: LintOptions) -> None:
-    total = 0
-    for path in opts.paths:
-        count = run_linter(path, opts.linter_config)
-        if count:
-            _write(f"{count} violation(s) found in {path}.")
-        total += count
-    if total:
-        raise LintError(f"custom linter found {total} violation(s)")
+def _run_custom_linter(opts: LintOptions) -> bool:
+    files = external.list_python_files(opts.paths)
+    count = run_linter(files, opts.linter_config)
+    if count:
+        _write(f"{count} violation(s) found.")
+    return count == 0
 
 
-def _timed_run(name: str, run: Callable[[], None]) -> _StepResult:
+def _timed_run(name: str, run: Callable[[], bool]) -> _StepResult:
     _write(f"Running {name}...")
     start = time.monotonic()
-    failed = False
-    try:
-        run()
-    except (subprocess.CalledProcessError, LintError):
-        failed = True
-    return _StepResult(name, time.monotonic() - start, failed=failed)
+    passed = run()
+    return _StepResult(name, time.monotonic() - start, failed=not passed)
 
 
 def _write(message: str) -> None:
