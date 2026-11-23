@@ -37,11 +37,32 @@ def f():
     {_LOCAL_OVER} = 1
     return lambda {_LOCAL_OVER}: {_LOCAL_OVER}
 """
+_COMPREHENSION_WALRUS = f"""\
+def f():
+    a = [({_LOCAL_OVER} := b) for b in c]
+    {_LOCAL_OVER} = 1
+"""
 _NOLINT_ON_PARAMETER = f"""\
 def f(
     {_LONG},  # nolint: namelen
 ):
     pass
+"""
+_NOLINT_ON_FIRST_IN_DICT = f"""\
+def f():
+    return {{
+        "a": ({_LONG} := 1),  # nolint: namelen
+        ({_LONG} := 2): 3,
+    }}
+"""
+_MULTILINE_EXCEPT = """\
+def f():
+    try:
+        pass
+    except (
+        E,
+    ) as {}:
+        pass
 """
 
 
@@ -87,6 +108,7 @@ def test_check_reports_first_binding_in_a_scope(parse: Parse) -> None:
         pytest.param(_NESTED, [3, 5], id="nested-function"),
         pytest.param(_COMPREHENSION, [2, 3], id="comprehension"),
         pytest.param(_LAMBDA, [2, 3], id="lambda"),
+        pytest.param(_COMPREHENSION_WALRUS, [2], id="comprehension-walrus"),
     ],
 )
 def test_check_reports_a_name_once_per_scope(
@@ -114,6 +136,7 @@ def test_check_reports_a_name_once_per_scope(
             20,
             id="except",
         ),
+        pytest.param(_MULTILINE_EXCEPT, 6, 20, id="multiline-except"),
         pytest.param(
             "def f():\n    match a:\n        case [{}]:\n            pass\n",
             3,
@@ -155,6 +178,21 @@ def test_check_reports_each_binding_kind(
 @pytest.mark.parametrize(
     "template",
     [
+        pytest.param("def f(a=({} := 1)):\n    pass\n", id="default"),
+        pytest.param("f = lambda a=({} := 1): a\n", id="lambda-default"),
+        pytest.param("@({} := d)\ndef f():\n    pass\n", id="decorator"),
+        pytest.param("class A(({} := B)):\n    pass\n", id="class-base"),
+        pytest.param("a = [({} := b) for b in c]\n", id="comprehension"),
+    ],
+)
+def test_check_binds_walrus_in_the_outer_scope(parse: Parse, template: str) -> None:
+    diags = namelen.check(parse(template.format(_LONG)))
+    assert diags == [_diag(1, _LONG, 30)]
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
         pytest.param("import {}\n", id="import"),
         pytest.param("import a as {}\n", id="import-as"),
         pytest.param("from a import {}\n", id="from-import"),
@@ -177,6 +215,7 @@ def test_check_ignores_names_it_does_not_bind(parse: Parse, template: str) -> No
             id="def-line",
         ),
         pytest.param(_NOLINT_ON_PARAMETER, id="parameter-line"),
+        pytest.param(_NOLINT_ON_FIRST_IN_DICT, id="first-binding-in-dict"),
     ],
 )
 def test_check_skips_name_with_nolint(parse: Parse, source: str) -> None:
