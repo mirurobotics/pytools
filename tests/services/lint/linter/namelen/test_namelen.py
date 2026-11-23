@@ -220,6 +220,8 @@ def test_check_reports_each_binding_kind(
     "template",
     [
         pytest.param("def f(a=({} := 1)):\n    pass\n", id="default"),
+        pytest.param("def f(a: ({} := int)):\n    pass\n", id="annotation"),
+        pytest.param("def f() -> ({} := int):\n    pass\n", id="return-annotation"),
         pytest.param("f = lambda a=({} := 1): a\n", id="lambda-default"),
         pytest.param("@({} := d)\ndef f():\n    pass\n", id="decorator"),
         pytest.param("class A(({} := B)):\n    pass\n", id="class-base"),

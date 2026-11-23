@@ -109,8 +109,9 @@ def _own_parts(scope: _Scope) -> list[ast.AST]:
 
 def _scope_nodes(nodes: list[ast.AST]) -> Iterator[ast.AST]:
     # A nested scope's name binds in the scope around it, and so do names in
-    # its defaults, decorators and bases and a walrus in a comprehension.
-    for node in walk_outside(nodes, _SCOPES):
+    # its defaults, annotations, decorators and bases and a walrus in a
+    # comprehension. A parameter is entered only through its outer parts.
+    for node in walk_outside(nodes, (*_SCOPES, ast.arg)):
         yield node
         if isinstance(node, _SCOPES):
             yield from _scope_nodes(_outer_parts(node))
@@ -122,7 +123,10 @@ def _outer_parts(scope: _Nested) -> list[ast.AST]:
     if isinstance(scope, ast.Lambda):
         return _defaults(scope.args)
     if isinstance(scope, ast.FunctionDef | ast.AsyncFunctionDef):
-        return [*scope.decorator_list, *_defaults(scope.args)]
+        params = _params(scope.args)
+        annotations = [param.annotation for param in params if param.annotation]
+        returns = [scope.returns] if scope.returns else []
+        return [*scope.decorator_list, *_defaults(scope.args), *annotations, *returns]
     if isinstance(scope, ast.DictComp):
         elements = [scope.key, scope.value]
     else:
@@ -131,7 +135,7 @@ def _outer_parts(scope: _Nested) -> list[ast.AST]:
     return [*elements, *tests]
 
 
-def _params(args: ast.arguments) -> list[ast.AST]:
+def _params(args: ast.arguments) -> list[ast.arg]:
     params = [*args.posonlyargs, *args.args, args.vararg, *args.kwonlyargs, args.kwarg]
     return [param for param in params if param is not None]
 
