@@ -75,15 +75,21 @@ def _first_bindings(scope: _Scope) -> list[_Name]:
         for name in node.names
     }
     found = [_binding(node, limit) for node in nodes]
-    bindings = [
-        name for name in found if name is not None and name.text not in declared
-    ]
+    bindings = [name for name in found if name is not None]
     firsts: dict[ast.AST | str, _Name] = {}
     for name in sorted(bindings, key=lambda name: name.line):
-        # Each type parameter has an annotation scope of its own.
-        key = name.node if isinstance(name.node, _TYPE_PARAMS) else name.text
-        firsts.setdefault(key, name)
+        key = _scope_key(name, declared)
+        if key is not None:
+            firsts.setdefault(key, name)
     return list(firsts.values())
+
+
+def _scope_key(name: _Name, declared: set[str]) -> ast.AST | str | None:
+    # Each type parameter has an annotation scope of its own, which the body's
+    # global and nonlocal statements don't reach.
+    if isinstance(name.node, _TYPE_PARAMS):
+        return name.node
+    return None if name.text in declared else name.text
 
 
 def _own_parts(scope: _Scope) -> list[ast.AST]:
