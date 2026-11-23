@@ -3,7 +3,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     Diagnostic,
     Rule,
     is_code_line,
-    start_line,
+    module_header_end,
 )
 from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
 
@@ -25,6 +25,5 @@ def _count_lines(file: CheckInput) -> int:
 
 
 def _has_file_nolint(file: CheckInput) -> bool:
-    body = file.tree.body
-    last = start_line(body[0]) if body else len(file.lines)
+    last = module_header_end(file)
     return has_nolint_on_lines(file.comments, Rule.FILELEN, 1, last)

@@ -16,6 +16,7 @@ class Rule(StrEnum):
     NESTDEPTH = "nestdepth"
     NAMELEN = "namelen"
     VARNAME = "varname"
+    STRAYCOMMENT = "straycomment"
 
 
 @dataclass(frozen=True)
@@ -86,3 +87,22 @@ def header_end(
     while line > node.lineno and not is_code_line(file, line):
         line -= 1
     return max(line, node.lineno)
+
+
+def module_header_end(file: CheckInput) -> int:
+    """Return the first statement's line, or the last line of a module without one.
+
+    Lines up to it are the module header: shebang, encoding, license and
+    file-wide directives.
+    """
+    body = file.tree.body
+    return start_line(body[0]) if body else len(file.lines)
+
+
+def elif_branch(stmt: ast.If) -> ast.If | None:
+    """Return the if an elif after stmt parses to, or None if stmt has none."""
+    # An elif sits at its if's column; a block under else is indented.
+    branch = stmt.orelse[0] if stmt.orelse else None
+    if isinstance(branch, ast.If) and branch.col_offset == stmt.col_offset:
+        return branch
+    return None
