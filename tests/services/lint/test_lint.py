@@ -16,14 +16,14 @@ Call = tuple[str, list[str], bool | None]
 
 _PATHS = ["src", "tests"]
 _SUCCESS_OUTPUT = (
-    "Running ruff format...\n"
     "Running ruff check...\n"
+    "Running ruff format...\n"
     "Running mypy...\n"
     "\n"
     "Timings\n"
     "-------\n"
-    "ruff format         0.0s\n"
     "ruff check          0.0s\n"
+    "ruff format         0.0s\n"
     "mypy                0.0s\n"
     "total               0.0s\n"
     "Lint complete\n"
@@ -66,8 +66,8 @@ def test_run_lint_runs_every_step(
     calls = _fake_external(monkeypatch, failing=set())
     lint.run_lint(LintOptions(paths=_PATHS, fix=fix))
     assert calls == [
-        ("ruff format", _PATHS, fix),
         ("ruff check", _PATHS, fix),
+        ("ruff format", _PATHS, fix),
         ("mypy", _PATHS, None),
     ]
     assert capsys.readouterr().out == _SUCCESS_OUTPUT
@@ -79,7 +79,7 @@ def test_run_lint_collects_failures_from_every_step(
     calls = _fake_external(monkeypatch, failing={"ruff format", "mypy"})
     with pytest.raises(LintError):
         lint.run_lint(LintOptions(paths=_PATHS, fix=True))
-    assert [call[0] for call in calls] == ["ruff format", "ruff check", "mypy"]
+    assert [call[0] for call in calls] == ["ruff check", "ruff format", "mypy"]
     assert "Lint complete" not in capsys.readouterr().out
 
 
