@@ -23,5 +23,3 @@ pytools = "pytools.__main__:main"
 
 [tool.hatch.version]
 source = "vcs"
-# Shallow checkouts have no tags to version from.
-fallback-version = "0.0.0"
