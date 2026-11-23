@@ -81,6 +81,13 @@ def f():
     ) as {_LONG}:  # nolint: namelen
         pass
 """
+_NOLINT_IN_EXCEPT_BODY = f"""\
+try:
+    pass
+except E as {_LONG}:
+    # nolint: namelen
+    pass
+"""
 _MULTILINE_MATCH_AS = """\
 def f():
     match a:
@@ -287,6 +294,7 @@ def test_check_skips_name_with_nolint(parse: Parse, source: str) -> None:
         pytest.param(
             f"{_LONG} = 1\n{_LONG} = 2  # nolint: namelen\n", 1, id="later-binding"
         ),
+        pytest.param(_NOLINT_IN_EXCEPT_BODY, 3, id="except-body"),
     ],
 )
 def test_check_reports_name_without_its_nolint(

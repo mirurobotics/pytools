@@ -6,7 +6,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
     Rule,
-    start_line,
+    header_end,
     walk_outside,
 )
 from pytools.services.lint.linter.analysis.nolint import (
@@ -161,12 +161,10 @@ def _binding(node: ast.AST, limit: int) -> _Name | None:
 
 
 def _clause_binding(node: ast.AST, limit: int) -> _Name | None:
-    # The name ends a capture pattern, and follows an exception type that can
-    # span lines.
-    if isinstance(node, ast.ExceptHandler) and node.name and node.type:
-        line = node.type.end_lineno or node.lineno
-        return _Name(node.name, line, limit, node)
+    if isinstance(node, ast.ExceptHandler) and node.name:
+        return _Name(node.name, node.lineno, limit, node)
     if isinstance(node, ast.MatchAs | ast.MatchStar) and node.name:
+        # The name ends a capture pattern, which can span lines.
         return _Name(node.name, node.end_lineno or node.lineno, limit, node)
     if isinstance(node, ast.MatchMapping) and node.rest:
         return _Name(node.rest, node.lineno, limit, node)
@@ -177,25 +175,26 @@ def _check_name(file: CheckInput, name: _Name) -> Diagnostic | None:
     length = len(name.text)
     if length <= name.limit:
         return None
-    if _has_nolint(file, name):
+    line = _name_line(file, name)
+    if _has_nolint(file, name, line):
         return None
     message = f'name "{name.text}" is {length} chars (limit {name.limit})'
-    return Diagnostic(file.path, name.line, message)
+    return Diagnostic(file.path, line, message)
 
 
-def _has_nolint(file: CheckInput, name: _Name) -> bool:
+def _name_line(file: CheckInput, name: _Name) -> int:
+    # An except alias has no position of its own; it ends the clause header.
+    if isinstance(name.node, ast.ExceptHandler):
+        return header_end(file, name.node)
+    return name.line
+
+
+def _has_nolint(file: CheckInput, name: _Name, line: int) -> bool:
     node = name.node
     if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
         return has_def_nolint(file, node, Rule.NAMELEN)
-    last = _clause_end(node, name.line)
-    return has_nolint_on_lines(file.comments, Rule.NAMELEN, name.line, last)
-
-
-def _clause_end(node: ast.AST, line: int) -> int:
-    # An except alias and a mapping rest have no position of their own, so a
-    # nolint anywhere up to the end of their clause counts.
-    if isinstance(node, ast.ExceptHandler):
-        return max(line, start_line(node.body[0]) - 1)
+    last = line
     if isinstance(node, ast.MatchMapping):
-        return node.end_lineno or line
-    return line
+        # A mapping rest has no position of its own either.
+        last = node.end_lineno or line
+    return has_nolint_on_lines(file.comments, Rule.NAMELEN, line, last)

@@ -75,3 +75,13 @@ def start_line(node: ast.stmt) -> int:
     if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
         return min((dec.lineno for dec in node.decorator_list), default=node.lineno)
     return node.lineno
+
+
+def header_end(
+    file: CheckInput, node: Function | ast.ClassDef | ast.ExceptHandler
+) -> int:
+    """Return the last code line of node's header, the line before its body."""
+    line = start_line(node.body[0]) - 1
+    while line > node.lineno and not is_code_line(file, line):
+        line -= 1
+    return max(line, node.lineno)

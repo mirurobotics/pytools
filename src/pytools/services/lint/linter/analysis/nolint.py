@@ -5,6 +5,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Function,
     Rule,
+    header_end,
     is_code_line,
     start_line,
 )
@@ -21,14 +22,7 @@ def has_def_nolint(file: CheckInput, node: Function | ast.ClassDef, rule: Rule) 
     first = start_line(node)
     if first > 1 and not is_code_line(file, first - 1):
         first -= 1
-    return has_nolint_on_lines(file.comments, rule, first, _signature_end(file, node))
-
-
-def _signature_end(file: CheckInput, node: Function | ast.ClassDef) -> int:
-    line = start_line(node.body[0]) - 1
-    while line > node.lineno and not is_code_line(file, line):
-        line -= 1
-    return max(line, node.lineno)
+    return has_nolint_on_lines(file.comments, rule, first, header_end(file, node))
 
 
 def has_nolint_on_lines(
