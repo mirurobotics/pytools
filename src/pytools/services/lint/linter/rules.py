@@ -11,10 +11,10 @@ from pytools.services.lint.linter.nestdepth import nestdepth
 class Config:
     """Custom linter configuration."""
 
-    max_func_len: int
-    max_file_len: int
-    max_nest_depth: int
-    exclude: frozenset[Rule]
+    max_func_len: int = 30
+    max_file_len: int = 300
+    max_nest_depth: int = 2
+    exclude: frozenset[Rule] = frozenset()
 
 
 def run_checks(file: CheckInput, config: Config) -> list[Diagnostic]:

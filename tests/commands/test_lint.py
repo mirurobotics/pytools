@@ -15,9 +15,7 @@ class _TwoRules(StrEnum):
     OTHER = "other"
 
 
-_DEFAULT_CONFIG = Config(
-    max_func_len=30, max_file_len=300, max_nest_depth=2, exclude=frozenset()
-)
+_DEFAULT_CONFIG = Config()
 
 
 def _parse(argv: list[str]) -> argparse.Namespace:
