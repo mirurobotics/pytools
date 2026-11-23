@@ -43,6 +43,11 @@ a = '''
 # not a comment
 '''
 """
+_NOLINT_ON_DOCSTRING_END = """\
+'''Doc.
+'''  # nolint: filelen
+b = 2
+"""
 _OVER_LIMIT = Diagnostic("a.py", 1, "file is 3 lines (limit 2)")
 
 
@@ -63,6 +68,10 @@ def test_check_reports_files_over_the_limit(
 def test_check_reports_file_without_statements(parse: Parse) -> None:
     diags = filelen.check(parse("\\\n\\\n\n"), 1)
     assert diags == [Diagnostic("a.py", 1, "file is 2 lines (limit 1)")]
+
+
+def test_check_skips_file_without_statements_with_nolint(parse: Parse) -> None:
+    assert filelen.check(parse("\\\n\\\n# nolint: filelen\n"), 1) == []
 
 
 @pytest.mark.parametrize(
@@ -87,6 +96,7 @@ def test_check_skips_file_with_nolint(parse: Parse, source: str) -> None:
         pytest.param(
             "a = 1\nb = 2  # nolint: filelen\nc = 3\n", id="after-first-statement"
         ),
+        pytest.param(_NOLINT_ON_DOCSTRING_END, id="docstring-closing-line"),
     ],
 )
 def test_check_reports_file_without_its_nolint(parse: Parse, source: str) -> None:
