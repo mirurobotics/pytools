@@ -12,6 +12,8 @@ def f(parameter_name_too_long, n):
     if a:
         if b:
             pass
+
+# stray note
 """
 _FUNCLEN = Diagnostic("a.py", 1, "function f is 3 lines (limit 1)")
 _FILELEN = Diagnostic("a.py", 1, "file is 4 lines (limit 1)")
@@ -26,38 +28,50 @@ _NAMELEN = Diagnostic(
 _VARNAME = Diagnostic(
     "a.py", 1, 'variable name "n" is shorter than 3 chars; use a descriptive name'
 )
+_STRAYCOMMENT = Diagnostic(
+    "a.py",
+    6,
+    "comment is not attached to a statement; remove it or move it directly above one",
+)
 
 
 @pytest.mark.parametrize(
     ("exclude", "expected"),
     [
         pytest.param(
-            frozenset(), [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME], id="none"
+            frozenset(),
+            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT],
+            id="none",
         ),
         pytest.param(
             frozenset({Rule.FUNCLEN}),
-            [_FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME],
+            [_FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT],
             id="funclen",
         ),
         pytest.param(
             frozenset({Rule.FILELEN}),
-            [_FUNCLEN, _NESTDEPTH, _NAMELEN, _VARNAME],
+            [_FUNCLEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT],
             id="filelen",
         ),
         pytest.param(
             frozenset({Rule.NESTDEPTH}),
-            [_FUNCLEN, _FILELEN, _NAMELEN, _VARNAME],
+            [_FUNCLEN, _FILELEN, _NAMELEN, _VARNAME, _STRAYCOMMENT],
             id="nestdepth",
         ),
         pytest.param(
             frozenset({Rule.NAMELEN}),
-            [_FUNCLEN, _FILELEN, _NESTDEPTH, _VARNAME],
+            [_FUNCLEN, _FILELEN, _NESTDEPTH, _VARNAME, _STRAYCOMMENT],
             id="namelen",
         ),
         pytest.param(
             frozenset({Rule.VARNAME}),
-            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN],
+            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _STRAYCOMMENT],
             id="varname",
+        ),
+        pytest.param(
+            frozenset({Rule.STRAYCOMMENT}),
+            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME],
+            id="straycomment",
         ),
     ],
 )

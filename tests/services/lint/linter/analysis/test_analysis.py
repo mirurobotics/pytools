@@ -8,6 +8,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     Diagnostic,
     functions,
     is_code_line,
+    module_header_end,
     walk_outside,
 )
 
@@ -40,6 +41,12 @@ c = '''
 # not a comment
 '''
 # spaced \t
+"""
+_MODULE_HEADER = """\
+#!/usr/bin/env python3
+# Copyright 2026 Example.
+
+import os
 """
 
 
@@ -78,3 +85,15 @@ def test_walk_outside_does_not_enter_stop_nodes(parse: Parse) -> None:
 )
 def test_is_code_line(parse: Parse, number: int, expected: bool) -> None:
     assert is_code_line(parse(_SOURCE), number) is expected
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(_MODULE_HEADER, 4, id="first-statement"),
+        pytest.param("", 1, id="empty"),
+        pytest.param("# a note\n# another note\n", 3, id="comment-only"),
+    ],
+)
+def test_module_header_end(parse: Parse, source: str, expected: int) -> None:
+    assert module_header_end(parse(source)) == expected
