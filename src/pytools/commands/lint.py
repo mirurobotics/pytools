@@ -6,7 +6,7 @@ from pytools.services.lint.lint import LintError, LintOptions, run_lint
 
 _DESCRIPTION = (
     "Run the full Python lint suite: ruff format, ruff check and mypy. "
-    "By default, runs in fix mode. Use --fix=false for CI (check-only) mode."
+    "By default, runs in fix mode. Use --no-fix for CI (check-only) mode."
 )
 
 
@@ -30,11 +30,9 @@ def _bind_lint_flags(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--fix",
-        type=_parse_bool,
-        nargs="?",
-        const=True,
+        action=argparse.BooleanOptionalAction,
         default=True,
-        help="auto-fix violations (false for CI check-only mode)",
+        help="auto-fix violations (--no-fix for CI check-only mode)",
     )
 
 
@@ -43,12 +41,6 @@ def _parse_paths(raw: str) -> list[str]:
     if not paths:
         raise argparse.ArgumentTypeError("expected at least one path")
     return paths
-
-
-def _parse_bool(raw: str) -> bool:
-    if raw not in ("true", "false"):
-        raise argparse.ArgumentTypeError(f"expected true or false, got {raw!r}")
-    return raw == "true"
 
 
 def _run(args: argparse.Namespace) -> None:

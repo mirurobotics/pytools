@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling==1.33.0"]
+requires = ["hatchling==1.33.0", "hatch-vcs==0.5.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "pytools"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Shared Python development tools for Miru repositories."
 requires-python = ">=3.12"
 dependencies = [
@@ -20,3 +20,8 @@ dev = [
 
 [project.scripts]
 pytools = "pytools.__main__:main"
+
+[tool.hatch.version]
+source = "vcs"
+# Shallow checkouts have no tags to version from.
+fallback-version = "0.0.0"
