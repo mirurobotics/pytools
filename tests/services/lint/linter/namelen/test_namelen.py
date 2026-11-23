@@ -71,6 +71,15 @@ def f():
         }}:
             pass
 """
+_NOLINT_ON_EXCEPT_ALIAS = f"""\
+def f():
+    try:
+        pass
+    except (
+        E
+    ) as {_LONG}:  # nolint: namelen
+        pass
+"""
 _MULTILINE_MATCH_AS = """\
 def f():
     match a:
@@ -259,6 +268,7 @@ def test_check_ignores_names_it_does_not_bind(parse: Parse, template: str) -> No
         ),
         pytest.param(_NOLINT_ON_PARAMETER, id="parameter-line"),
         pytest.param(_NOLINT_ON_MAPPING_REST, id="mapping-rest-line"),
+        pytest.param(_NOLINT_ON_EXCEPT_ALIAS, id="except-alias-line"),
         pytest.param(_NOLINT_ON_FIRST_IN_DICT, id="first-binding-in-dict"),
     ],
 )

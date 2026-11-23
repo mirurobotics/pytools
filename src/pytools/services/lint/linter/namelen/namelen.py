@@ -6,6 +6,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
     Rule,
+    start_line,
     walk_outside,
 )
 from pytools.services.lint.linter.analysis.nolint import (
@@ -182,8 +183,15 @@ def _has_nolint(file: CheckInput, name: _Name) -> bool:
     node = name.node
     if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
         return has_def_nolint(file, node, Rule.NAMELEN)
-    last = name.line
-    if isinstance(node, ast.MatchMapping):
-        # A mapping pattern's rest has no position of its own.
-        last = node.end_lineno or last
+    last = _clause_end(node, name.line)
     return has_nolint_on_lines(file.comments, Rule.NAMELEN, name.line, last)
+
+
+def _clause_end(node: ast.AST, line: int) -> int:
+    # An except alias and a mapping rest have no position of their own, so a
+    # nolint anywhere up to the end of their clause counts.
+    if isinstance(node, ast.ExceptHandler):
+        return max(line, start_line(node.body[0]) - 1)
+    if isinstance(node, ast.MatchMapping):
+        return node.end_lineno or line
+    return line
