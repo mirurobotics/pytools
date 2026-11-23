@@ -1,5 +1,4 @@
 import ast
-import re
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
@@ -11,11 +10,11 @@ from pytools.services.lint.linter.analysis.analysis import (
     is_code_line,
     module_header_end,
 )
+from pytools.services.lint.linter.analysis.comments import is_directive
 
 _MESSAGE = (
     "comment is not attached to a statement; remove it or move it directly above one"
 )
-_DIRECTIVE = re.compile(r"#\s*(?:noqa\b|(?:type|nolint|pragma|fmt|isort|mypy|ruff):)")
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
@@ -77,6 +76,6 @@ def _groups(lines: list[int]) -> list[list[int]]:
 
 def _first_prose(file: CheckInput, group: list[int]) -> int | None:
     prose = (
-        number for number in group if not _DIRECTIVE.match(file.comments[number].text)
+        number for number in group if not is_directive(file.comments[number].text)
     )
     return next(prose, None)
