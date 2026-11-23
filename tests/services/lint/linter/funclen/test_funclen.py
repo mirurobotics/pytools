@@ -34,6 +34,16 @@ def f(
     c = 2
     return a
 """
+_NOLINT_ON_INNER = """\
+def outer():
+    # nolint: funclen
+    def inner():
+        a = 1
+        b = 2
+        c = 3
+
+    return inner
+"""
 _NOLINT_ON_OUTER = """\
 def outer():  # nolint: funclen
     def inner():
@@ -167,10 +177,25 @@ def test_check_reports_function_without_its_nolint(
     assert diags == [Diagnostic("a.py", line, "function f is 3 lines (limit 2)")]
 
 
-def test_check_reports_function_under_a_nolinted_def(parse: Parse) -> None:
-    assert funclen.check(parse(_NOLINT_ON_OUTER), 2) == [
-        Diagnostic("a.py", 2, "function inner is 3 lines (limit 2)")
-    ]
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(
+            _NOLINT_ON_OUTER,
+            Diagnostic("a.py", 2, "function inner is 3 lines (limit 2)"),
+            id="outer-nolinted",
+        ),
+        pytest.param(
+            _NOLINT_ON_INNER,
+            Diagnostic("a.py", 1, "function outer is 5 lines (limit 2)"),
+            id="inner-nolinted",
+        ),
+    ],
+)
+def test_check_keeps_nested_nolint_to_its_own_function(
+    parse: Parse, source: str, expected: Diagnostic
+) -> None:
+    assert funclen.check(parse(source), 2) == [expected]
 
 
 @pytest.mark.parametrize(

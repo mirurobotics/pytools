@@ -37,11 +37,24 @@ def _check_function(
 
 
 def _has_nolint(file: CheckInput, func: _Function) -> bool:
-    first = min((dec.lineno for dec in func.decorator_list), default=func.lineno)
+    first = _start_line(func)
     if first > 1 and not _is_code_line(file.lines[first - 2]):
         first -= 1
-    last = max(func.body[0].lineno - 1, func.lineno)
+    last = _signature_end(file, func)
     return has_nolint_on_lines(file.comments, Rule.FUNCLEN, first, last)
+
+
+def _start_line(node: ast.stmt) -> int:
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        return min((dec.lineno for dec in node.decorator_list), default=node.lineno)
+    return node.lineno
+
+
+def _signature_end(file: CheckInput, func: _Function) -> int:
+    line = _start_line(func.body[0]) - 1
+    while line > func.lineno and not _is_code_line(file.lines[line - 1]):
+        line -= 1
+    return max(line, func.lineno)
 
 
 def _count_lines(func: _Function, lines: list[str]) -> int:
