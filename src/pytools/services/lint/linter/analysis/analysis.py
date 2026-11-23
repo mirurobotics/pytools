@@ -1,4 +1,5 @@
 import ast
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -46,6 +47,18 @@ def functions(tree: ast.Module) -> list[Function]:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
     ]
     return sorted(found, key=lambda func: func.lineno)
+
+
+def walk_outside(
+    nodes: Iterable[ast.AST], stop: tuple[type[ast.AST], ...]
+) -> Iterator[ast.AST]:
+    """Yield nodes and their descendants in source order, not entering stop nodes."""
+    pending = list(nodes)[::-1]
+    while pending:
+        node = pending.pop()
+        yield node
+        if not isinstance(node, stop):
+            pending.extend(reversed(list(ast.iter_child_nodes(node))))
 
 
 def is_code_line(file: CheckInput, number: int) -> bool:

@@ -1,8 +1,12 @@
 import ast
-from collections.abc import Iterator
 from dataclasses import dataclass
 
-from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
+from pytools.services.lint.linter.analysis.analysis import (
+    CheckInput,
+    Diagnostic,
+    Rule,
+    walk_outside,
+)
 from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
 
 MAX_NAME_LEN = 30
@@ -45,22 +49,12 @@ def _first_bindings(scope: ast.AST) -> list[_Name]:
     is_local = not isinstance(scope, ast.Module | ast.ClassDef)
     limit = MAX_LOCAL_NAME_LEN if is_local else MAX_NAME_LEN
     firsts: dict[str, _Name] = {}
-    for node in _scope_nodes(scope):
+    # A nested scope binds its name here, so it is yielded but not entered.
+    for node in walk_outside(ast.iter_child_nodes(scope), _SCOPES):
         name = _binding(node, limit)
         if name is not None:
             firsts.setdefault(name.text, name)
     return list(firsts.values())
-
-
-def _scope_nodes(scope: ast.AST) -> Iterator[ast.AST]:
-    # Yields in source order. A nested scope binds its name here, so it is
-    # yielded but not entered.
-    pending = list(ast.iter_child_nodes(scope))[::-1]
-    while pending:
-        node = pending.pop()
-        yield node
-        if not isinstance(node, _SCOPES):
-            pending.extend(reversed(list(ast.iter_child_nodes(node))))
 
 
 def _binding(node: ast.AST, limit: int) -> _Name | None:
