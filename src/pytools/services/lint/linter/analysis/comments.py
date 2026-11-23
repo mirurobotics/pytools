@@ -3,7 +3,9 @@ import re
 import tokenize
 from dataclasses import dataclass
 
-_DIRECTIVE = re.compile(r"#\s*(?:noqa\b|(?:type|nolint|pragma|fmt|isort|mypy|ruff):)")
+_DIRECTIVE = re.compile(
+    r"#\s*(?:(?i:noqa)\b|(?:type|nolint|pragma|fmt|isort|mypy|ruff):)"
+)
 
 
 @dataclass(frozen=True)

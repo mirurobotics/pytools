@@ -31,6 +31,7 @@ def test_collect_comments_maps_lines_to_comments() -> None:
     [
         pytest.param("# noqa", True, id="bare-noqa"),
         pytest.param("#noqa: E501", True, id="no-space"),
+        pytest.param("# NOQA: E501", True, id="upper-case-noqa"),
         pytest.param("# type: ignore  # reason", True, id="directive-then-reason"),
         pytest.param("# ruff: noqa", True, id="keyword-colon"),
         pytest.param("# noqaish", False, id="noqa-prefix"),
