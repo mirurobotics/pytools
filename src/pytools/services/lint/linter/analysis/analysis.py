@@ -12,6 +12,7 @@ class Rule(StrEnum):
 
     FUNCLEN = "funclen"
     FILELEN = "filelen"
+    NESTDEPTH = "nestdepth"
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,16 @@ class Diagnostic:
 
     def __str__(self) -> str:
         return f"{self.path}:{self.line}: {self.message}"
+
+
+def functions(tree: ast.Module) -> list[Function]:
+    """Return every function in tree, nested ones included, in line order."""
+    found = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    ]
+    return sorted(found, key=lambda func: func.lineno)
 
 
 def is_code_line(file: CheckInput, number: int) -> bool:

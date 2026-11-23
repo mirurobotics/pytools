@@ -5,7 +5,9 @@ import pytest
 from pytools.services.lint.linter.rules import Config
 from pytools.services.lint.linter.run import run_linter
 
-_CONFIG = Config(max_func_len=1, max_file_len=300, exclude=frozenset())
+_CONFIG = Config(
+    max_func_len=1, max_file_len=300, max_nest_depth=2, exclude=frozenset()
+)
 _TWO_LONG_FUNCTIONS = """\
 def f():
     a = 1

@@ -59,6 +59,12 @@ def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
         default=300,
         help="maximum file length (non-blank, non-comment)",
     )
+    parser.add_argument(
+        "--max-nest-depth",
+        type=_parse_limit,
+        default=2,
+        help="maximum nesting depth within functions",
+    )
     rules = parser.add_mutually_exclusive_group()
     rules.add_argument(
         "--exclude",
@@ -102,6 +108,9 @@ def _run(args: argparse.Namespace) -> None:
 def _lint_options(args: argparse.Namespace) -> LintOptions:
     exclude = args.exclude if args.rule is None else frozenset(Rule) - {args.rule}
     config = Config(
-        max_func_len=args.max_func_len, max_file_len=args.max_file_len, exclude=exclude
+        max_func_len=args.max_func_len,
+        max_file_len=args.max_file_len,
+        max_nest_depth=args.max_nest_depth,
+        exclude=exclude,
     )
     return LintOptions(paths=args.paths, fix=args.fix, linter_config=config)
