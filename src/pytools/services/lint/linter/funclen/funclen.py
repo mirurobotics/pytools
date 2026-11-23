@@ -6,6 +6,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     Diagnostic,
     Function,
     Rule,
+    functions,
     is_code_line,
     start_line,
 )
@@ -16,17 +17,8 @@ _LITERALS = (ast.Constant, ast.JoinedStr, ast.List, ast.Tuple, ast.Set, ast.Dict
 
 def check(file: CheckInput, max_len: int) -> list[Diagnostic]:
     """Report functions over max_len code lines; a multi-line literal counts as one."""
-    diags = [_check_function(file, func, max_len) for func in _functions(file.tree)]
+    diags = [_check_function(file, func, max_len) for func in functions(file.tree)]
     return [diag for diag in diags if diag is not None]
-
-
-def _functions(tree: ast.Module) -> list[Function]:
-    functions = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
-    ]
-    return sorted(functions, key=lambda func: func.lineno)
 
 
 def _check_function(

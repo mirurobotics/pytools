@@ -37,6 +37,16 @@ class Diagnostic:
         return f"{self.path}:{self.line}: {self.message}"
 
 
+def functions(tree: ast.Module) -> list[Function]:
+    """Return every function in tree, nested ones included, in line order."""
+    found = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    ]
+    return sorted(found, key=lambda func: func.lineno)
+
+
 def is_code_line(file: CheckInput, number: int) -> bool:
     """Report whether line number holds more than whitespace and a comment."""
     line = file.lines[number - 1]

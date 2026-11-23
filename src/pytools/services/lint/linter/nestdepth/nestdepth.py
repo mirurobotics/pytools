@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
-    Function,
+    functions,
 )
 
 
@@ -16,18 +16,9 @@ def check(file: CheckInput, max_depth: int) -> list[Diagnostic]:
     )
     return [
         Diagnostic(file.path, stmt.lineno, message)
-        for func in _functions(file.tree)
+        for func in functions(file.tree)
         for stmt in _too_deep(func.body, max_depth)
     ]
-
-
-def _functions(tree: ast.Module) -> list[Function]:
-    functions = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
-    ]
-    return sorted(functions, key=lambda func: func.lineno)
 
 
 def _too_deep(body: list[ast.stmt], levels_left: int) -> Iterator[ast.stmt]:
