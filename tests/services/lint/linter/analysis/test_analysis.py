@@ -42,7 +42,7 @@ def test_diagnostic_str() -> None:
     assert str(diag) == "src/a.py:42: function f is 31 lines"
 
 
-def test_functions_lists_nested_and_async_in_line_order(parse: Parse) -> None:
+def test_functions_lists_nested_and_async_by_line(parse: Parse) -> None:
     names = [func.name for func in functions(parse(_FUNCTIONS).tree)]
     assert names == ["method", "inner", "b", "c"]
 

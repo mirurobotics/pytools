@@ -32,7 +32,7 @@ def _fake_run(
     return calls
 
 
-def test_list_python_files_lists_py_files_relative_to_cwd(
+def test_list_python_files_lists_relative_to_cwd(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -46,7 +46,7 @@ def test_list_python_files_lists_py_files_relative_to_cwd(
     assert calls == [(command, kwargs)]
 
 
-def test_list_python_files_returns_none_when_ruff_fails(
+def test_list_python_files_is_none_when_ruff_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _fake_run(monkeypatch, 2)

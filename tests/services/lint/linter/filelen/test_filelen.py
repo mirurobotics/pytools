@@ -70,7 +70,7 @@ def test_check_reports_file_without_statements(parse: Parse) -> None:
     assert diags == [Diagnostic("a.py", 1, "file is 2 lines (limit 1)")]
 
 
-def test_check_skips_file_without_statements_with_nolint(parse: Parse) -> None:
+def test_check_skips_nolint_file_without_statements(parse: Parse) -> None:
     assert filelen.check(parse("\\\n\\\n# nolint: filelen\n"), 1) == []
 
 
