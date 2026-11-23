@@ -13,9 +13,7 @@ from pytools.services.lint.linter.analysis.comments import Comment
 _NOLINT = re.compile(r"#\s*nolint:([^#]*)")
 
 
-def has_def_nolint(
-    file: CheckInput, node: Function | ast.ClassDef, rule: Rule
-) -> bool:
+def has_def_nolint(file: CheckInput, node: Function | ast.ClassDef, rule: Rule) -> bool:
     """Report whether a nolint for rule sits on node's decorators or signature.
 
     A comment-only line just above them counts too.
