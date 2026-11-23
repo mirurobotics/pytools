@@ -90,9 +90,11 @@ def header_end(
 
 
 def body_lines(file: CheckInput, func: Function) -> range:
-    """Return the lines of func's body, after its header."""
-    # A comment indented under the def after its last statement is still in
-    # its body.
+    """Return the lines of func's body, after its header.
+
+    A comment indented under the def after its last statement is still in its
+    body.
+    """
     end = func.end_lineno or func.lineno
     while end < len(file.lines) and _is_body_tail(file, end + 1, func.col_offset):
         end += 1
@@ -117,8 +119,10 @@ def module_header_end(file: CheckInput) -> int:
 
 
 def elif_branch(stmt: ast.If) -> ast.If | None:
-    """Return the if an elif after stmt parses to, or None if stmt has none."""
-    # An elif sits at its if's column; a block under else is indented.
+    """Return the if an elif after stmt parses to, or None if stmt has none.
+
+    An elif sits at its if's column; a block under else is indented.
+    """
     branch = stmt.orelse[0] if stmt.orelse else None
     if isinstance(branch, ast.If) and branch.col_offset == stmt.col_offset:
         return branch

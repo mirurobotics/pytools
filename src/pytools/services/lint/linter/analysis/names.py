@@ -93,14 +93,22 @@ def _var_kind(scope: _Scope) -> NameKind:
 
 
 def _scope_key(name: DeclaredName, declared: set[str]) -> ast.AST | str | None:
-    # Each type parameter has an annotation scope of its own, which the body's
-    # global and nonlocal statements don't reach.
+    """Return name's key in its scope, or None if global or nonlocal moves it.
+
+    Each type parameter has an annotation scope of its own, which the body's
+    global and nonlocal statements don't reach.
+    """
     if isinstance(name.node, _TYPE_PARAMS):
         return name.node
     return None if name.text in declared else name.text
 
 
 def _own_parts(scope: _Scope) -> list[ast.AST]:
+    """Return the parts of scope whose names bind in it.
+
+    Only a comprehension's loop targets are its own; a walrus in it binds in
+    the scope around it.
+    """
     if isinstance(scope, ast.Module):
         return list(scope.body)
     if isinstance(scope, ast.ClassDef):
@@ -109,15 +117,16 @@ def _own_parts(scope: _Scope) -> list[ast.AST]:
         return [*_params(scope.args), scope.body]
     if isinstance(scope, ast.FunctionDef | ast.AsyncFunctionDef):
         return [*scope.type_params, *_params(scope.args), *scope.body]
-    # Only a comprehension's loop targets are its own; a walrus in it binds
-    # in the scope around it.
     return [gen.target for gen in scope.generators]
 
 
 def _scope_nodes(nodes: list[ast.AST]) -> Iterator[ast.AST]:
-    # A nested scope's name binds in the scope around it, and so do names in
-    # its defaults, annotations, decorators and bases and a walrus in a
-    # comprehension. A parameter is entered only through its outer parts.
+    """Yield nodes and the nodes under them that bind in the scope holding them.
+
+    A nested scope's name binds in the scope around it, and so do names in its
+    defaults, annotations, decorators and bases and a walrus in a comprehension.
+    A parameter is entered only through its outer parts.
+    """
     for node in walk_outside(nodes, (*_SCOPES, ast.arg)):
         yield node
         if isinstance(node, _SCOPES):
@@ -174,17 +183,19 @@ def _binding(
 def _clause_binding(
     file: CheckInput, node: ast.AST, var_kind: NameKind
 ) -> DeclaredName | None:
+    """Return the name an except alias or match pattern binds, if any.
+
+    An except alias has no position of its own; it ends the clause header. A
+    capture name ends its pattern, which can span lines. A mapping rest has no
+    position of its own either, so a nolint may sit on any line of the pattern.
+    """
     if isinstance(node, ast.ExceptHandler) and node.name:
-        # An except alias has no position of its own; it ends the clause header.
         line = header_end(file, node)
         return DeclaredName(node.name, line, line, var_kind, node)
     if isinstance(node, ast.MatchAs | ast.MatchStar) and node.name:
-        # The name ends a capture pattern, which can span lines.
         line = node.end_lineno or node.lineno
         return DeclaredName(node.name, line, line, var_kind, node)
     if isinstance(node, ast.MatchMapping) and node.rest:
-        # A mapping rest has no position of its own, so a nolint may sit on
-        # any line of the pattern.
         last_line = node.end_lineno or node.lineno
         return DeclaredName(node.rest, node.lineno, last_line, var_kind, node)
     return None
