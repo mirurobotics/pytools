@@ -1,8 +1,43 @@
+from collections.abc import Callable
+
 import pytest
 
-from pytools.services.lint.linter.analysis.analysis import Rule
+from pytools.services.lint.linter.analysis.analysis import CheckInput, Rule
 from pytools.services.lint.linter.analysis.comments import Comment
-from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
+from pytools.services.lint.linter.analysis.names import declared_names
+from pytools.services.lint.linter.analysis.nolint import (
+    has_name_nolint,
+    has_nolint_on_lines,
+)
+
+Parse = Callable[[str], CheckInput]
+
+_MAPPING_REST = """\
+match a:
+    case {
+        **name  # nolint: varname
+    }:
+        pass
+"""
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param("name = 1  # nolint: varname\n", True, id="binding-line"),
+        pytest.param("# nolint: varname\nname = 1\n", False, id="line-above-binding"),
+        pytest.param(_MAPPING_REST, True, id="mapping-rest-pattern"),
+        pytest.param(
+            "# nolint: varname\ndef name():\n    pass\n", True, id="line-above-def"
+        ),
+    ],
+)
+def test_has_name_nolint_searches_the_name_lines(
+    parse: Parse, source: str, expected: bool
+) -> None:
+    file = parse(source)
+    name = declared_names(file)[0]
+    assert has_name_nolint(file, name, Rule.VARNAME) is expected
 
 
 @pytest.mark.parametrize(

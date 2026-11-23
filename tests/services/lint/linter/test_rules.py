@@ -8,7 +8,7 @@ from pytools.services.lint.linter.rules import Config, run_checks
 Parse = Callable[[str], CheckInput]
 
 _SOURCE = """\
-def f(parameter_name_too_long):
+def f(parameter_name_too_long, n):
     if a:
         if b:
             pass
@@ -23,25 +23,41 @@ _NESTDEPTH = Diagnostic(
 _NAMELEN = Diagnostic(
     "a.py", 1, 'name "parameter_name_too_long" is 23 chars (limit 20)'
 )
+_VARNAME = Diagnostic(
+    "a.py", 1, 'variable name "n" is shorter than 3 chars; use a descriptive name'
+)
 
 
 @pytest.mark.parametrize(
     ("exclude", "expected"),
     [
         pytest.param(
-            frozenset(), [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN], id="none"
+            frozenset(), [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME], id="none"
         ),
         pytest.param(
-            frozenset({Rule.FUNCLEN}), [_FILELEN, _NESTDEPTH, _NAMELEN], id="funclen"
+            frozenset({Rule.FUNCLEN}),
+            [_FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME],
+            id="funclen",
         ),
         pytest.param(
-            frozenset({Rule.FILELEN}), [_FUNCLEN, _NESTDEPTH, _NAMELEN], id="filelen"
+            frozenset({Rule.FILELEN}),
+            [_FUNCLEN, _NESTDEPTH, _NAMELEN, _VARNAME],
+            id="filelen",
         ),
         pytest.param(
-            frozenset({Rule.NESTDEPTH}), [_FUNCLEN, _FILELEN, _NAMELEN], id="nestdepth"
+            frozenset({Rule.NESTDEPTH}),
+            [_FUNCLEN, _FILELEN, _NAMELEN, _VARNAME],
+            id="nestdepth",
         ),
         pytest.param(
-            frozenset({Rule.NAMELEN}), [_FUNCLEN, _FILELEN, _NESTDEPTH], id="namelen"
+            frozenset({Rule.NAMELEN}),
+            [_FUNCLEN, _FILELEN, _NESTDEPTH, _VARNAME],
+            id="namelen",
+        ),
+        pytest.param(
+            frozenset({Rule.VARNAME}),
+            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN],
+            id="varname",
         ),
     ],
 )
