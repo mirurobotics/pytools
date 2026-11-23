@@ -15,7 +15,9 @@ class _TwoRules(StrEnum):
     OTHER = "other"
 
 
-_DEFAULT_CONFIG = Config(max_func_len=30, max_file_len=300, exclude=frozenset())
+_DEFAULT_CONFIG = Config(
+    max_func_len=30, max_file_len=300, max_nest_depth=2, exclude=frozenset()
+)
 
 
 def _parse(argv: list[str]) -> argparse.Namespace:
@@ -138,7 +140,12 @@ def test_lint_handler_exits_on_lint_error(monkeypatch: pytest.MonkeyPatch) -> No
         ([], _DEFAULT_CONFIG),
         (
             ["--max-func-len", "5", "--max-file-len", "7", "--exclude", "funclen"],
-            Config(max_func_len=5, max_file_len=7, exclude=frozenset({Rule.FUNCLEN})),
+            Config(
+                max_func_len=5,
+                max_file_len=7,
+                max_nest_depth=2,
+                exclude=frozenset({Rule.FUNCLEN}),
+            ),
         ),
     ],
 )

@@ -12,6 +12,7 @@ class Rule(StrEnum):
 
     FUNCLEN = "funclen"
     FILELEN = "filelen"
+    NESTDEPTH = "nestdepth"
 
 
 @dataclass(frozen=True)

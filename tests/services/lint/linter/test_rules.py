@@ -27,5 +27,5 @@ _FILELEN = Diagnostic("a.py", 1, "file is 3 lines (limit 1)")
 def test_run_checks_honors_exclude(
     parse: Parse, exclude: frozenset[Rule], expected: list[Diagnostic]
 ) -> None:
-    config = Config(max_func_len=1, max_file_len=1, exclude=exclude)
+    config = Config(max_func_len=1, max_file_len=1, max_nest_depth=1, exclude=exclude)
     assert run_checks(parse(_SOURCE), config) == expected
