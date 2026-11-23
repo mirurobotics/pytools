@@ -180,4 +180,3 @@ def _clause_binding(
     if isinstance(node, ast.MatchMapping) and node.rest:
         return DeclaredName(node.rest, node.lineno, var_kind, node)
     return None
-
