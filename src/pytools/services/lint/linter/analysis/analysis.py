@@ -15,6 +15,7 @@ class Rule(StrEnum):
     FILELEN = "filelen"
     NESTDEPTH = "nestdepth"
     NAMELEN = "namelen"
+    VARNAME = "varname"
 
 
 @dataclass(frozen=True)
