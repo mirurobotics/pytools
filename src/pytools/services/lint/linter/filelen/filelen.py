@@ -25,5 +25,6 @@ def _count_lines(file: CheckInput) -> int:
 
 
 def _has_file_nolint(file: CheckInput) -> bool:
-    last = start_line(file.tree.body[0])
+    body = file.tree.body
+    last = start_line(body[0]) if body else len(file.lines)
     return has_nolint_on_lines(file.comments, Rule.FILELEN, 1, last)

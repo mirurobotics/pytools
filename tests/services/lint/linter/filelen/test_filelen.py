@@ -60,6 +60,11 @@ def test_check_reports_files_over_the_limit(
     assert filelen.check(parse(_THREE_LINES), max_len) == expected
 
 
+def test_check_reports_file_without_statements(parse: Parse) -> None:
+    diags = filelen.check(parse("\\\n\\\n\n"), 1)
+    assert diags == [Diagnostic("a.py", 1, "file is 2 lines (limit 1)")]
+
+
 @pytest.mark.parametrize(
     "source",
     [
