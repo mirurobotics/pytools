@@ -89,6 +89,23 @@ def header_end(
     return max(line, node.lineno)
 
 
+def body_lines(file: CheckInput, func: Function) -> range:
+    """Return the lines of func's body, after its header."""
+    # A comment indented under the def after its last statement is still in
+    # its body.
+    end = func.end_lineno or func.lineno
+    while end < len(file.lines) and _is_body_tail(file, end + 1, func.col_offset):
+        end += 1
+    return range(header_end(file, func) + 1, end + 1)
+
+
+def _is_body_tail(file: CheckInput, number: int, indent: int) -> bool:
+    if is_code_line(file, number):
+        return False
+    comment = file.comments.get(number)
+    return comment is None or comment.column > indent
+
+
 def module_header_end(file: CheckInput) -> int:
     """Return the first statement's line, or the last line of a module without one.
 
