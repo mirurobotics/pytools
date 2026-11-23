@@ -1,3 +1,4 @@
+import typing
 from collections.abc import Callable
 
 import pytest
@@ -290,3 +291,8 @@ def test_check_reports_name_without_its_nolint(
     parse: Parse, source: str, line: int
 ) -> None:
     assert namelen.check(parse(source)) == [_diag(line, _LONG, 30)]
+
+
+def test_scopes_match_the_nested_scope_type() -> None:
+    nested = typing.get_args(namelen._Nested.__value__)
+    assert set(namelen._SCOPES) == set(nested)

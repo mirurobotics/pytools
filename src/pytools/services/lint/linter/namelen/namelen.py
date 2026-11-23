@@ -108,8 +108,8 @@ def _own_parts(scope: _Scope) -> list[ast.AST]:
 
 
 def _scope_nodes(nodes: list[ast.AST]) -> Iterator[ast.AST]:
-    # A nested scope's name, and the parts of it Python runs in the scope
-    # around it, belong to that outer scope.
+    # A nested scope's name binds in the scope around it, and so do names in
+    # its defaults, decorators and bases and a walrus in a comprehension.
     for node in walk_outside(nodes, _SCOPES):
         yield node
         if isinstance(node, _SCOPES):
