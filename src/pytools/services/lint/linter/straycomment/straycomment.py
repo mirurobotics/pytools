@@ -3,9 +3,8 @@ import ast
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
-    body_lines,
     elif_branch,
-    functions,
+    function_body_lines,
     is_code_line,
     module_header_end,
 )
@@ -40,9 +39,8 @@ def _statement_starts(tree: ast.Module) -> set[int]:
 
 
 def _candidate_lines(file: CheckInput) -> list[int]:
-    skipped = set(range(1, module_header_end(file) + 1))
-    for func in functions(file.tree):
-        skipped.update(body_lines(file, func))
+    header = set(range(1, module_header_end(file) + 1))
+    skipped = header | function_body_lines(file)
     outside = [number for number in sorted(file.comments) if number not in skipped]
     return [number for number in outside if not is_code_line(file, number)]
 

@@ -90,12 +90,17 @@ def header_end(
     return max(line, node.lineno)
 
 
-def body_lines(file: CheckInput, func: Function) -> range:
-    """Return the lines of func's body, after its header.
+def function_body_lines(file: CheckInput) -> set[int]:
+    """Return the lines inside any function's body, after its header.
 
-    A comment indented under the def after its last statement is still in its
+    A comment indented under a def after its last statement is still in its
     body.
     """
+    bodies = [_body_lines(file, func) for func in functions(file.tree)]
+    return {number for body in bodies for number in body}
+
+
+def _body_lines(file: CheckInput, func: Function) -> range:
     end = func.end_lineno or func.lineno
     while end < len(file.lines) and _is_body_tail(file, end + 1, func.col_offset):
         end += 1
