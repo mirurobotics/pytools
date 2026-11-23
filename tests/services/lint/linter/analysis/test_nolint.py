@@ -39,4 +39,5 @@ def test_has_nolint_on_lines_searches_the_range(
     ],
 )
 def test_has_nolint_on_lines_matches_rule(comment: str, expected: bool) -> None:
-    assert has_nolint_on_lines({1: comment}, Rule.FUNCLEN, 1, 1) is expected
+    comments = {1: Comment(0, comment)}
+    assert has_nolint_on_lines(comments, Rule.FUNCLEN, 1, 1) is expected
