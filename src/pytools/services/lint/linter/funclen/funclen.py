@@ -6,6 +6,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     Diagnostic,
     Rule,
     is_code_line,
+    start_line,
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 
@@ -48,7 +49,7 @@ def _count_lines(func: _Function, lines: list[str]) -> int:
     skip = _literal_tail_lines(body)
     code_lines = [
         number
-        for number in range(body[0].lineno, _end_line(func) + 1)
+        for number in range(start_line(body[0]), _end_line(func) + 1)
         if number not in skip and is_code_line(lines[number - 1])
     ]
     return len(code_lines)

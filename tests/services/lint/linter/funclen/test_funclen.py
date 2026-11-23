@@ -116,6 +116,14 @@ async def f():
     await g()
     await h()
 """
+_DECORATED_FIRST_STATEMENT = """\
+def f(fn):
+    @wraps(fn)
+    def wrapper():
+        return fn()
+
+    return wrapper
+"""
 _DOCSTRING_ONLY = """\
 def f():
     '''Doc.'''
@@ -209,6 +217,7 @@ def test_check_keeps_nested_nolint_to_its_own_function(
         pytest.param(_CLOSING_LINE_STARTS_LITERAL, 2, id="closing-line-starts-code"),
         pytest.param(_CALL_ARGS, 3, id="call-args"),
         pytest.param(_ASYNC, 2, id="async"),
+        pytest.param(_DECORATED_FIRST_STATEMENT, 4, id="decorated-first-statement"),
     ],
 )
 def test_check_counts_code_lines(parse: Parse, source: str, count: int) -> None:

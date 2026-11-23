@@ -5,6 +5,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Rule,
     is_code_line,
+    start_line,
 )
 
 type _Function = ast.FunctionDef | ast.AsyncFunctionDef
@@ -17,20 +18,14 @@ def has_def_nolint(file: CheckInput, func: _Function, rule: Rule) -> bool:
 
     A comment-only line just above them counts too.
     """
-    first = _start_line(func)
+    first = start_line(func)
     if first > 1 and not is_code_line(file.lines[first - 2]):
         first -= 1
     return has_nolint_on_lines(file.comments, rule, first, _signature_end(file, func))
 
 
-def _start_line(node: ast.stmt) -> int:
-    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-        return min((dec.lineno for dec in node.decorator_list), default=node.lineno)
-    return node.lineno
-
-
 def _signature_end(file: CheckInput, func: _Function) -> int:
-    line = _start_line(func.body[0]) - 1
+    line = start_line(func.body[0]) - 1
     while line > func.lineno and not is_code_line(file.lines[line - 1]):
         line -= 1
     return max(line, func.lineno)

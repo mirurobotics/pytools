@@ -35,3 +35,10 @@ def is_code_line(line: str) -> bool:
     """Report whether line holds more than whitespace and a comment."""
     stripped = line.strip()
     return bool(stripped) and not stripped.startswith("#")
+
+
+def start_line(node: ast.stmt) -> int:
+    """Return the first line of node, counting its decorators."""
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+        return min((dec.lineno for dec in node.decorator_list), default=node.lineno)
+    return node.lineno
