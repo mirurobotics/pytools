@@ -42,6 +42,11 @@ def f():
     a = [({_LOCAL_OVER} := b) for b in c]
     {_LOCAL_OVER} = 1
 """
+_TYPE_PARAMETERS = f"""\
+{_LOCAL_OVER} = 1
+type A[{_LOCAL_OVER}] = int
+type B[{_LOCAL_OVER}] = int
+"""
 _NOLINT_ON_PARAMETER = f"""\
 def f(
     {_LONG},  # nolint: namelen
@@ -126,6 +131,7 @@ def test_check_reports_first_binding_in_a_scope(parse: Parse) -> None:
         pytest.param(_COMPREHENSION, [2, 3], id="comprehension"),
         pytest.param(_LAMBDA, [2, 3], id="lambda"),
         pytest.param(_COMPREHENSION_WALRUS, [2], id="comprehension-walrus"),
+        pytest.param(_TYPE_PARAMETERS, [2, 3], id="type-parameters"),
     ],
 )
 def test_check_reports_a_name_once_per_scope(

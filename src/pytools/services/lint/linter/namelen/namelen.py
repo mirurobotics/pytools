@@ -17,6 +17,7 @@ _MAX_NAME_LEN = 30
 _MAX_LOCAL_NAME_LEN = 20
 _MAX_TEST_NAME_LEN = 50
 
+_TYPE_PARAMS = (ast.TypeVar, ast.ParamSpec, ast.TypeVarTuple)
 _SCOPES = (
     ast.FunctionDef,
     ast.AsyncFunctionDef,
@@ -77,9 +78,11 @@ def _first_bindings(scope: _Scope) -> list[_Name]:
     bindings = [
         name for name in found if name is not None and name.text not in declared
     ]
-    firsts: dict[str, _Name] = {}
+    firsts: dict[ast.AST | str, _Name] = {}
     for name in sorted(bindings, key=lambda name: name.line):
-        firsts.setdefault(name.text, name)
+        # Each type parameter has an annotation scope of its own.
+        key = name.node if isinstance(name.node, _TYPE_PARAMS) else name.text
+        firsts.setdefault(key, name)
     return list(firsts.values())
 
 
@@ -137,8 +140,7 @@ def _binding(node: ast.AST, limit: int) -> _Name | None:
         return _Name(node.name, node.lineno, func_limit, node)
     if isinstance(node, ast.ClassDef):
         return _Name(node.name, node.lineno, _MAX_NAME_LEN, node)
-    if isinstance(node, ast.TypeVar | ast.ParamSpec | ast.TypeVarTuple):
-        # A type parameter is local to its own annotation scope.
+    if isinstance(node, _TYPE_PARAMS):
         return _Name(node.name, node.lineno, _MAX_LOCAL_NAME_LEN, node)
     if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
         return _Name(node.id, node.lineno, limit, node)
