@@ -97,3 +97,12 @@ def module_header_end(file: CheckInput) -> int:
     """
     body = file.tree.body
     return start_line(body[0]) if body else len(file.lines)
+
+
+def elif_branch(stmt: ast.If) -> ast.If | None:
+    """Return the if an elif after stmt parses to, or None if stmt has none."""
+    # An elif sits at its if's column; a block under else is indented.
+    branch = stmt.orelse[0] if stmt.orelse else None
+    if isinstance(branch, ast.If) and branch.col_offset == stmt.col_offset:
+        return branch
+    return None

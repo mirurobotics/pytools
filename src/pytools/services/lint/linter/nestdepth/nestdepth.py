@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
+    elif_branch,
     functions,
 )
 
@@ -50,16 +51,8 @@ def _nested_blocks(stmt: ast.stmt) -> list[list[ast.stmt]]:
 def _if_chain_blocks(stmt: ast.If) -> list[list[ast.stmt]]:
     # A loop, not recursion, so a long elif chain can't hit the recursion limit.
     blocks = [stmt.body]
-    while (branch := _elif(stmt)) is not None:
+    while (branch := elif_branch(stmt)) is not None:
         stmt = branch
         blocks.append(stmt.body)
     blocks.append(stmt.orelse)
     return blocks
-
-
-def _elif(stmt: ast.If) -> ast.If | None:
-    # An elif sits at its if's column; a block under else is indented.
-    branch = stmt.orelse[0] if stmt.orelse else None
-    if isinstance(branch, ast.If) and branch.col_offset == stmt.col_offset:
-        return branch
-    return None
