@@ -5,6 +5,10 @@ import pytest
 from pytools.commands import lint
 from pytools.commands.lint import add_lint_command
 from pytools.services.lint.lint import LintError, LintOptions
+from pytools.services.lint.linter.analysis.analysis import Rule
+from pytools.services.lint.linter.rules import Config
+
+_DEFAULT_CONFIG = Config(max_func_len=30, exclude=frozenset())
 
 
 def _parse(argv: list[str]) -> argparse.Namespace:
@@ -19,7 +23,8 @@ def _fail_lint(_opts: LintOptions) -> None:
 
 def test_add_lint_command_defaults() -> None:
     args = _parse([])
-    assert (args.paths, args.fix) == (["."], True)
+    defaults = (args.paths, args.fix, args.max_func_len, args.exclude, args.rule)
+    assert defaults == (["."], True, 30, frozenset(), None)
 
 
 @pytest.mark.parametrize(
@@ -46,10 +51,45 @@ def test_add_lint_command_parses_fix(flag: str, expected: bool) -> None:
     assert _parse([flag]).fix is expected
 
 
+def test_add_lint_command_parses_max_func_len() -> None:
+    assert _parse(["--max-func-len", "50"]).max_func_len == 50
+
+
+def test_add_lint_command_rejects_exclude_with_rule() -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        _parse(["--exclude", "funclen", "--rule", "funclen"])
+    assert excinfo.value.code == 2
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("funclen", frozenset({Rule.FUNCLEN})),
+        (" funclen , ,funclen, ", frozenset({Rule.FUNCLEN})),
+        ("", frozenset()),
+    ],
+)
+def test_add_lint_command_parses_exclude(raw: str, expected: frozenset[Rule]) -> None:
+    assert _parse(["--exclude", raw]).exclude == expected
+
+
+def test_add_lint_command_parses_rule() -> None:
+    assert _parse(["--rule", "funclen"]).rule is Rule.FUNCLEN
+
+
+@pytest.mark.parametrize("argv", [["--exclude", "funclen,typo"], ["--rule", "typo"]])
+def test_add_lint_command_rejects_unknown_rule(argv: list[str]) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        _parse(argv)
+    assert excinfo.value.code == 2
+
+
 def test_lint_handler_runs_lint(lint_calls: list[LintOptions]) -> None:
     args = _parse(["--paths", "src,tests", "--no-fix"])
     args.handler(args)
-    assert lint_calls == [LintOptions(paths=["src", "tests"], fix=False)]
+    assert lint_calls == [
+        LintOptions(paths=["src", "tests"], fix=False, linter_config=_DEFAULT_CONFIG)
+    ]
 
 
 def test_lint_handler_exits_on_lint_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -58,3 +98,18 @@ def test_lint_handler_exits_on_lint_error(monkeypatch: pytest.MonkeyPatch) -> No
     with pytest.raises(SystemExit) as excinfo:
         args.handler(args)
     assert isinstance(excinfo.value.__cause__, LintError)
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        ([], _DEFAULT_CONFIG),
+        (
+            ["--max-func-len", "0", "--exclude", "funclen"],
+            Config(max_func_len=0, exclude=frozenset({Rule.FUNCLEN})),
+        ),
+        (["--rule", "funclen"], _DEFAULT_CONFIG),
+    ],
+)
+def test_lint_options_builds_linter_config(argv: list[str], expected: Config) -> None:
+    assert lint._lint_options(_parse(argv)).linter_config == expected

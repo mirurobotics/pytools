@@ -1,0 +1,55 @@
+from pathlib import Path
+
+import pytest
+
+from pytools.services.lint.linter.rules import Config
+from pytools.services.lint.linter.run import run_linter
+
+_CONFIG = Config(max_func_len=1, exclude=frozenset())
+_TWO_LONG_FUNCTIONS = """\
+def f():
+    a = 1
+    b = 2
+
+
+def g():
+    a = 1
+    b = 2
+"""
+_SHORT_FUNCTION = """\
+def h():
+    return 1
+"""
+
+
+def test_run_linter_prints_diagnostics_and_returns_count(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    long_file = tmp_path / "long.py"
+    long_file.write_text(_TWO_LONG_FUNCTIONS, encoding="utf-8")
+    short_file = tmp_path / "short.py"
+    short_file.write_text(_SHORT_FUNCTION, encoding="utf-8")
+    count = run_linter([str(long_file), str(short_file)], _CONFIG)
+    assert capsys.readouterr().out.splitlines() == [
+        f"{long_file}:1: function f is 2 lines (limit 1)",
+        f"{long_file}:6: function g is 2 lines (limit 1)",
+    ]
+    assert count == 2
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(b"def f(:\n", id="syntax-error"),
+        pytest.param(b"\xff\n", id="not-utf-8"),
+    ],
+)
+def test_run_linter_warns_and_skips_unparsable_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], content: bytes
+) -> None:
+    bad_file = tmp_path / "bad.py"
+    bad_file.write_bytes(content)
+    count = run_linter([str(bad_file)], _CONFIG)
+    captured = capsys.readouterr()
+    assert (count, captured.out) == (0, "")
+    assert captured.err.startswith(f"warning: {bad_file}: ")
