@@ -32,7 +32,7 @@ def _functions(tree: ast.Module) -> list[Function]:
 def _check_function(
     file: CheckInput, func: Function, max_len: int
 ) -> Diagnostic | None:
-    count = _count_lines(func, file.lines)
+    count = _count_lines(file, func)
     if count <= max_len:
         return None
     if has_def_nolint(file, func, Rule.FUNCLEN):
@@ -41,7 +41,7 @@ def _check_function(
     return Diagnostic(file.path, func.lineno, message)
 
 
-def _count_lines(func: Function, lines: list[str]) -> int:
+def _count_lines(file: CheckInput, func: Function) -> int:
     body = func.body[1:] if ast.get_docstring(func) is not None else func.body
     if not body:
         return 0
@@ -49,7 +49,7 @@ def _count_lines(func: Function, lines: list[str]) -> int:
     code_lines = [
         number
         for number in range(start_line(body[0]), _end_line(func) + 1)
-        if number not in skip and is_code_line(lines[number - 1])
+        if number not in skip and is_code_line(file, number)
     ]
     return len(code_lines)
 

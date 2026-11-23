@@ -15,7 +15,7 @@ class _TwoRules(StrEnum):
     OTHER = "other"
 
 
-_DEFAULT_CONFIG = Config(max_func_len=30, exclude=frozenset())
+_DEFAULT_CONFIG = Config(max_func_len=30, max_file_len=300, exclude=frozenset())
 
 
 def _parse(argv: list[str]) -> argparse.Namespace:
@@ -30,8 +30,15 @@ def _fail_lint(_opts: LintOptions) -> None:
 
 def test_add_lint_command_defaults() -> None:
     args = _parse([])
-    defaults = (args.paths, args.fix, args.max_func_len, args.exclude, args.rule)
-    assert defaults == (["."], True, 30, frozenset(), None)
+    defaults = (
+        args.paths,
+        args.fix,
+        args.max_func_len,
+        args.max_file_len,
+        args.exclude,
+        args.rule,
+    )
+    assert defaults == (["."], True, 30, 300, frozenset(), None)
 
 
 @pytest.mark.parametrize(
@@ -66,6 +73,17 @@ def test_add_lint_command_parses_max_func_len() -> None:
 def test_add_lint_command_rejects_bad_max_func_len(raw: str) -> None:
     with pytest.raises(SystemExit) as excinfo:
         _parse(["--max-func-len", raw])
+    assert excinfo.value.code == 2
+
+
+def test_add_lint_command_parses_max_file_len() -> None:
+    assert _parse(["--max-file-len", "500"]).max_file_len == 500
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "ten"])
+def test_add_lint_command_rejects_bad_max_file_len(raw: str) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        _parse(["--max-file-len", raw])
     assert excinfo.value.code == 2
 
 
@@ -119,8 +137,8 @@ def test_lint_handler_exits_on_lint_error(monkeypatch: pytest.MonkeyPatch) -> No
     [
         ([], _DEFAULT_CONFIG),
         (
-            ["--max-func-len", "5", "--exclude", "funclen"],
-            Config(max_func_len=5, exclude=frozenset({Rule.FUNCLEN})),
+            ["--max-func-len", "5", "--max-file-len", "7", "--exclude", "funclen"],
+            Config(max_func_len=5, max_file_len=7, exclude=frozenset({Rule.FUNCLEN})),
         ),
     ],
 )
