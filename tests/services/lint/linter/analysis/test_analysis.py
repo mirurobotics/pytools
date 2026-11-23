@@ -6,6 +6,7 @@ import pytest
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
+    function_body_lines,
     functions,
     is_code_line,
     module_header_end,
@@ -41,6 +42,19 @@ c = '''
 # not a comment
 '''
 # spaced \t
+"""
+_FUNCTION_BODIES = """\
+def helper(
+    first,
+):
+    return first
+    # tail
+# outside
+class Point:
+    async def fetch(self):
+        def inner(): pass
+        return inner
+LIMIT = 1
 """
 _MODULE_HEADER = """\
 #!/usr/bin/env python3
@@ -85,6 +99,18 @@ def test_walk_outside_does_not_enter_stop_nodes(parse: Parse) -> None:
 )
 def test_is_code_line(parse: Parse, number: int, expected: bool) -> None:
     assert is_code_line(parse(_SOURCE), number) is expected
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(_FUNCTION_BODIES, {4, 5, 9, 10}, id="bodies"),
+        pytest.param("def f(): pass\nLIMIT = 1\n", set(), id="one-line-def"),
+        pytest.param("LIMIT = 1\n", set(), id="no-functions"),
+    ],
+)
+def test_function_body_lines(parse: Parse, source: str, expected: set[int]) -> None:
+    assert function_body_lines(parse(source)) == expected
 
 
 @pytest.mark.parametrize(
