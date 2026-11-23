@@ -2,6 +2,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
     Rule,
+    is_code_line,
     start_line,
 )
 from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
@@ -19,18 +20,8 @@ def check(file: CheckInput, max_len: int) -> list[Diagnostic]:
 
 
 def _count_lines(file: CheckInput) -> int:
-    code_lines = [
-        line
-        for number, line in enumerate(file.lines, start=1)
-        if _strip_comment(line, file.comments.get(number)).strip()
-    ]
-    return len(code_lines)
-
-
-def _strip_comment(line: str, comment: str | None) -> str:
-    if comment is None:
-        return line
-    return line[: line.rfind(comment)]
+    numbers = range(1, len(file.lines) + 1)
+    return sum(1 for number in numbers if is_code_line(file, number))
 
 
 def _has_file_nolint(file: CheckInput) -> bool:

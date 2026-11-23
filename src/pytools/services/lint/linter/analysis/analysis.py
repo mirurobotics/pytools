@@ -34,10 +34,11 @@ class Diagnostic:
         return f"{self.path}:{self.line}: {self.message}"
 
 
-def is_code_line(line: str) -> bool:
-    """Report whether line holds more than whitespace and a comment."""
-    stripped = line.strip()
-    return bool(stripped) and not stripped.startswith("#")
+def is_code_line(file: CheckInput, number: int) -> bool:
+    """Report whether line number holds more than whitespace and a comment."""
+    stripped = file.lines[number - 1].strip()
+    comment = file.comments.get(number)
+    return bool(stripped) and (comment is None or not stripped.startswith(comment))
 
 
 def start_line(node: ast.stmt) -> int:

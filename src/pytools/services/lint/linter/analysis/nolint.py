@@ -17,14 +17,14 @@ def has_def_nolint(file: CheckInput, func: Function, rule: Rule) -> bool:
     A comment-only line just above them counts too.
     """
     first = start_line(func)
-    if first > 1 and not is_code_line(file.lines[first - 2]):
+    if first > 1 and not is_code_line(file, first - 1):
         first -= 1
     return has_nolint_on_lines(file.comments, rule, first, _signature_end(file, func))
 
 
 def _signature_end(file: CheckInput, func: Function) -> int:
     line = start_line(func.body[0]) - 1
-    while line > func.lineno and not is_code_line(file.lines[line - 1]):
+    while line > func.lineno and not is_code_line(file, line):
         line -= 1
     return max(line, func.lineno)
 
