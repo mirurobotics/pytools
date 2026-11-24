@@ -52,9 +52,9 @@ def _is_constant_expr(expr: ast.expr) -> bool:
     """Report whether expr is written only in syntax that builds no mutable value.
 
     Its leaves are literals, names and dotted references such as re.IGNORECASE,
-    which Final keeps from being rebound; operators, tuples, frozensets and
-    f-strings combine them. A stack, not recursion, so long chains don't
-    overflow.
+    which Final keeps from being rebound; operators, conditionals, tuples,
+    frozensets and f-strings combine them. A stack, not recursion, so long
+    chains don't overflow.
     """
     pending = [expr]
     while pending:
@@ -80,6 +80,8 @@ def _parts(expr: ast.expr) -> list[ast.expr] | None:
         return [expr.left, expr.right]
     if isinstance(expr, ast.Compare):
         return [expr.left, *expr.comparators]
+    if isinstance(expr, ast.IfExp):
+        return [expr.test, expr.body, expr.orelse]
     if isinstance(expr, ast.BoolOp | ast.JoinedStr):
         return expr.values
     if isinstance(expr, ast.Tuple):
