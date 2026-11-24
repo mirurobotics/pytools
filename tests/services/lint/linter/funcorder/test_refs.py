@@ -123,10 +123,12 @@ except ValueError as err:
 _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
 _CLASS_LOCAL: Final = """\
 class Other:
-    Point = int
-    Gone = int
+    Point = Gone = Lost = int
     del Gone
-    value = Point(), Size(), Gone()
+    def drop(self): del Point
+    try: pass
+    except E as Lost: pass
+    value = Point(), Size(), Gone(), Lost()
     Size = int
 """
 _TYPE_PARAMS: Final = "@deco(Point)\ndef make[Point, Size, T](p: T, q=Size): pass\n"
@@ -144,9 +146,7 @@ class Other:
     [
         pytest.param("def run(): b(); a(); b()\n", ["b", "a", "b"], id="call-order"),
         pytest.param(_NESTED_DEF, ["helper"], id="nested-def"),
-        pytest.param(
-            _NESTED_DEF_OUTER_PARTS, ["deco", "make"], id="nested-def-outer-parts"
-        ),
+        pytest.param(_NESTED_DEF_OUTER_PARTS, ["deco", "make"], id="outer-parts"),
         pytest.param("def run(): return lambda: helper()\n", ["helper"], id="lambda"),
         pytest.param(_COMPREHENSION_THEN_CALL, ["helper"], id="comprehension-target"),
         pytest.param(
@@ -286,7 +286,7 @@ def test_import_time_names_skips_function_bodies(
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
-        pytest.param(_CLASS_LOCAL, {"Gone", "Size", "int"}, id="bound-above-not-below"),
+        pytest.param(_CLASS_LOCAL, {"E", "Gone", "Lost", "Size", "int"}, id="local"),
         pytest.param(_TYPE_PARAMS, {"Point", "Size", "deco"}, id="type-params"),
         pytest.param(_OUTER_TYPE_PARAMS, {"Size"}, id="enclosing-type-params"),
         pytest.param(

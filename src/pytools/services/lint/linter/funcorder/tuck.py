@@ -45,10 +45,11 @@ def _is_tuckable(
 ) -> bool:
     """Report whether the tree at start can move up under the tree at last.
 
-    It can't hold a statement, which runs in order at import time, or a decl
-    that never moves, and in the file the class must rise below that tree's
-    end without passing what it uses when defined. Nor can a tree it passes
-    hold what it waits for or a caller.
+    It can't hold a statement, which runs in order at import time, a decl
+    whose definition may run scope code, or a class whose name is bound again,
+    and in the file the class must rise below that tree's end without passing
+    what it uses when defined. Nor can a tree it passes hold what it waits for
+    or a caller.
     """
     tree, end = trees[start], trees[last][-1]
     if any(idx not in model.decls and idx not in model.stubs for idx in tree):

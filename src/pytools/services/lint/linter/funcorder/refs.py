@@ -16,6 +16,7 @@ from pytools.services.lint.linter.analysis.names import (
     own_parts,
     param_defaults,
 )
+from pytools.services.lint.linter.funcorder.loaded import loaded_nodes
 
 _ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 _COMPS: Final = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
@@ -123,6 +124,7 @@ class ImportTimeNames:
 
     loads: set[str]  # loaded from the scope it's in, outside lambda bodies
     called: set[str]  # used other than by only loading them, or read in a lambda
+    stored: set[str]  # a class body's values, which only `__set_name__` may run
     binds: frozenset[str]  # bound anywhere it runs, but by an import
 
 
@@ -143,67 +145,20 @@ def import_time_names(
     pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0, frozenset()))]
     nodes: list[ast.AST] = []
     loads: set[str] = set()
-    loaded: set[ast.AST] = set()
     while pending:
         node, hidden = pending.pop()
         nodes.append(node)
-        loaded.update(_loaded_parts(node))
         if _is_load(node) and node.id != own and not _is_hidden(hidden, node.id):
             loads.add(node.id)
         pending.extend(_import_time_parts(file, node, hidden, is_class=is_class))
-    called = _called(nodes, loaded)
+    assigns = [node for node in nodes if isinstance(node, (ast.Assign, ast.AnnAssign))]
+    stored = [node.value for node in assigns if isinstance(node.value, ast.Name)]
+    classes = [node for node in nodes if isinstance(node, ast.ClassDef)]
+    body = {part for cls in classes for part in _run_nodes(list(cls.body))}
+    called = _called(nodes, loaded_nodes(nodes, body) | set(stored))
     bound = [node for node in nodes if not isinstance(node, ast.alias)]
-    return ImportTimeNames(loads, called, _bound_names(file, bound))
-
-
-def _loaded_parts(node: ast.AST) -> list[ast.AST]:
-    """Return the parts of node it only loads, running none of their code.
-
-    Those are an annotation, a value assigned to names or attributes without
-    unpacking it, a list or tuple element, and a subscript slice of a name or
-    attribute, such as `list[Vec]`. A call argument may run, since the callee
-    can call it, and so may a named value, since a class body hands what it
-    binds to `__set_name__`.
-    """
-    if isinstance(node, (ast.Assign, ast.AnnAssign)):
-        return _loaded_assign_parts(node)
-    if isinstance(node, (ast.List, ast.Tuple)):
-        return list(node.elts)
-    if isinstance(node, _ROOTS):
-        return _loaded_def_parts(node)
-    if isinstance(node, ast.Subscript) and _is_named(node.value):
-        return [node.slice]
-    return []
-
-
-def _loaded_assign_parts(node: ast.Assign | ast.AnnAssign) -> list[ast.AST]:
-    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-    parts: list[ast.AST] = [node.annotation] if isinstance(node, ast.AnnAssign) else []
-    is_plain = all(isinstance(target, (ast.Name, ast.Attribute)) for target in targets)
-    if node.value is not None and is_plain and not _is_named(node.value):
-        parts.append(node.value)
-    return parts
-
-
-def _is_named(node: ast.expr) -> bool:
-    while isinstance(node, ast.Attribute):
-        node = node.value
-    return isinstance(node, ast.Name)
-
-
-def _loaded_def_parts(node: _Root) -> list[ast.AST]:
-    """Return a def's or lambda's defaults, annotations and setter's def."""
-    if isinstance(node, ast.Lambda):
-        return param_defaults(node.args)
-    decorators = node.decorator_list
-    loaded = [part for part in outer_parts(node) if part not in decorators]
-    replaced = [dec.value for dec in decorators if _is_on(dec, node.name)]
-    return [*loaded, *replaced]
-
-
-def _is_on(decorator: ast.expr, name: str) -> TypeGuard[ast.Attribute]:
-    value = decorator.value if isinstance(decorator, ast.Attribute) else None
-    return isinstance(value, ast.Name) and value.id == name
+    names = {name.id for name in stored}
+    return ImportTimeNames(loads, called, names, _bound_names(file, bound))
 
 
 def _is_hidden(hidden: _Hidden, name: str) -> bool:
@@ -323,8 +278,12 @@ def _bound_names(file: CheckInput, nodes: list[ast.AST]) -> frozenset[str]:
 
 
 def _deleted(nodes: list[ast.AST]) -> frozenset[str]:
+    """Return the names nodes delete, as `del` and an except alias's end do."""
     names = [node for node in nodes if isinstance(node, ast.Name)]
-    return frozenset(name.id for name in names if isinstance(name.ctx, ast.Del))
+    handlers = [node for node in nodes if isinstance(node, ast.ExceptHandler)]
+    aliases = [handler.name for handler in handlers if handler.name]
+    deleted = [name.id for name in names if isinstance(name.ctx, ast.Del)]
+    return frozenset([*aliases, *deleted])
 
 
 def _declared(nodes: list[ast.AST], kind: type[ast.Global | ast.Nonlocal]) -> set[str]:
@@ -370,3 +329,5 @@ def _called(nodes: list[ast.AST], loaded: set[ast.AST]) -> set[str]:
 
 def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:
     return isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+
+

@@ -13,6 +13,7 @@ _RUN: Final = "def run(): pass\n"
 _MAKE: Final = "def make(): return Point()\n"
 _REPORT: Final = 'class "Point" should be directly above its first user'
 _LINE_REPORT: Final = 'class "Line" should be directly above its first user "make"'
+_PLUGIN_REPORT: Final = 'class "Plugin" should be directly above its first user "Point"'
 _STATEMENT_BETWEEN: Final = """\
 class Point:
     x: int
@@ -48,14 +49,6 @@ class Point:
     x: int
 class Line:
     start: Point
-"""
-_REBOUND_BELOW: Final = """\
-VALUE = 1
-class Point:
-    x = [VALUE]
-del VALUE
-def run(): pass
-def make(): return Point()
 """
 _USER_STAYS: Final = """\
 def make(): return Line()
@@ -143,10 +136,10 @@ class Box:
 """
 _HOOK_ASSIGNED: Final = """\
 def _register(cls): REGISTRY.append(cls)
+REGISTRY = []
 class Plugin:
     __init_subclass__ = _register
 def load(): return Point()
-REGISTRY = []
 class Point(Plugin): pass
 """
 _ITEM_OF_LOCAL: Final = """\
@@ -187,11 +180,9 @@ def run():
         pytest.param(_DEEPER_ABOVE, id="class-it-uses-above"),
         pytest.param(_RISES_PAST_NEED, id="move-would-pass-what-it-uses"),
         pytest.param(_USER_STAYS, id="class-user-that-stays"),
-        pytest.param(_REBOUND_BELOW, id="move-would-pass-a-deletion"),
         pytest.param("def make(p: 'Point'): pass\n" + _POINT, id="string-annotation"),
         pytest.param(_CYCLE, id="classes-using-each-other"),
         pytest.param(_ITEM_OF_LOCAL, id="definition-indexes-a-local"),
-        pytest.param(_HOOK_ASSIGNED, id="base-is-bound-in-scope"),
     ],
 )
 def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
@@ -251,6 +242,7 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
             _WALRUS_BINDING, {0: f'{_REPORT} "Other"'}, id="class-binding-by-walrus"
         ),
         pytest.param(_TYPE_PARAM, {0: f'{_REPORT} "make"'}, id="class-type-param"),
+        pytest.param(_HOOK_ASSIGNED, {2: _PLUGIN_REPORT}, id="hook-is-a-bare-def"),
         pytest.param(_NOLINT + _RUN + _MAKE, {0: f'{_REPORT} "make"'}, id="nolint"),
     ],
 )

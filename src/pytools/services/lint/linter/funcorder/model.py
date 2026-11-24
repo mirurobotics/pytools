@@ -69,8 +69,9 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    needs = _needs(file, scope.body, decls, loads)
-    classes = find_classes(file, scope, decls, refs, effects, needs)
+    binders = _binders(file, scope.body, decls, loads)
+    needs = graph.above(binders)
+    classes = find_classes(file, scope, decls, refs, effects, binders)
     return Model(
         scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
     )
@@ -193,13 +194,13 @@ def _openers(
     return openers
 
 
-def _needs(
+def _binders(
     file: CheckInput,
     stmts: list[ast.stmt],
     decls: dict[int, Decl],
     loads: list[set[str]],
 ) -> dict[int, frozenset[int]]:
-    """Return the statements above each decl that it uses when defined.
+    """Return the statements that bind or delete a name each decl uses when defined.
 
     The stubs merged into a decl are defined with it.
     """
@@ -209,8 +210,8 @@ def _needs(
         for idx, decl in decls.items()
     }
     return {
-        idx: frozenset(other for other in range(idx) if binds[other] & defined[idx])
-        for idx in decls
+        idx: frozenset(other for other, names in enumerate(binds) if names & used)
+        for idx, used in defined.items()
     }
 
 

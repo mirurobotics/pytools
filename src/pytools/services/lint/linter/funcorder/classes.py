@@ -35,7 +35,7 @@ class Classes:
     uses: dict[int, Use]  # where each class without methods that can move goes
     inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
-    kept: frozenset[int]  # decls that never move
+    kept: frozenset[int]  # decls whose definition may run scope code, shadowed classes
 
 
 def find_classes(
@@ -44,17 +44,21 @@ def find_classes(
     decls: dict[int, Decl],
     refs: dict[int, list[int]],
     effects: list[ImportTimeNames],
-    needs: dict[int, frozenset[int]],
+    binders: dict[int, frozenset[int]],
 ) -> Classes:
-    """Return where the classes in scope go, from the statements that use them."""
+    """Return where the classes in scope go, from the statements that use them.
+
+    Binders are the statements that bind a name each decl uses when defined.
+    """
     loads = [found.loads for found in effects]
     users = _users(file, scope, decls, refs, loads)
     used = {cls: found for cls, found in users.items() if found}
     changes = [bound_names(file, stmt) for stmt in scope.body]
-    kept = _runs_code(decls, effects) | _rebound(decls, changes)
+    kept = _runs_code(decls, effects) | _shadowed_classes(decls, changes)
     plain = _plain(decls, used)
-    rebinds = _rebinds(changes, effects, plain)
-    uses = _place(decls, plain, needs, kept, rebinds)
+    blocked = _blocked(decls, effects, binders, kept, changes, plain)
+    uses = _place(decls, plain, blocked, kept)
+    needs = graph.above(binders)
     inherited = _inherited(plain, uses, needs)
     return Classes(uses, inherited, _tucked(decls, used), kept)
 
@@ -95,13 +99,32 @@ def _runs_code(
 
     That code may read a statement a move would pass, so such a decl never
     moves. Its definition may run it when it uses a name bound in the scope, or
-    in that definition, other than by only loading it.
+    in that definition, other than by only loading it. A class body's value may
+    be a def's name, since a function has no `__set_name__` to run.
     """
     local = {name for found in effects for name in found.binds}
-    return frozenset(idx for idx in decls if not effects[idx].called.isdisjoint(local))
+    risky = local - _bare_def_names(decls, effects)
+    return frozenset(
+        idx
+        for idx in decls
+        if effects[idx].called & local or effects[idx].stored & risky
+    )
 
 
-def _rebound(decls: dict[int, Decl], changes: list[frozenset[str]]) -> frozenset[int]:
+def _bare_def_names(decls: dict[int, Decl], effects: list[ImportTimeNames]) -> set[str]:
+    """Return the names that only undecorated defs bind."""
+    defs = {
+        idx
+        for idx, decl in decls.items()
+        if isinstance(decl.stmt, DEFS) and not decl.stmt.decorator_list
+    }
+    others = [found.binds for idx, found in enumerate(effects) if idx not in defs]
+    return {decls[idx].stmt.name for idx in defs}.difference(*others)
+
+
+def _shadowed_classes(
+    decls: dict[int, Decl], changes: list[frozenset[str]]
+) -> frozenset[int]:
     """Return the classes whose name another statement binds or deletes.
 
     A use of that name may mean another binding, so such a class never moves.
@@ -128,26 +151,33 @@ def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
     }
 
 
-def _rebinds(
-    changes: list[frozenset[str]], effects: list[ImportTimeNames], plain: _Users
+def _blocked(
+    decls: dict[int, Decl],
+    effects: list[ImportTimeNames],
+    binders: dict[int, frozenset[int]],
+    kept: frozenset[int],
+    changes: list[frozenset[str]],
+    plain: _Users,
 ) -> dict[int, frozenset[int]]:
-    """Return the statements that bind or delete a name each class reads when defined.
+    """Return the statements each class without methods must not move past.
 
-    A class moved past one would read another value, or none.
+    A move past a statement that binds a name it reads when defined changes
+    that name. If it reads a name bound in the scope, so may any statement but
+    a decl that runs no scope code, such as a call that sets it as a global.
     """
-    reads = {cls: effects[cls].loads for cls in plain}
+    local = frozenset().union(*changes)
+    walls = frozenset(range(len(changes))) - (decls.keys() - kept)
     return {
-        cls: frozenset(idx for idx, found in enumerate(changes) if found & read)
-        for cls, read in reads.items()
+        cls: binders[cls] | (walls if effects[cls].loads & local else frozenset())
+        for cls in plain
     }
 
 
 def _place(
     decls: dict[int, Decl],
     plain: _Users,
-    needs: dict[int, frozenset[int]],
+    blocked: dict[int, frozenset[int]],
     kept: frozenset[int],
-    rebinds: dict[int, frozenset[int]],
 ) -> dict[int, Use]:
     """Return where each class without methods that can move goes.
 
@@ -157,7 +187,7 @@ def _place(
     fixed = kept & plain.keys()
     while True:
         uses = _first_uses(decls, plain, fixed)
-        movable = _movable(needs, rebinds, uses, fixed)
+        movable = _movable(blocked, uses, fixed)
         stuck = frozenset(uses) - movable
         if stuck <= fixed:
             return {cls: use for cls, use in uses.items() if cls in movable}
@@ -222,34 +252,28 @@ def _use(
 
 
 def _movable(
-    needs: dict[int, frozenset[int]],
-    rebinds: dict[int, frozenset[int]],
-    uses: dict[int, Use],
-    fixed: frozenset[int],
+    blocked: dict[int, frozenset[int]], uses: dict[int, Use], fixed: frozenset[int]
 ) -> frozenset[int]:
     """Return the classes that can move to their first user.
 
-    One that rises must not pass a statement it uses when defined, unless that
-    is a deeper class rising with it, so deeper classes are decided first. One
-    that sinks must not pass a statement that binds or deletes a name it reads
-    when defined.
+    One must not pass a statement it's blocked by, unless that is a deeper
+    class moving to the same place, so deeper classes are decided first.
     """
     movable: set[int] = set()
     for cls in sorted(uses, key=lambda idx: -uses[idx].depth):
         use = uses[cls]
-        is_movable = all(_stays_above(uses, movable, use, need) for need in needs[cls])
-        is_kept = rebinds[cls].isdisjoint(range(cls + 1, use.at))
-        if cls not in fixed and is_movable and is_kept:
+        passed = range(cls + 1, use.at) if cls < use.at else range(use.at, cls)
+        crossed = blocked[cls].intersection(passed)
+        is_movable = all(_moves_with(uses, movable, use, idx) for idx in crossed)
+        if cls not in fixed and is_movable:
             movable.add(cls)
     return frozenset(movable)
 
 
-def _stays_above(uses: dict[int, Use], movable: set[int], use: Use, need: int) -> bool:
-    if need < use.at:
-        return True
-    other = uses.get(need)
+def _moves_with(uses: dict[int, Use], movable: set[int], use: Use, idx: int) -> bool:
+    other = uses.get(idx)
     is_deeper = other is not None and other.at == use.at and other.depth > use.depth
-    return is_deeper and need in movable
+    return is_deeper and idx in movable
 
 
 def _inherited(

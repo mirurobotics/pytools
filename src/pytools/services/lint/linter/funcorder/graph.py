@@ -52,3 +52,11 @@ def callers_of(
         for caller, found in calls.items()
         if idx in found and (comps[caller] == comps[idx]) == in_cycle
     ]
+
+
+def above(edges: dict[int, frozenset[int]]) -> dict[int, frozenset[int]]:
+    """Return each node's edges to nodes before it."""
+    return {
+        idx: frozenset(other for other in found if other < idx)
+        for idx, found in edges.items()
+    }
