@@ -1,5 +1,6 @@
 import ast
 from dataclasses import dataclass
+from enum import Enum, auto
 from itertools import pairwise
 from typing import Final
 
@@ -11,6 +12,15 @@ _DEFS: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
+class DeclKind(Enum):
+    """How a decl takes part in its scope's order."""
+
+    PUBLIC = auto()
+    PRIVATE = auto()  # named with a leading underscore, and not a dunder
+    EXEMPT = auto()  # a def with a nolint, which keeps its place
+    CLASS = auto()  # one caller, through its methods' calls
+
+
 @dataclass(frozen=True)
 class Decl:
     """A def or class in a scope, one of the units the scope is ordered by."""
@@ -18,8 +28,7 @@ class Decl:
     idx: int
     stmt: Function | ast.ClassDef
     name: str
-    is_public: bool
-    exempt: bool
+    kind: DeclKind
 
 
 @dataclass(frozen=True)
@@ -47,7 +56,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     by_name = {
         decl.stmt.name: idx
         for idx, decl in decls.items()
-        if not isinstance(decl.stmt, ast.ClassDef)
+        if decl.kind is not DeclKind.CLASS
     }
     callees = {idx: _callees(file, scope, decl, by_name) for idx, decl in decls.items()}
     pinned = _pinned(scope.body, by_name)
@@ -92,15 +101,19 @@ def _decls(
 def _decl(
     file: CheckInput, idx: int, stmt: Function | ast.ClassDef, prefix: str
 ) -> Decl:
-    is_def = not isinstance(stmt, ast.ClassDef)
-    exempt = is_def and has_def_nolint(file, stmt, Rule.FUNCORDER)
-    return Decl(idx, stmt, prefix + stmt.name, _is_public(stmt.name), exempt)
+    return Decl(idx, stmt, prefix + stmt.name, _kind(file, stmt))
 
 
-def _is_public(name: str) -> bool:
-    """Report whether name is public; a dunder is Python's entry point."""
-    is_dunder = name.startswith("__") and name.endswith("__")
-    return is_dunder or not name.startswith("_")
+def _kind(file: CheckInput, stmt: Function | ast.ClassDef) -> DeclKind:
+    """Return stmt's kind; a dunder is Python's entry point, so it is public."""
+    if isinstance(stmt, ast.ClassDef):
+        return DeclKind.CLASS
+    if has_def_nolint(file, stmt, Rule.FUNCORDER):
+        return DeclKind.EXEMPT
+    is_dunder = stmt.name.startswith("__") and stmt.name.endswith("__")
+    if is_dunder or not stmt.name.startswith("_"):
+        return DeclKind.PUBLIC
+    return DeclKind.PRIVATE
 
 
 def _callees(
@@ -123,8 +136,8 @@ def _pinned(stmts: list[ast.stmt], by_name: dict[str, int]) -> set[int]:
 def _is_enforced(
     decls: dict[int, Decl], caller: int, callee: int, pinned: set[int]
 ) -> bool:
-    is_exempt = decls[caller].exempt or decls[callee].exempt
-    return not is_exempt and callee not in pinned
+    kinds = (decls[caller].kind, decls[callee].kind)
+    return DeclKind.EXEMPT not in kinds and callee not in pinned
 
 
 def _components(callees: dict[int, list[int]]) -> dict[int, int]:
@@ -180,7 +193,7 @@ def _openers(
 ) -> dict[int, int | None]:
     openers: dict[int, int | None] = {}
     for idx, decl in decls.items():
-        if decl.exempt:
+        if decl.kind is DeclKind.EXEMPT:
             continue
         if callers[idx]:
             openers[comps[idx]] = None
@@ -192,11 +205,7 @@ def _openers(
 def must_precede(model: Model, decl: Decl, other: Decl) -> bool:
     """Report whether decl, a public def nothing calls, must sit above other.
 
-    It must when other is a private def nothing calls; exempt defs are free.
+    It must when other is a private def nothing calls.
     """
-    defs = (decl.stmt, other.stmt)
-    if any(isinstance(stmt, ast.ClassDef) for stmt in defs):
-        return False
-    if decl.exempt or other.exempt or not decl.is_public or other.is_public:
-        return False
-    return decl.idx not in model.used and other.idx not in model.used
+    is_unused = decl.idx not in model.used and other.idx not in model.used
+    return (decl.kind, other.kind) == (DeclKind.PUBLIC, DeclKind.PRIVATE) and is_unused

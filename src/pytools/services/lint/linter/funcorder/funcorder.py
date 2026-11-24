@@ -3,6 +3,7 @@ import ast
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.funcorder.model import (
     Decl,
+    DeclKind,
     Model,
     build,
     must_precede,
@@ -36,7 +37,7 @@ def _check_scope(
 def _violations(
     model: Model, decl: Decl, order: list[int], below: set[int]
 ) -> list[str]:
-    if decl.exempt:
+    if decl.kind is DeclKind.EXEMPT:
         return []
     found = [_stepdown(model, decl), _rank_order(model, decl)]
     messages = [message for message in found if message is not None]

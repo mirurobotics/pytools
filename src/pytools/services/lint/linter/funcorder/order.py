@@ -1,4 +1,4 @@
-from pytools.services.lint.linter.funcorder.model import Model, must_precede
+from pytools.services.lint.linter.funcorder.model import DeclKind, Model, must_precede
 
 
 def arrange(model: Model) -> tuple[list[int], set[int]]:
@@ -78,7 +78,7 @@ def _is_ready(model: Model, idx: int, done: set[int]) -> bool:
     and a private def nothing calls for the public ones nothing calls.
     """
     decl = model.decls.get(idx)
-    if decl is None or decl.exempt:
+    if decl is None or decl.kind is DeclKind.EXEMPT:
         return True
     if not done.issuperset(model.callers[idx]):
         return False
