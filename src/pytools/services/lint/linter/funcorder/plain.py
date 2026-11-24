@@ -113,9 +113,7 @@ def _is_near(model: Model, uses: dict[int, _Use], cls: int) -> bool:
     )
 
 
-def _may_sit_between(
-    model: Model, uses: dict[int, _Use], use: _Use, idx: int
-) -> bool:
+def _may_sit_between(model: Model, uses: dict[int, _Use], use: _Use, idx: int) -> bool:
     if idx not in model.decls:
         return True
     other = uses.get(idx)
