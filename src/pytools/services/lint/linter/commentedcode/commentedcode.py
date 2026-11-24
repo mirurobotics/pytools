@@ -129,7 +129,10 @@ def _has_non_ascii_name(source: str) -> bool:
 
 
 def _docstrings(tree: ast.Module) -> set[ast.stmt]:
-    """Return the docstrings in tree, which read as prose but are code there."""
+    """Return the function and class docstrings in tree.
+
+    Each reads as prose but is code where it sits.
+    """
     scopes: list[Function | ast.ClassDef] = [
         node
         for node in ast.walk(tree)
