@@ -74,11 +74,11 @@ def _is_code(text: str) -> bool:
     tree = _parse(source)
     if tree is None or _has_spaced_dot(source, tree) or _has_non_ascii_name(source):
         return False
-    exempt = _exempt_stmts(tree)
+    docstrings = _docstrings(tree)
     stmts = [node for node in ast.walk(tree) if isinstance(node, ast.stmt)]
-    if not all(stmt in exempt or _is_plausible(stmt) for stmt in stmts):
+    if not all(stmt in docstrings or _is_plausible(stmt) for stmt in stmts):
         return False
-    return any(not isinstance(stmt, _NOT_CODE) for stmt in stmts)
+    return any(_is_code_stmt(stmt) for stmt in stmts)
 
 
 def _parse(source: str) -> ast.Module | None:
@@ -121,40 +121,33 @@ def _has_non_ascii_name(source: str) -> bool:
     return not all(name.isascii() for name in names)
 
 
-def _exempt_stmts(tree: ast.Module) -> set[ast.stmt]:
-    """Return the docstrings and class fields in tree.
-
-    Each would read as prose on its own, but is code where it sits.
-    """
+def _docstrings(tree: ast.Module) -> set[ast.stmt]:
+    """Return the docstrings in tree, which read as prose but are code there."""
     scopes: list[Function | ast.ClassDef] = [
         node
         for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
     ]
-    docstrings = {
-        scope.body[0] for scope in scopes if ast.get_docstring(scope) is not None
-    }
-    fields = {
-        stmt
-        for scope in scopes
-        if isinstance(scope, ast.ClassDef)
-        for stmt in scope.body
-        if isinstance(stmt, ast.AnnAssign)
-    }
-    return docstrings | fields
+    return {scope.body[0] for scope in scopes if ast.get_docstring(scope) is not None}
 
 
 def _is_plausible(stmt: ast.stmt) -> bool:
     """Report whether stmt reads as code rather than prose that parses.
 
-    A bare annotation reads as a "Note: text" label, and an expression
-    statement other than a call as a phrase.
+    An expression statement other than a call reads as a phrase.
+    """
+    return not isinstance(stmt, ast.Expr) or isinstance(stmt.value, _CODE_EXPRS)
+
+
+def _is_code_stmt(stmt: ast.stmt) -> bool:
+    """Report whether stmt is code on its own.
+
+    A bare annotation, like Go's bare var, fits in code but alone reads as a
+    "Note: text" label.
     """
     if isinstance(stmt, ast.AnnAssign):
         return stmt.value is not None
-    if isinstance(stmt, ast.Expr):
-        return isinstance(stmt.value, _CODE_EXPRS)
-    return True
+    return not isinstance(stmt, _NOT_CODE)
 
 
 def _first_non_blank(run: list[_Line]) -> int:
