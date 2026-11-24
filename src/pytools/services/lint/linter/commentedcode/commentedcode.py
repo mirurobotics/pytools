@@ -19,7 +19,6 @@ from pytools.services.lint.linter.analysis.comments import is_directive
 from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
 
 _MESSAGE: Final = "commented-out code; delete it instead"
-_NOT_CODE = (ast.Pass, ast.Break, ast.Continue, ast.Global, ast.Nonlocal)
 _ENCODING: Final = r"#.*?coding[:=]\s*[-\w.]+"
 
 
@@ -161,7 +160,9 @@ def _is_code_stmt(stmt: ast.stmt) -> bool:
     """
     if isinstance(stmt, ast.AnnAssign):
         return stmt.value is not None
-    return not isinstance(stmt, _NOT_CODE)
+    return not isinstance(
+        stmt, ast.Pass | ast.Break | ast.Continue | ast.Global | ast.Nonlocal
+    )
 
 
 def _first_non_blank(run: list[_Line]) -> int:
