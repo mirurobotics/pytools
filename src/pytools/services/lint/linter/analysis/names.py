@@ -11,7 +11,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 
 _TYPE_PARAMS: Final = (ast.TypeVar, ast.ParamSpec, ast.TypeVarTuple)
-_SCOPES: Final = (
+SCOPES: Final = (
     ast.FunctionDef,
     ast.AsyncFunctionDef,
     ast.Lambda,
@@ -61,14 +61,14 @@ class DeclaredName:
 def declared_names(file: CheckInput) -> list[DeclaredName]:
     """Return the first binding of each name in every scope of file, in line order."""
     scopes: list[_Scope] = [file.tree]
-    scopes += [node for node in ast.walk(file.tree) if isinstance(node, _SCOPES)]
+    scopes += [node for node in ast.walk(file.tree) if isinstance(node, SCOPES)]
     names = [name for scope in scopes for name in _first_bindings(file, scope)]
     return sorted(names, key=lambda name: name.line)
 
 
 def _first_bindings(file: CheckInput, scope: _Scope) -> list[DeclaredName]:
     var_kind = _var_kind(scope)
-    nodes = list(_scope_nodes(_own_parts(scope)))
+    nodes = list(_scope_nodes(own_parts(scope)))
     declared = {
         name
         for node in nodes
@@ -100,9 +100,9 @@ def _scope_nodes(nodes: list[ast.AST]) -> Iterator[ast.AST]:
     defaults, annotations, decorators and bases and a walrus in a comprehension.
     A parameter is entered only through its outer parts.
     """
-    for node in walk_outside(nodes, (*_SCOPES, ast.arg)):
+    for node in walk_outside(nodes, (*SCOPES, ast.arg)):
         yield node
-        if isinstance(node, _SCOPES):
+        if isinstance(node, SCOPES):
             yield from _scope_nodes(outer_parts(node))
 
 
@@ -129,7 +129,7 @@ def _defaults(args: ast.arguments) -> list[ast.AST]:
     return [default for default in (*args.defaults, *args.kw_defaults) if default]
 
 
-def _own_parts(scope: _Scope) -> list[ast.AST]:
+def own_parts(scope: _Scope) -> list[ast.AST]:
     """Return the parts of scope whose names bind in it.
 
     Only a comprehension's loop targets are its own; a walrus in it binds in
