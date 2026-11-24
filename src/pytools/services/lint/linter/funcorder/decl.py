@@ -21,5 +21,5 @@ class Decl:
     stmt: Function | ast.ClassDef
     name: str
     kind: DeclKind
-    first: int  # its first stub, such as a property getter, or idx without one
+    span: range  # its stubs, such as a property getter, then idx itself
     exempt: bool  # has a funcorder nolint, so it keeps its place

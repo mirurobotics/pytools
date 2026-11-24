@@ -114,7 +114,8 @@ def _decl(
     while first - 1 in stubs:
         first -= 1
     exempt = _is_exempt(file, stmt, scope.body[first:idx])
-    return Decl(idx, stmt, prefix + stmt.name, _kind(stmt), first, exempt)
+    span = range(first, idx + 1)
+    return Decl(idx, stmt, prefix + stmt.name, _kind(stmt), span, exempt)
 
 
 def _is_exempt(
@@ -145,11 +146,10 @@ def _refs(
 
     The stubs decl replaces, such as a property getter, call for it too.
     """
-    stmts = scope.body[decl.first : decl.idx + 1]
     found = [
         names[name]
-        for stmt in stmts
-        for name in called_names(file, scope, stmt)
+        for part in decl.span
+        for name in called_names(file, scope, scope.body[part])
         if name in names
     ]
     return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
@@ -206,7 +206,7 @@ def _binders(
     """
     binds = [bound_names(file, stmt) for stmt in stmts]
     defined = {
-        idx: {name for found in loads[decl.first : idx + 1] for name in found}
+        idx: {name for part in decl.span for name in loads[part]}
         for idx, decl in decls.items()
     }
     return {

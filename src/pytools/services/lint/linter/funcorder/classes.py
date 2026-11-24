@@ -85,7 +85,7 @@ def _users(
     """
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
     merged = {
-        stub: idx for idx, decl in decls.items() for stub in range(decl.first, idx)
+        stub: idx for idx, decl in decls.items() for stub in decl.span[:-1]
     }
     referred = [set(refs.get(idx, [])) for idx in range(len(scope.body))]
     for idx, stmt in enumerate(scope.body):
@@ -124,10 +124,11 @@ def _runs_code(
     """
     local = {name for found in effects for name in found.binds}
     risky = local - _bare_def_names(decls, bindings)
+    merged = {idx: [effects[part] for part in decl.span] for idx, decl in decls.items()}
     return frozenset(
         idx
-        for idx in decls
-        if effects[idx].called & local or effects[idx].stored & risky
+        for idx, parts in merged.items()
+        if any(part.called & local or part.stored & risky for part in parts)
     )
 
 
@@ -249,7 +250,7 @@ def _use(
     keys = [
         (uses[user].at, 0, -uses[user].depth - 1, user)
         if user in uses and user not in staying
-        else (decls[user].first if user in decls else user, 1, 0, user)
+        else (decls[user].span.start if user in decls else user, 1, 0, user)
         for user in users
     ]
     place, _, depth, user = min(keys)

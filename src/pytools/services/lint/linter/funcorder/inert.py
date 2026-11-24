@@ -20,34 +20,21 @@ _RUNS: Final = (
 _PURE: Final = frozenset(
     {
         "abc.abstractmethod",
-        "abstractmethod",
-        "cache",
-        "cached_property",
         "classmethod",
-        "dataclass",
         "dataclasses.dataclass",
         "enum.unique",
-        "final",
         "functools.cache",
         "functools.cached_property",
         "functools.lru_cache",
         "functools.singledispatch",
         "functools.total_ordering",
         "functools.wraps",
-        "lru_cache",
-        "overload",
-        "override",
         "property",
-        "runtime_checkable",
-        "singledispatch",
         "staticmethod",
-        "total_ordering",
         "typing.final",
         "typing.overload",
         "typing.override",
         "typing.runtime_checkable",
-        "unique",
-        "wraps",
     }
 )
 
@@ -118,4 +105,5 @@ def _is_pure(decorator: ast.expr) -> bool:
         target = target.value
     if not isinstance(target, ast.Name):
         return False
-    return ".".join([target.id, *reversed(attrs)]) in _PURE
+    name = ".".join([target.id, *reversed(attrs)])
+    return name in _PURE or any(pure.endswith(f".{name}") for pure in _PURE)

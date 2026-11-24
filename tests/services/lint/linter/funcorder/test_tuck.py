@@ -64,13 +64,10 @@ class Obj:
 B = record("b")
 def _g(): pass
 """
-_JUMPED_CALLER: Final = """\
-def run(): return Obj()
-def other(): _g()
-class Obj:
-    def ident(self): _g()
-def _g(): pass
-"""
+_JUMPED_CALLER: Final = (
+    "def run(): return Obj()\ndef other(): _g()\nclass Obj:\n"
+    + "    def ident(self): _g()\ndef _g(): pass\n"
+)
 _CLASS_USER: Final = (
     "class Other:\n    def use(self): return Obj()\ndef run(): pass\n" + _OBJ
 )
@@ -161,25 +158,22 @@ _CARRIED_OVERLOAD: Final = (
     + _CARRY
     + '@overload\ndef helper(x=print("b")): ...\ndef helper(x=0): return x\n'
 )
+_STUB_RUNS_CODE: Final = (
+    "def make(): return C()\nX = 1\ndef run(): return Obj()\nclass C:\n    y: X\n"
+    + "class Obj:\n    def m(self): return helper()\n"
+    + "@overload\ndef helper(x=make()): ...\ndef helper(x=0): return x\n"
+)
 _STAR_IMPORT: Final = (
     "def run(): return Obj()\nfrom m import *\ndef other(): pass\n" + _OBJ
 )
-_HELPER_WAITS: Final = """\
-def run(): return Obj()
-def other(): pass
-C = 1
-class Obj:
-    def ident(self): return _g()
-def _g(x=C): pass
-"""
-_STATEMENT_NEED: Final = """\
-def run(): return Obj()
-KEY = "k"
-def other(): pass
-class Obj:
-    key = KEY
-    def ident(self): return 1
-"""
+_HELPER_WAITS: Final = (
+    "def run(): return Obj()\ndef other(): pass\nC = 1\nclass Obj:\n"
+    + "    def ident(self): return _g()\ndef _g(x=C): pass\n"
+)
+_STATEMENT_NEED: Final = (
+    'def run(): return Obj()\nKEY = "k"\ndef other(): pass\n'
+    + "class Obj:\n    key = KEY\n    def ident(self): return 1\n"
+)
 
 
 def _diag(line: int, message: str) -> Diagnostic:
@@ -262,6 +256,7 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_CARRIED_DEFAULT, id="would-take-a-helper-past-a-write"),
         pytest.param(_CARRIED_HINT, id="would-take-a-helper-past-its-hint"),
         pytest.param(_CARRIED_OVERLOAD, id="would-take-an-overload-past-a-call"),
+        pytest.param(_STUB_RUNS_CODE, id="tree-holds-a-stub-that-calls-code"),
         pytest.param(_GLOBAL_THROUGH_CALL, id="would-rise-past-a-call"),
         pytest.param(_STAR_IMPORT, id="would-rise-past-a-star-import"),
         pytest.param(_NONLOCAL_WRITE, id="would-rise-past-a-nonlocal-write"),

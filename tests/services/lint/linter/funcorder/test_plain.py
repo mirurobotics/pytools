@@ -15,13 +15,9 @@ _REPORT: Final = 'class "Point" should be directly above its first user'
 _LINE_REPORT: Final = 'class "Line" should be directly above its first user "make"'
 _PLUGIN_REPORT: Final = 'class "Plugin" should be directly above its first user "Point"'
 _STATEMENT_BETWEEN: Final = _POINT + "ORIGIN = 0\n" + _MAKE
-_SAME_USER: Final = """\
-class Point:
-    x: int
-class Size:
-    width: int
-def make(p: Point, s: Size): pass
-"""
+_SAME_USER: Final = (
+    _POINT + "class Size:\n    width: int\ndef make(p: Point, s: Size): pass\n"
+)
 _DEEPER_ABOVE: Final = (
     _POINT + "class Line:\n    start: Point\ndef make(line: Line): pass\n"
 )
@@ -135,6 +131,11 @@ def other(): pass
 class Point:
     value = SETTINGS["key"]
 """
+_OVERLOAD_BETWEEN: Final = (
+    "V = 1\nclass Point:\n    x: V\n@overload\ndef f(x: int) -> int: ...\n"
+    + "def f(x): return x\n"
+    + _MAKE
+)
 _NOLINT: Final = "class Point:  # nolint: funcorder\n    x: int\n"
 _EXEMPT_BETWEEN: Final = """\
 X = 1
@@ -246,6 +247,7 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
         ),
         pytest.param(_TYPE_PARAM, {0: f'{_REPORT} "make"'}, id="class-type-param"),
         pytest.param(_HOOK_ASSIGNED, {2: _PLUGIN_REPORT}, id="hook-is-a-bare-def"),
+        pytest.param(_OVERLOAD_BETWEEN, {1: f'{_REPORT} "make"'}, id="overload"),
         pytest.param(
             _EXEMPT_BETWEEN, {1: f'{_REPORT} "make"'}, id="exempt-class-between"
         ),

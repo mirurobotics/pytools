@@ -2,13 +2,11 @@ import ast
 from collections import Counter
 from collections.abc import Collection
 from dataclasses import dataclass
-from typing import Final
 
+from pytools.services.lint.linter.analysis.analysis import DEFS
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.inert import is_inert
 from pytools.services.lint.linter.funcorder.refs import ImportTimeNames
-
-_DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
 @dataclass(frozen=True)
@@ -44,9 +42,9 @@ def find_walls(
     doesn't bind. A decl's stubs, such as overloads, count as part of it.
     """
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    merged = {idx: scope.body[decl.first : idx + 1] for idx, decl in decls.items()}
-    active = {idx for idx, stmts in merged.items() if not _is_inert(stmts)}
-    barriers = frozenset(range(len(effects))) - (decls.keys() - kept - active)
+    active = {idx for idx, decl in decls.items() if not _is_inert(scope, decl)}
+    calm = {part for idx in decls.keys() - kept - active for part in decls[idx].span}
+    barriers = frozenset(range(len(effects))) - calm
     reads = {idx: _reads(effects, decl) for idx, decl in decls.items()}
     walled = active | {idx for idx in decls if reads[idx] & bindings.keys()}
     if isinstance(scope, ast.ClassDef):
@@ -54,11 +52,13 @@ def find_walls(
     return Walls(binders, barriers, frozenset(walled))
 
 
-def _is_inert(stmts: list[ast.stmt]) -> bool:
-    return all(isinstance(stmt, _DECLS) and is_inert(stmt) for stmt in stmts)
+def _is_inert(scope: ast.Module | ast.ClassDef, decl: Decl) -> bool:
+    """Report whether defining decl and its stubs surely runs no code."""
+    stubs = [scope.body[part] for part in decl.span[:-1]]
+    is_calm = all(isinstance(stub, DEFS) and is_inert(stub) for stub in stubs)
+    return is_calm and is_inert(decl.stmt)
 
 
 def _reads(effects: list[ImportTimeNames], decl: Decl) -> set[str]:
     """Return the names decl and its stubs read when defined."""
-    merged = effects[decl.first : decl.idx + 1]
-    return {name for found in merged for name in found.reads}
+    return {name for part in decl.span for name in effects[part].reads}
