@@ -20,6 +20,7 @@ _COMPS: Final = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 
 type _Root = ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
 type _Comp = ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
+type _Hidden = tuple[dict[str, int], int]
 
 
 def called_names(
@@ -109,18 +110,6 @@ def _scoped_nodes(
     return found
 
 
-def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
-    """Return the parts of scope that run in it.
-
-    A comprehension's first iterable runs in the scope around it instead.
-    """
-    if not isinstance(scope, _COMPS):
-        return own_parts(scope)
-    first = scope.generators[0].iter
-    inner = [part for part in outer_parts(scope) if part is not first]
-    return [*own_parts(scope), *inner]
-
-
 def _position(node: ast.expr) -> tuple[int, int]:
     return node.lineno, node.col_offset
 
@@ -133,23 +122,29 @@ def import_time_names(file: CheckInput, stmt: ast.stmt) -> set[str]:
     stack, not recursion, so deep nesting doesn't overflow.
     """
     own = stmt.name if isinstance(stmt, DEFS) else ""
-    pending: list[tuple[ast.AST, frozenset[str]]] = [(stmt, frozenset())]
+    pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0))]
     names: set[str] = set()
     while pending:
         node, hidden = pending.pop()
         if (
             isinstance(node, ast.Name)
             and isinstance(node.ctx, ast.Load)
-            and node.id not in hidden | {own}
+            and node.id != own
+            and not _is_hidden(hidden, node.id)
         ):
             names.add(node.id)
         pending.extend(_import_time_parts(file, node, hidden))
     return names
 
 
+def _is_hidden(hidden: _Hidden, name: str) -> bool:
+    bound, idx = hidden
+    return bound.get(name, idx) < idx
+
+
 def _import_time_parts(
-    file: CheckInput, node: ast.AST, hidden: frozenset[str]
-) -> list[tuple[ast.AST, frozenset[str]]]:
+    file: CheckInput, node: ast.AST, hidden: _Hidden
+) -> list[tuple[ast.AST, _Hidden]]:
     """Return the parts of node that run when it does, with the names they hide.
 
     A name a class body binds hides the module's in later statements of that
@@ -159,16 +154,41 @@ def _import_time_parts(
         return [(part, hidden) for part in outer_parts(node)]
     if isinstance(node, _COMPS):
         first = node.generators[0].iter
-        rest = [part for part in ast.iter_child_nodes(node) if part is not first]
-        return [(first, hidden), *((part, frozenset()) for part in rest)]
+        rest: list[tuple[ast.AST, _Hidden]] = [
+            (part, ({}, 0)) for part in _inner_parts(node)
+        ]
+        return [(first, hidden), *rest]
     if not isinstance(node, ast.ClassDef):
         return [(part, hidden) for part in ast.iter_child_nodes(node)]
-    parts = [(part, hidden) for part in outer_parts(node)]
-    bound: frozenset[str] = frozenset()
-    for body_stmt in node.body:
-        parts.append((body_stmt, bound))
-        bound |= bound_names(file, body_stmt)
-    return parts
+    bound = _class_bindings(file, node)
+    outer = [(part, hidden) for part in outer_parts(node)]
+    return [*outer, *((part, (bound, idx)) for idx, part in enumerate(node.body))]
+
+
+def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
+    """Return the parts of scope that run in it.
+
+    A comprehension's first iterable runs in the scope around it instead.
+    """
+    if not isinstance(scope, _COMPS):
+        return own_parts(scope)
+    first = scope.generators[0].iter
+    inner = [part for part in outer_parts(scope) if part is not first]
+    return [*own_parts(scope), *inner]
+
+
+def _class_bindings(file: CheckInput, cls: ast.ClassDef) -> dict[str, int]:
+    """Return the first statement of cls's body that binds each name.
+
+    An annotation without a value binds nothing.
+    """
+    body = list(enumerate(cls.body))
+    return {
+        name: idx
+        for idx, stmt in reversed(body)
+        if not (isinstance(stmt, ast.AnnAssign) and stmt.value is None)
+        for name in bound_names(file, stmt)
+    }
 
 
 def bound_names(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:

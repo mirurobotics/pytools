@@ -134,7 +134,8 @@ class Other:
 _CLASS_LOCAL_COMPREHENSION: Final = """\
 class Other:
     Point = int
-    values = [Point() for _ in range(2)]
+    Size = int
+    values = [Point() for _ in Size()]
 """
 
 
@@ -287,9 +288,7 @@ def test_import_time_names_skips_function_bodies(
     [
         pytest.param(_CLASS_LOCAL, {"int"}, id="bound-above"),
         pytest.param(_CLASS_LOCAL_LATER, {"Point", "int"}, id="bound-below"),
-        pytest.param(
-            _CLASS_LOCAL_COMPREHENSION, {"Point", "int", "range"}, id="comprehension"
-        ),
+        pytest.param(_CLASS_LOCAL_COMPREHENSION, {"Point", "int"}, id="comprehension"),
     ],
 )
 def test_import_time_names_skips_class_local_names(

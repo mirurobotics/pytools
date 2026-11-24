@@ -81,10 +81,18 @@ class Point:
     @property
     def x(self): return 0
 """
-_PASS_BODY: Final = """\
+_BARE_METHOD: Final = """\
 class Point(ABC):
     @abstractmethod
     def x(self): pass
+"""
+_ANNOTATION_ONLY: Final = """\
+class Point:
+    x: int
+def run(): pass
+class Other:
+    Point: type
+    value = Point()
 """
 _NOLINT: Final = """\
 class Point:  # nolint: funcorder
@@ -165,6 +173,9 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
             {1: f'{_REPORT} "Line"', 2: _LINE_REPORT},
             id="deeper-class-rises-with-it",
         ),
+        pytest.param(
+            _ANNOTATION_ONLY, {0: f'{_REPORT} "Other"'}, id="class-annotation-only"
+        ),
         pytest.param(_NOLINT + _RUN + _MAKE, {0: f'{_REPORT} "make"'}, id="nolint"),
     ],
 )
@@ -194,7 +205,7 @@ def test_plain_violations_places_methodless_class(parse: Parse, source: str) -> 
     [
         pytest.param("class Point:\n    def __init__(self): pass\n", id="dunder"),
         pytest.param(_PROPERTY, id="property"),
-        pytest.param(_PASS_BODY, id="pass-body"),
+        pytest.param(_BARE_METHOD, id="pass-body"),
     ],
 )
 def test_plain_violations_skips_class_with_methods(parse: Parse, source: str) -> None:
