@@ -19,7 +19,7 @@ def _next_tuck(
     model: Model, trees: list[list[int]], waits: dict[int, set[int]]
 ) -> tuple[int, int] | None:
     """Return the tree a class heads that can move, and the tree it moves under."""
-    for cls in sorted(model.tucked):
+    for cls in sorted(model.classes.tucked):
         start = next((pos for pos, tree in enumerate(trees) if tree[0] == cls), None)
         if start is None:
             continue
@@ -31,7 +31,7 @@ def _next_tuck(
 
 def _last_user_tree(model: Model, trees: list[list[int]], cls: int) -> int | None:
     """Return the last of trees that holds a def above cls that uses it."""
-    users = set(model.tucked[cls])
+    users = set(model.classes.tucked[cls])
     found = [pos for pos, tree in enumerate(trees) if not users.isdisjoint(tree)]
     return max(found, default=None)
 

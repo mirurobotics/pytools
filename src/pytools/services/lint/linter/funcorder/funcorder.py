@@ -23,24 +23,24 @@ def _check_scope(
 ) -> list[Diagnostic]:
     model = build(file, scope)
     order, below = arrange(model)
-    misplaced = plain_violations(model)
-    return [
+    diags = [
         Diagnostic(file.path, decl.stmt.lineno, message)
         for decl in model.decls.values()
-        for message in _violations(model, decl, order, below, misplaced)
+        for message in _violations(model, decl, order, below)
     ]
+    diags.extend(
+        Diagnostic(file.path, model.decls[cls].stmt.lineno, message)
+        for cls, message in plain_violations(model).items()
+    )
+    return diags
 
 
 def _violations(
-    model: Model,
-    decl: Decl,
-    order: list[int],
-    below: set[int],
-    misplaced: dict[int, str],
+    model: Model, decl: Decl, order: list[int], below: set[int]
 ) -> list[str]:
     if decl.kind is DeclKind.EXEMPT:
         return []
-    found = [_stepdown(model, decl), _rank_order(model, decl), misplaced.get(decl.idx)]
+    found = [_stepdown(model, decl), _rank_order(model, decl)]
     messages = [message for message in found if message is not None]
     if messages or decl.idx not in below:
         return messages
@@ -73,7 +73,7 @@ def _directly_below(model: Model, decl: Decl, order: list[int]) -> list[str]:
     while pos > 0 and order[pos - 1] not in model.decls:
         pos -= 1
     prev = order[pos] - 1
-    while prev in model.plain:
+    while prev in model.classes.plain:
         prev -= 1
     if pos == 0 or order[pos - 1] == prev:
         return []

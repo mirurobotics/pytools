@@ -35,7 +35,7 @@ def _first_uses(model: Model) -> dict[int, _Use]:
     the deeper class sits above it.
     """
     uses: dict[int, _Use] = {}
-    for cls in model.plain:
+    for cls in model.classes.plain:
         _resolve(model, uses, cls)
     return uses
 
@@ -48,8 +48,8 @@ def _resolve(model: Model, uses: dict[int, _Use], root: int) -> None:
     pending = [root]
     while pending:
         cls = pending[-1]
-        users = model.plain[cls]
-        todo = [user for user in users if user in model.plain and user not in uses]
+        plain = model.classes.plain
+        todo = [user for user in plain[cls] if user in plain and user not in uses]
         if todo:
             pending.extend(todo)
         else:
@@ -64,9 +64,9 @@ def _use(model: Model, uses: dict[int, _Use], cls: int) -> _Use:
     """
     keys = [
         (uses[user].at, 0, -uses[user].depth - 1, user)
-        if user in model.plain
+        if user in model.classes.plain
         else (model.decls[user].first if user in model.decls else user, 1, 0, user)
-        for user in model.plain[cls]
+        for user in model.classes.plain[cls]
     ]
     place, _, depth, user = min(keys)
     return _Use(user, place, -depth)
