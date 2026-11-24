@@ -14,12 +14,7 @@ _MAKE: Final = "def make(): return Point()\n"
 _REPORT: Final = 'class "Point" should be directly above its first user'
 _LINE_REPORT: Final = 'class "Line" should be directly above its first user "make"'
 _PLUGIN_REPORT: Final = 'class "Plugin" should be directly above its first user "Point"'
-_STATEMENT_BETWEEN: Final = """\
-class Point:
-    x: int
-ORIGIN = 0
-def make(): return Point()
-"""
+_STATEMENT_BETWEEN: Final = _POINT + "ORIGIN = 0\n" + _MAKE
 _SAME_USER: Final = """\
 class Point:
     x: int
@@ -183,6 +178,7 @@ def run():
         pytest.param("def make(p: 'Point'): pass\n" + _POINT, id="string-annotation"),
         pytest.param(_CYCLE, id="classes-using-each-other"),
         pytest.param(_ITEM_OF_LOCAL, id="definition-indexes-a-local"),
+        pytest.param(_NOLINT + _RUN + _MAKE, id="nolint"),
     ],
 )
 def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
@@ -203,6 +199,11 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
             _POINT + _RUN + "class Options:\n    Point |= None\n",
             {0: f'{_REPORT} "Options"'},
             id="augmented-assignment",
+        ),
+        pytest.param(
+            _MAKE + "X = 1\nclass Point:\n    x = dict()\n",
+            {2: f'{_REPORT} "make"'},
+            id="module-class-that-calls-code",
         ),
         pytest.param(
             _POINT + _RUN + "class Line(Point):\n    def length(self): return 0\n",
@@ -248,7 +249,6 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
         ),
         pytest.param(_TYPE_PARAM, {0: f'{_REPORT} "make"'}, id="class-type-param"),
         pytest.param(_HOOK_ASSIGNED, {2: _PLUGIN_REPORT}, id="hook-is-a-bare-def"),
-        pytest.param(_NOLINT + _RUN + _MAKE, {0: f'{_REPORT} "make"'}, id="nolint"),
     ],
 )
 def test_plain_violations_reports_misplaced_class(

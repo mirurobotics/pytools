@@ -163,6 +163,10 @@ def _diag(line: int, message: str) -> Diagnostic:
         pytest.param(_EXEMPT_CALLER, id="exempt-caller"),
         pytest.param(_EXEMPT_METHOD_IN_GROUP, id="exempt-method-inside-its-group"),
         pytest.param(_CLASS_ABOVE_CALLEE, id="methodless-class-above-callee"),
+        pytest.param(
+            "def helper(): pass\ndef run(v=(lambda: helper())()): pass\n",
+            id="lambda-called-in-a-default",
+        ),
     ],
 )
 def test_check_skips_ordered_source(parse: Parse, source: str) -> None:

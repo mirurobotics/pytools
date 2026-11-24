@@ -6,9 +6,9 @@ def plain_violations(model: Model) -> dict[int, str]:
     """Report each class without methods not directly above its first user.
 
     Statements may sit between them, and so may other such classes placed above
-    the same user, as deep or less. A class is left alone when its definition
-    may run code from the scope, its name is bound again, or the move would pass
-    a statement that could change what it reads when defined.
+    the same user, as deep or less. A class is left alone when it has a nolint,
+    its definition may run code from the scope, its name is bound again, or the
+    move would pass a statement that could change what it reads when defined.
     """
     uses = model.classes.uses
     return {

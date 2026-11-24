@@ -9,12 +9,7 @@ from pytools.services.lint.linter.funcorder import funcorder
 type Parse = Callable[[str], CheckInput]
 
 _OBJ: Final = "class Obj:\n    def ident(self): return 1\n"
-_BELOW_USER: Final = """\
-def test_a(): return [Obj()]
-def test_b(): pass
-class Obj:
-    def ident(self): return 1
-"""
+_BELOW_USER: Final = "def test_a(): return [Obj()]\ndef test_b(): pass\n" + _OBJ
 _BELOW_HELPERS: Final = """\
 def run(): _helper()
 def _helper(): return Obj()
@@ -174,18 +169,13 @@ def outer():
             def ident(self, v=value): return v
     return Box
 """
-_GLOBAL_READ_THROUGH_CALL: Final = """\
+_GLOBAL_WRITE_ABOVE: Final = """\
 VALUE = 1
-def _initialize(): return VALUE
 class Box:
     def make(self): return self.Obj()
     class Update:
-        global VALUE
-        VALUE = 2
+        global VALUE; VALUE = 2
     def other(self): pass
-    class Obj:
-        captured = _initialize()
-        def ident(self): return 1
 """
 _STAR_IMPORT: Final = """\
 def run(): return Obj()
@@ -293,8 +283,28 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_STAR_IMPORT, id="would-rise-past-a-star-import"),
         pytest.param(_NONLOCAL_WRITE, id="would-rise-past-a-nonlocal-write"),
         pytest.param(_NONLOCAL_DEFAULT, id="default-would-pass-a-nonlocal-write"),
-        pytest.param(_GLOBAL_READ_THROUGH_CALL, id="would-call-past-a-global-write"),
     ],
 )
 def test_check_skips_class_left_where_it_is(parse: Parse, source: str) -> None:
     assert funcorder.check(parse(source)) == []
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        pytest.param("    @_register\n    class Obj:\n", id="decorator"),
+        pytest.param("    class Obj(Base):\n", id="base"),
+        pytest.param("    class Obj:\n        x = _initialize()\n", id="call"),
+        pytest.param("    class Obj:\n        x = SETTINGS['key']\n", id="subscript"),
+        pytest.param("    class Obj:\n        x = OTHER + 1\n", id="operator"),
+    ],
+)
+def test_check_skips_nested_class_running_code(parse: Parse, header: str) -> None:
+    source = _GLOBAL_WRITE_ABOVE + header + "        def ident(self): return 1\n"
+    assert funcorder.check(parse(source)) == []
+
+
+def test_check_tucks_inert_nested_class(parse: Parse) -> None:
+    inert = "    class Obj:\n        x = 1\n        def ident(self): pass\n"
+    message = '"Box.Obj" should be directly below "Box.make"'
+    assert funcorder.check(parse(_GLOBAL_WRITE_ABOVE + inert)) == [_diag(7, message)]

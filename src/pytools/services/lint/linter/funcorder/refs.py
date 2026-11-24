@@ -31,10 +31,7 @@ type _Hidden = tuple[dict[str, int], int, frozenset[str]]
 def called_names(
     file: CheckInput, scope: ast.Module | ast.ClassDef, stmt: ast.stmt
 ) -> list[str]:
-    """Return the names stmt calls, in order, in code that runs only when called.
-
-    A method calls its class's methods only through its receiver.
-    """
+    """Return the names stmt calls, in order, in code that runs only when called."""
     if isinstance(scope, ast.ClassDef):
         return _receiver_calls(file, stmt)
     return _free_calls(file, stmt)
@@ -142,7 +139,6 @@ class ImportTimeNames:
     stored: set[str]  # a class body's values, which only `__set_name__` may run
     binds: frozenset[str]  # bound, except by import, plus every name it declares global
     reads: set[str]  # read where it runs or in its lambdas, wherever they resolve
-    has_call: bool  # calls code where it runs, wherever the callee resolves
 
 
 def import_time_names(
@@ -158,16 +154,15 @@ def import_time_names(
     nodes, loads = _import_time_walk(file, stmt, own, is_class=is_class)
     seen = _import_time_walk(file, stmt, own, is_class=False)[0] if is_class else nodes
     reads = {name for node in [*seen, *_in_lambdas(seen)] for name in _reads(node)}
-    has_call = any(isinstance(node, ast.Call) for node in seen)
     assigns = [node for node in nodes if isinstance(node, (ast.Assign, ast.AnnAssign))]
     stored = [node.value for node in assigns if isinstance(node.value, ast.Name)]
     classes = [node for node in nodes if isinstance(node, ast.ClassDef)]
     body = {part for cls in classes for part in _run_nodes(list(cls.body))}
     called = _called(nodes, loaded_nodes(nodes, body) | set(stored))
     bound = [node for node in nodes if not isinstance(node, ast.alias)]
-    names = {name.id for name in stored}
     binds = _bound_names(file, bound) | _declared(list(ast.walk(stmt)), ast.Global)
-    return ImportTimeNames(loads, called, names, binds, reads, has_call)
+    loads |= _invoked_loads(file, nodes)
+    return ImportTimeNames(loads, called, {name.id for name in stored}, binds, reads)
 
 
 def _import_time_walk(
@@ -275,11 +270,7 @@ def _class_bindings(file: CheckInput, cls: ast.ClassDef) -> dict[str, int]:
 
 
 def _is_definite(stmt: ast.stmt) -> bool:
-    """Report whether stmt surely binds the names it binds once it runs.
-
-    An annotation without a value binds nothing, and a statement holding others
-    or a walrus may skip them.
-    """
+    """Report whether stmt surely binds; a bare annotation, branch or walrus may not."""
     is_annotation = isinstance(stmt, ast.AnnAssign) and stmt.value is None
     nested = _run_nodes([stmt])[1:]
     is_unsure = any(isinstance(node, (ast.NamedExpr, ast.stmt)) for node in nested)
@@ -302,6 +293,15 @@ def _reads(node: ast.AST) -> list[str]:
     if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
         return [node.target.id]
     return [node.id] if _is_load(node) else []
+
+
+def _invoked_loads(file: CheckInput, nodes: list[ast.AST]) -> set[str]:
+    """Return the names the lambdas among nodes that are called right away load."""
+    funcs = {node.func for node in nodes if isinstance(node, ast.Call)}
+    lambdas = [node for node in nodes if node in funcs and isinstance(node, ast.Lambda)]
+    params = {name for lam in lambdas for name in _bound_names(file, own_parts(lam))}
+    loads = [node for lam in lambdas for node in ast.walk(lam.body) if _is_load(node)]
+    return {name.id for name in loads} - params
 
 
 def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:
