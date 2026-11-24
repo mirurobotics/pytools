@@ -51,10 +51,11 @@ def is_inert(decl: Function | ast.ClassDef) -> bool:
         return _is_inert_def(decl)
     if decl.bases or decl.keywords or not _are_pure(decl.decorator_list):
         return False
-    return all(_is_inert_stmt(stmt) for stmt in decl.body)
+    return all(is_inert_stmt(stmt) for stmt in decl.body)
 
 
-def _is_inert_stmt(stmt: ast.stmt) -> bool:
+def is_inert_stmt(stmt: ast.stmt) -> bool:
+    """Report whether running stmt in a class or module body surely runs no code."""
     if isinstance(stmt, ast.Expr):
         return isinstance(stmt.value, ast.Constant)
     if isinstance(stmt, ast.Assign):

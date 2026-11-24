@@ -1,7 +1,10 @@
 import ast
+from bisect import bisect_left
+from itertools import accumulate
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.funcorder.decl import Decl
+from pytools.services.lint.linter.funcorder.inert import is_inert_stmt
 from pytools.services.lint.linter.funcorder.model import Model, build, must_precede
 from pytools.services.lint.linter.funcorder.order import arrange
 from pytools.services.lint.linter.funcorder.plain import place, plain_violations
@@ -112,23 +115,27 @@ def _directly_below(model: Model, decl: Decl, order: list[int]) -> list[str]:
 
 
 def _is_safe(scope: ast.Module | ast.ClassDef, model: Model, order: list[int]) -> bool:
-    """Report whether order keeps definition-time behaviour.
+    """Report whether order keeps what runs when scope is defined.
 
-    Each statement but an inert decl may run code, so those keep their order,
-    and each decl stays below the statements it uses when defined.
+    No statement moves past one that may run code, since such a statement may
+    use any name above it, and each decl stays below the statements it needs.
     """
+    spans = {part: decl for decl in model.decls.values() for part in decl.span}
     calm = {
-        part
-        for decl in model.decls.values()
-        if is_inert_decl(scope, decl)
-        for part in decl.span
+        idx
+        for idx, stmt in enumerate(scope.body)
+        if (is_inert_decl(scope, spans[idx]) if idx in spans else is_inert_stmt(stmt))
     }
-    active = [idx for idx in order if idx not in calm]
+    active = sorted(set(order) - calm)
+    seen = list(accumulate((int(idx not in calm) for idx in order), initial=0))
+    is_kept = all(
+        seen[pos] == bisect_left(active, idx) for pos, idx in enumerate(order)
+    )
     rank = {idx: pos for pos, idx in enumerate(order)}
     starts = {idx: rank[decl.span.start] for idx, decl in model.decls.items()}
     needs = model.needs.items()
     is_below = all(rank[need] < starts[idx] for idx, found in needs for need in found)
-    return active == sorted(active) and is_below
+    return is_kept and is_below
 
 
 def _holds_same_statements(file: CheckInput, fixed: str) -> bool:

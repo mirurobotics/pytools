@@ -16,6 +16,11 @@ ids = iter(range(2))
 def _a(x=next(ids)): return x
 def b(x=next(ids)): return x
 """
+_DYNAMIC_USE: Final = """\
+def _h(): return 1
+result = globals()["_h"]()
+def run(): return _h()
+"""
 _NEAR_USER: Final = """\
 def main(): U()
 class P:
@@ -64,6 +69,7 @@ class T:
         pytest.param("def run(): _h()\ndef _h(): pass\n", id="ordered"),
         pytest.param("a = 1; b = 2\ndef _h(): pass\ndef run(): _h()\n", id="shared"),
         pytest.param(_SIDE_EFFECTS, id="definitions-with-side-effects"),
+        pytest.param(_DYNAMIC_USE, id="statement-that-runs-code"),
     ],
 )
 def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
