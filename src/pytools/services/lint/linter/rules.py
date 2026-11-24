@@ -2,6 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
+from pytools.services.lint.linter.commentedcode import commentedcode
 from pytools.services.lint.linter.filelen import filelen
 from pytools.services.lint.linter.funccomment import funccomment
 from pytools.services.lint.linter.funclen import funclen
@@ -41,4 +42,5 @@ def _rule_checkers(
         Rule.VARNAME: varname.check,
         Rule.STRAYCOMMENT: straycomment.check,
         Rule.FUNCCOMMENT: funccomment.check,
+        Rule.COMMENTEDCODE: commentedcode.check,
     }

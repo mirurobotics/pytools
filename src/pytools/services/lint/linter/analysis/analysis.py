@@ -18,6 +18,7 @@ class Rule(StrEnum):
     VARNAME = "varname"
     STRAYCOMMENT = "straycomment"
     FUNCCOMMENT = "funccomment"
+    COMMENTEDCODE = "commentedcode"
 
 
 @dataclass(frozen=True)
