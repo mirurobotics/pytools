@@ -146,16 +146,23 @@ def _position(node: ast.expr) -> tuple[int, int]:
 def import_time_names(stmts: list[ast.stmt]) -> set[str]:
     """Return the names stmts load outside function and lambda bodies.
 
+    A def's outer parts run before its name is bound, so its own name there is
+    the def it replaces, such as the getter in a property's setter decorator.
     A stack, not recursion, so deep nesting doesn't overflow.
     """
-    pending: list[ast.AST] = list(stmts)
+    pending: list[tuple[ast.AST, str]] = [(stmt, "") for stmt in stmts]
     names: set[str] = set()
     while pending:
-        node = pending.pop()
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+        node, own = pending.pop()
+        if (
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Load)
+            and node.id != own
+        ):
             names.add(node.id)
         if isinstance(node, _ROOTS):
-            pending.extend(outer_parts(node))
+            skip = own if isinstance(node, ast.Lambda) else node.name
+            pending.extend((part, skip) for part in outer_parts(node))
         else:
-            pending.extend(ast.iter_child_nodes(node))
+            pending.extend((child, own) for child in ast.iter_child_nodes(node))
     return names
