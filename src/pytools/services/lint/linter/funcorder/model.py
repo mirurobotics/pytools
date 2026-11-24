@@ -11,6 +11,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     Rule,
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
+from pytools.services.lint.linter.funcorder import graph
 from pytools.services.lint.linter.funcorder.refs import (
     bound_names,
     called_names,
@@ -70,17 +71,19 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         idx: [ref for ref in found if decls[ref].kind is not DeclKind.CLASS]
         for idx, found in refs.items()
     }
-    reach = {idx: _reachable(callees, idx) for idx in callees}
+    reach = {idx: graph.reachable(callees, idx) for idx in callees}
     loads = [import_time_names(stmt) for stmt in scope.body]
-    import_time = [_import_time_reach(found, names, refs) for found in loads]
-    pinned = _pinned(import_time, reach)
+    import_time = [graph.import_time_reach(found, names, refs) for found in loads]
+    pinned = graph.pinned(import_time, reach)
     calls = {
         idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
         for idx, found in callees.items()
     }
-    comps = _components(reach)
-    callers = {idx: _callers_of(calls, comps, idx, in_cycle=False) for idx in decls}
-    cycles = {idx: _callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
+    comps = graph.components(reach)
+    callers = {
+        idx: graph.callers_of(calls, comps, idx, in_cycle=False) for idx in decls
+    }
+    cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
     needs = _needs(file, scope.body, decls, loads)
@@ -165,67 +168,11 @@ def _refs(
     return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
 
 
-def _import_time_reach(
-    loads: set[str], names: dict[str, int], refs: dict[int, list[int]]
-) -> set[int]:
-    """Return the decls a statement loads at import time, and all they refer to.
-
-    Following every reference, not only the calls that run, may pin more than
-    needed, but never too little.
-    """
-    used = {names[name] for name in loads if name in names}
-    return used.union(*(_reachable(refs, idx) for idx in used))
-
-
-def _reachable(callees: dict[int, list[int]], start: int) -> set[int]:
-    seen: set[int] = set()
-    pending = list(callees[start])
-    while pending:
-        idx = pending.pop()
-        if idx not in seen:
-            seen.add(idx)
-            pending.extend(callees[idx])
-    return seen
-
-
-def _pinned(import_time: list[set[int]], reach: dict[int, set[int]]) -> set[int]:
-    """Return the decls an import-time use needs that a caller below it reaches.
-
-    The rule would move such a decl below that caller, past the use. A def
-    counts as below its own decorators and defaults.
-    """
-    last = {idx: caller for caller in sorted(reach) for idx in reach[caller]}
-    return {
-        idx
-        for use, needed in enumerate(import_time)
-        for idx in needed
-        if last.get(idx, -1) >= use
-    }
-
-
 def _is_enforced(
     decls: dict[int, Decl], caller: int, callee: int, pinned: set[int]
 ) -> bool:
     kinds = (decls[caller].kind, decls[callee].kind)
     return DeclKind.EXEMPT not in kinds and callee not in pinned
-
-
-def _components(reach: dict[int, set[int]]) -> dict[int, int]:
-    """Label each def with its cycle's first member, or itself outside a cycle."""
-    return {
-        idx: min([idx, *(other for other in reach[idx] if idx in reach[other])])
-        for idx in reach
-    }
-
-
-def _callers_of(
-    calls: dict[int, list[int]], comps: dict[int, int], idx: int, *, in_cycle: bool
-) -> list[int]:
-    return [
-        caller
-        for caller, found in calls.items()
-        if idx in found and (comps[caller] == comps[idx]) == in_cycle
-    ]
 
 
 def _waiting(
