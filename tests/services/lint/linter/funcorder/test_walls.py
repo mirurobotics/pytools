@@ -1,15 +1,6 @@
-from typing import Final
-
 import pytest
 
 from pytools.services.lint.linter.funcorder.walls import Walls
-
-_WALLS: Final = Walls(
-    binders={3: frozenset({2})},
-    barriers=frozenset({0, 2}),
-    walled=frozenset(),
-    runs=frozenset({0}),
-)
 
 
 @pytest.mark.parametrize(
@@ -22,4 +13,13 @@ _WALLS: Final = Walls(
     ],
 )
 def test_keeps_reports_safe_order(order: list[int], expected: bool) -> None:
-    assert _WALLS.keeps(order) is expected
+    assert _walls().keeps(order) is expected
+
+
+def _walls() -> Walls:
+    return Walls(
+        binders={3: frozenset({2})},
+        barriers=frozenset({0, 2}),
+        walled=frozenset(),
+        runs=frozenset({0}),
+    )

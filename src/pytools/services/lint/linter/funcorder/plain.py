@@ -8,7 +8,6 @@ def place(model: Model, order: list[int]) -> list[int]:
     Each goes directly above its first user in order, deeper ones above it. One
     plain_violations passes over keeps its place while that holds there.
     """
-    uses = model.classes.uses
     rank = {idx: pos for pos, idx in enumerate(order)}
     starts = {idx: decl.span.start for idx, decl in model.decls.items()}
     places = {idx: rank[starts.get(idx, idx)] for idx in order}
