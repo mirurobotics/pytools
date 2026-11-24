@@ -49,7 +49,8 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     stubs = _stubs(stmts)
     decls = _decls(file, scope, stubs)
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
-    refs = {idx: _refs(file, scope, decl, names) for idx, decl in decls.items()}
+    called = {idx: _called(file, scope, decl) for idx, decl in decls.items()}
+    refs = {idx: _refs(idx, found, names) for idx, found in called.items()}
     callees = {
         idx: [ref for ref in found if decls[ref].kind is not DeclKind.CLASS]
         for idx, found in refs.items()
@@ -69,7 +70,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    needs = _needs(file, scope, decls, loads, import_time)
+    needs = _needs(file, stmts, decls, loads, import_time, called)
     classes = find_classes(file, scope, decls, refs, loads, needs)
     return Model(
         stmts, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
@@ -134,24 +135,21 @@ def _kind(
     return DeclKind.PRIVATE
 
 
-def _refs(
-    file: CheckInput,
-    scope: ast.Module | ast.ClassDef,
-    decl: Decl,
-    names: dict[str, int],
-) -> list[int]:
-    """Return the decls decl calls or refers to, in the order it first does.
+def _called(
+    file: CheckInput, scope: ast.Module | ast.ClassDef, decl: Decl
+) -> list[str]:
+    """Return the names decl calls or refers to when called, in order.
 
     The stubs decl replaces, such as a property getter, call for it too.
     """
     stmts = scope.body[decl.first : decl.idx + 1]
-    found = [
-        names[name]
-        for stmt in stmts
-        for name in called_names(file, scope, stmt)
-        if name in names
-    ]
-    return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
+    return [name for stmt in stmts for name in called_names(file, scope, stmt)]
+
+
+def _refs(idx: int, called: list[str], names: dict[str, int]) -> list[int]:
+    """Return the decls a decl calls or refers to, in the order it first does."""
+    found = [names[name] for name in called if name in names]
+    return [ref for ref in dict.fromkeys(found) if ref != idx]
 
 
 def _is_enforced(
@@ -195,27 +193,26 @@ def _openers(
 
 def _needs(
     file: CheckInput,
-    scope: ast.Module | ast.ClassDef,
+    stmts: list[ast.stmt],
     decls: dict[int, Decl],
     loads: list[set[str]],
     import_time: list[set[int]],
+    called: dict[int, list[str]],
 ) -> dict[int, frozenset[int]]:
     """Return the statements above each decl that it uses when defined.
 
     The stubs merged into a decl are defined with it. A decl it uses then brings
     all that decl refers to, which may run then too, and the names they read.
     """
-    binds = [bound_names(file, stmt) for stmt in scope.body]
+    binds = [bound_names(file, stmt) for stmt in stmts]
     reached = {
         idx: {other for found in import_time[decl.first : idx + 1] for other in found}
         for idx, decl in decls.items()
     }
-    run = {other for found in reached.values() for other in found}
-    read = {other: called_names(file, scope, scope.body[other]) for other in run}
     defined = {
         idx: {
             *(name for found in loads[decl.first : idx + 1] for name in found),
-            *(name for other in reached[idx] for name in read[other]),
+            *(name for other in reached[idx] for name in called[other]),
         }
         for idx, decl in decls.items()
     }
