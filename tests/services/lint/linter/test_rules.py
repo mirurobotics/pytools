@@ -17,6 +17,9 @@ def f(parameter_name_too_long, n):
 # f(n)
 
 total = 0
+
+def _g():
+    f()
 """
 
 
@@ -36,7 +39,7 @@ def test_run_checks_honors_exclude(parse: Parse, exclude: frozenset[Rule]) -> No
 def _diagnostics() -> dict[Rule, Diagnostic]:
     return {
         Rule.FUNCLEN: Diagnostic("a.py", 1, "function f is 3 lines (limit 1)"),
-        Rule.FILELEN: Diagnostic("a.py", 1, "file is 5 lines (limit 1)"),
+        Rule.FILELEN: Diagnostic("a.py", 1, "file is 7 lines (limit 1)"),
         Rule.NESTDEPTH: Diagnostic(
             "a.py",
             3,
@@ -68,5 +71,8 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
             8,
             "mutable global variable: use a Final constant, a type statement"
             " or a function instead",
+        ),
+        Rule.FUNCORDER: Diagnostic(
+            "a.py", 1, '"f" should be below its last caller "_g"'
         ),
     }

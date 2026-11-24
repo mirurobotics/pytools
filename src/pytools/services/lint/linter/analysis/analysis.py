@@ -20,6 +20,7 @@ class Rule(StrEnum):
     FUNCCOMMENT = "funccomment"
     COMMENTEDCODE = "commentedcode"
     MUTABLEGLOBAL = "mutableglobal"
+    FUNCORDER = "funcorder"
 
 
 @dataclass(frozen=True)
