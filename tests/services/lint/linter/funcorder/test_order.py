@@ -1,0 +1,112 @@
+from collections.abc import Callable
+from typing import Final
+
+import pytest
+
+from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
+from pytools.services.lint.linter.funcorder import funcorder, model, order
+
+type Parse = Callable[[str], CheckInput]
+
+_CALL_ORDER: Final = """\
+def generate(): _validate_args(); return _checksum()
+def verify(): return _checksum() == 0
+def _validate_args(): _validate_prefix(); _validate_size()
+def _validate_prefix(): pass
+def _validate_size(): pass
+def _checksum(): return 0
+"""
+_CARRIED: Final = """\
+def run(): _f()
+def _g(): pass
+C: Final = 1
+def _f(): pass
+"""
+_EXEMPT_CYCLE_MEMBER: Final = """\
+def _e(): _a()  # nolint: funcorder
+def run(): pass
+def _a(): _b()
+def _b(): _a(); _e()
+def _c(): pass
+"""
+_HEADER: Final = """\
+import os
+X: Final = 1
+def _helper(): pass
+def run(): _helper()
+"""
+_STATEMENT_ORDER: Final = """\
+def _f(): pass
+A = record("a")
+def _g(): pass
+B = record("b")
+def _h(): pass
+def run(): _h(); _g()
+"""
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(
+            _CALL_ORDER,
+            [
+                Diagnostic(
+                    "a.py", 3, '"_validate_args" should be directly below "generate"'
+                ),
+                Diagnostic("a.py", 6, '"_checksum" should be directly below "verify"'),
+            ],
+            id="helpers-follow-call-order",
+        ),
+        pytest.param(
+            _CARRIED,
+            [Diagnostic("a.py", 4, '"_f" should be directly below "run"')],
+            id="statement-moves-with-def-below-it",
+        ),
+        pytest.param(
+            "def _b(): _a()\ndef run(): _a()\ndef _a(): _b()\n",
+            [Diagnostic("a.py", 1, '"_b" should be directly below "_a"')],
+            id="cycle-member-follows-its-caller",
+        ),
+    ],
+)
+def test_check_reports_def_not_directly_below(
+    parse: Parse, source: str, expected: list[Diagnostic]
+) -> None:
+    assert funcorder.check(parse(source)) == expected
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param(
+            "def run(): _f()\nC: Final = 1\ndef _f(): pass\n",
+            id="statement-between-caller-and-callee",
+        ),
+        pytest.param(
+            "def _b(): _a()\ndef _a(): _b()\ndef run(): pass\n", id="cycle-opener"
+        ),
+        pytest.param(_EXEMPT_CYCLE_MEMBER, id="exempt-member-leaves-cycle-open"),
+    ],
+)
+def test_check_skips_def_directly_below(parse: Parse, source: str) -> None:
+    assert funcorder.check(parse(source)) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(_HEADER, ([0, 1, 3, 2], {2}), id="header-stays"),
+        pytest.param(_CARRIED, ([0, 2, 3, 1], {2, 3}), id="statement-moves-with-def"),
+        pytest.param(
+            _STATEMENT_ORDER,
+            ([1, 3, 5, 4, 2, 0], {2, 4}),
+            id="statements-keep-their-order",
+        ),
+    ],
+)
+def test_arrange_orders_the_scope(
+    parse: Parse, source: str, expected: tuple[list[int], set[int]]
+) -> None:
+    file = parse(source)
+    assert order.arrange(model.build(file, file.tree)) == expected
