@@ -53,7 +53,7 @@ def _run_custom_linter(opts: LintOptions) -> bool:
     files = external.list_python_files(opts.paths)
     if files is None:
         return False
-    count = run_linter(files, opts.linter_config)
+    count = run_linter(files, opts.linter_config, fix=opts.fix)
     if count:
         _write(f"{count} violation(s) found.")
     return count == 0
