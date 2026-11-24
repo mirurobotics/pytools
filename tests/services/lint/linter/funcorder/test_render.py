@@ -40,14 +40,14 @@ def test_has_shared_lines_in_class(parse: Parse, source: str, expected: bool) ->
     [
         pytest.param("a = 1\nb = 2\n", "b = 2\na = 1\n", id="swap"),
         pytest.param(
-            "# about a\na = 1\nb = 2\n",
-            "b = 2\n# about a\na = 1\n",
+            "a = 1\n# about b\nb = 2\n",
+            "# about b\nb = 2\na = 1\n",
             id="attached-comment-moves",
         ),
         pytest.param(
-            "# header\n\na = 1\nb = 2\n",
-            "# header\n\nb = 2\na = 1\n",
-            id="detached-header-stays",
+            "# header\na = 1\nb = 2\n",
+            "# header\nb = 2\na = 1\n",
+            id="module-header-stays",
         ),
         pytest.param(
             "a = 1\n# about b\n\nb = 2\nc = 3\n",

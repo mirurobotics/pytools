@@ -42,7 +42,7 @@ def find_walls(
     doesn't bind. A decl's stubs, such as overloads, count as part of it.
     """
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    active = {idx for idx, decl in decls.items() if not _is_inert_decl(scope, decl)}
+    active = {idx for idx, decl in decls.items() if not is_inert_decl(scope, decl)}
     calm = {part for idx in decls.keys() - kept - active for part in decls[idx].span}
     barriers = frozenset(range(len(effects))) - calm
     reads = {idx: _reads(effects, decl) for idx, decl in decls.items()}
@@ -52,7 +52,7 @@ def find_walls(
     return Walls(binders, barriers, frozenset(walled))
 
 
-def _is_inert_decl(scope: ast.Module | ast.ClassDef, decl: Decl) -> bool:
+def is_inert_decl(scope: ast.Module | ast.ClassDef, decl: Decl) -> bool:
     """Report whether defining decl and its stubs surely runs no code."""
     stubs = [scope.body[part] for part in decl.span[:-1]]
     is_calm = all(isinstance(stub, DEFS) and is_inert(stub) for stub in stubs)

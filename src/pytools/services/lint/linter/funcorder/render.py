@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     header_end,
+    is_body_tail,
     is_code_line,
+    module_header_end,
     start_line,
 )
 
@@ -47,9 +49,35 @@ def _region(
 
 
 def _ends(file: CheckInput, scope: ast.Module | ast.ClassDef) -> list[int]:
-    """Return the line each statement in scope ends on, after the scope's header's."""
-    header = header_end(file, scope) if isinstance(scope, ast.ClassDef) else 0
-    return [header, *(stmt.end_lineno or stmt.lineno for stmt in scope.body)]
+    """Return the line each statement in scope ends on, after the scope's header's.
+
+    The lines above a module's first statement are its header and stay put.
+    """
+    if isinstance(scope, ast.ClassDef):
+        header = header_end(file, scope)
+    else:
+        header = module_header_end(file) - 1
+    return [header, *(_end_line(file, stmt) for stmt in scope.body)]
+
+
+def _end_line(file: CheckInput, stmt: ast.stmt) -> int:
+    """Return stmt's last line, past the lines a backslash joins to it.
+
+    The comments indented under it after its last line belong to it too.
+    """
+    end = stmt.end_lineno or stmt.lineno
+    while end < len(file.lines) and _is_continued(file, end):
+        end += 1
+    last = end
+    while last < len(file.lines) and is_body_tail(file, last + 1, stmt.col_offset):
+        last += 1
+        end = last if last in file.comments else end
+    return end
+
+
+def _is_continued(file: CheckInput, number: int) -> bool:
+    is_code = number not in file.comments
+    return is_code and file.lines[number - 1].rstrip().endswith("\\")
 
 
 def _chunk_start(file: CheckInput, stmt: ast.stmt, floor: int) -> int:

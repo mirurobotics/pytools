@@ -1,6 +1,8 @@
 import ast
+import shutil
 import sys
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput
 from pytools.services.lint.linter.analysis.comments import collect_comments
@@ -34,7 +36,7 @@ def _fix_file(path: Path, config: Config) -> None:
         return
     fixed = run_fixes(file, config)
     if fixed is not None:
-        path.write_text(fixed, encoding="utf-8")
+        _write(path, fixed)
 
 
 def _read(path: Path) -> CheckInput | None:
@@ -43,6 +45,28 @@ def _read(path: Path) -> CheckInput | None:
         source = path.read_text(encoding="utf-8-sig")
         tree = ast.parse(source, filename=str(path))
     except (OSError, SyntaxError, UnicodeDecodeError) as err:
-        sys.stderr.write(f"warning: {path}: {err}\n")
+        _warn(path, err)
         return None
     return CheckInput(str(path), tree, source.split("\n"), collect_comments(source))
+
+
+def _write(path: Path, source: str) -> None:
+    """Replace path's content with source in one step, keeping its mode.
+
+    On failure it warns and leaves the file as it was.
+    """
+    prefix = f".{path.name}."
+    try:
+        with NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent, prefix=prefix, delete_on_close=False
+        ) as temp:
+            temp.write(source)
+            temp.close()
+            shutil.copymode(path, temp.name)
+            Path(temp.name).replace(path)
+    except OSError as err:
+        _warn(path, err)
+
+
+def _warn(path: Path, err: Exception) -> None:
+    sys.stderr.write(f"warning: {path}: {err}\n")

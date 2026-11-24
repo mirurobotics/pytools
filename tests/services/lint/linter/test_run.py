@@ -74,10 +74,11 @@ def test_run_fixer_rewrites_misplaced_file(tmp_path: Path) -> None:
     misplaced = tmp_path / "misplaced.py"
     misplaced.write_text(_MISPLACED, encoding="utf-8")
     ordered = tmp_path / "ordered.py"
-    ordered.write_text(_ORDERED, encoding="utf-8")
+    ordered_bytes = _ORDERED.replace("\n", "\r\n").encode("utf-8-sig")
+    ordered.write_bytes(ordered_bytes)
     run_fixer([str(misplaced), str(ordered)], Config())
     assert misplaced.read_text(encoding="utf-8") == _ORDERED
-    assert ordered.read_text(encoding="utf-8") == _ORDERED
+    assert ordered.read_bytes() == ordered_bytes
 
 
 def test_run_fixer_warns_and_skips_unparsable_file(
@@ -88,3 +89,19 @@ def test_run_fixer_warns_and_skips_unparsable_file(
     run_fixer([str(bad_file)], Config())
     assert bad_file.read_bytes() == b"def f(:\n"
     assert capsys.readouterr().err.startswith(f"warning: {bad_file}: ")
+
+
+def test_run_fixer_warns_and_keeps_file_it_cannot_write(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    misplaced = tmp_path / "misplaced.py"
+    misplaced.write_text(_MISPLACED, encoding="utf-8")
+    monkeypatch.setattr(Path, "replace", _refuse)
+    run_fixer([str(misplaced)], Config())
+    assert list(tmp_path.iterdir()) == [misplaced]
+    assert misplaced.read_text(encoding="utf-8") == _MISPLACED
+    assert capsys.readouterr().err.startswith(f"warning: {misplaced}: ")
+
+
+def _refuse(path: Path, target: Path) -> Path:
+    raise PermissionError(path, target)

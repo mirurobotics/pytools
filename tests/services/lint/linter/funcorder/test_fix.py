@@ -11,6 +11,43 @@ type Parse = Callable[[str], CheckInput]
 _RUN: Final = "def run(x: int | None) -> list[int]: pass\n"
 _PLACED: Final = "class P:\n    x: int\nX = 0\ndef run(): _h(); return P()\n"
 _DEEPER: Final = "class Point:\n    x: int\nclass Line:\n    start: Point\n"
+_SIDE_EFFECTS: Final = """\
+ids = iter(range(2))
+def _a(x=next(ids)): return x
+def b(x=next(ids)): return x
+"""
+_NEAR_USER: Final = """\
+def main(): U()
+class P:
+    x: int
+S = 1
+def U(p: P): pass
+def W(x=S): pass
+"""
+_NEAR_USER_FIXED: Final = """\
+def main(): U()
+class P:
+    x: int
+def U(p: P): pass
+S = 1
+def W(x=S): pass
+"""
+_TRAILING_COMMENT: Final = """\
+class T:
+    def _h(self):
+        return 1
+        # TODO: cache this
+    def run(self):
+        return self._h()
+"""
+_TRAILING_COMMENT_FIXED: Final = """\
+class T:
+    def run(self):
+        return self._h()
+    def _h(self):
+        return 1
+        # TODO: cache this
+"""
 _SHARED_LINE: Final = """\
 a = 1; b = 2
 def _h(): pass
@@ -26,6 +63,7 @@ class T:
     [
         pytest.param("def run(): _h()\ndef _h(): pass\n", id="ordered"),
         pytest.param("a = 1; b = 2\ndef _h(): pass\ndef run(): _h()\n", id="shared"),
+        pytest.param(_SIDE_EFFECTS, id="definitions-with-side-effects"),
     ],
 )
 def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
@@ -46,9 +84,19 @@ def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
             id="helpers-move-with-their-caller",
         ),
         pytest.param(
-            "# helps\n@cache\ndef _h(): pass\ndef run(): _h()\n",
-            "def run(): _h()\n# helps\n@cache\ndef _h(): pass\n",
+            "import x\n# helps\n@cache\ndef _h(): pass\ndef run(): _h()\n",
+            "import x\ndef run(): _h()\n# helps\n@cache\ndef _h(): pass\n",
             id="comments-and-decorators",
+        ),
+        pytest.param(
+            "#!/usr/bin/env python3\ndef _h(): pass\ndef run(): _h()\n",
+            "#!/usr/bin/env python3\ndef run(): _h()\ndef _h(): pass\n",
+            id="file-header-stays",
+        ),
+        pytest.param(
+            "def _h(): pass\ndef run(): _h() \\\n# joined\n",
+            "def run(): _h() \\\n# joined\ndef _h(): pass\n",
+            id="backslash-continuation",
         ),
         pytest.param(
             "def _h(): pass\n@overload\ndef f(x: int) -> int: ...\ndef f(x): _h()\n",
@@ -68,7 +116,12 @@ def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
         pytest.param(
             "class Point:\n    x: int\ndef other(): pass\ndef make(): return Point()\n",
             "def other(): pass\nclass Point:\n    x: int\ndef make(): return Point()\n",
-            id="methodless-class-above-first-user",
+            id="methodless-class-down-to-first-user",
+        ),
+        pytest.param(
+            "def make(): return Point()\ndef other(): pass\nclass Point:\n    x: int\n",
+            "class Point:\n    x: int\ndef make(): return Point()\ndef other(): pass\n",
+            id="methodless-class-up-to-first-user",
         ),
         pytest.param(
             "class P:\n    x: int\ndef other(): pass\nORIGIN = P()\n",
@@ -81,10 +134,23 @@ def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
             id="deeper-class-above-its-user",
         ),
         pytest.param(
+            "class B:\n    y: int\ndef other(): pass\nclass A:\n    x: int\n"
+            "def make(a: A, b: B): pass\n",
+            "def other(): pass\nclass B:\n    y: int\nclass A:\n    x: int\n"
+            "def make(a: A, b: B): pass\n",
+            id="same-depth-classes-keep-their-order",
+        ),
+        pytest.param(
+            "class P:\n    x: int\ndef f(): return P()\ndef g(): f(); return P()\n",
+            "class P:\n    x: int\ndef g(): f(); return P()\ndef f(): return P()\n",
+            id="methodless-class-above-new-first-user",
+        ),
+        pytest.param(
             "def _h(): pass\n" + _PLACED,
             _PLACED + "def _h(): pass\n",
             id="placed-class-stays",
         ),
+        pytest.param(_NEAR_USER, _NEAR_USER_FIXED, id="near-class-follows-its-user"),
     ],
 )
 def test_fix_orders_module(parse: Parse, source: str, expected: str) -> None:
@@ -108,18 +174,21 @@ def test_fix_orders_module(parse: Parse, source: str, expected: str) -> None:
             "def main(): _g(); T()\ndef _g(): pass\n",
             id="class-in-a-moving-module",
         ),
-        pytest.param(
-            _SHARED_LINE,
-            _SHARED_LINE.replace(
-                "    def _h(self): pass\n    def run(self): self._h()\n",
-                "    def run(self): self._h()\n    def _h(self): pass\n",
-            ),
-            id="module-with-shared-line",
-        ),
+        pytest.param(_TRAILING_COMMENT, _TRAILING_COMMENT_FIXED, id="trailing-comment"),
     ],
 )
 def test_fix_orders_class_body(parse: Parse, source: str, expected: str) -> None:
-    assert funcorder.fix(parse(source)) == expected
+    fixed = funcorder.fix(parse(source))
+    assert fixed == expected
+    assert funcorder.check(parse(expected)) == []
+
+
+def test_fix_leaves_scope_with_shared_line(parse: Parse) -> None:
+    expected = _SHARED_LINE.replace(
+        "    def _h(self): pass\n    def run(self): self._h()\n",
+        "    def run(self): self._h()\n    def _h(self): pass\n",
+    )
+    assert funcorder.fix(parse(_SHARED_LINE)) == expected
 
 
 def test_fix_follows_a_long_chain(parse: Parse) -> None:

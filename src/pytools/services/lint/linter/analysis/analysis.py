@@ -73,12 +73,13 @@ def function_body_lines(file: CheckInput) -> set[int]:
 
 def _body_lines(file: CheckInput, func: Function) -> range:
     end = func.end_lineno or func.lineno
-    while end < len(file.lines) and _is_body_tail(file, end + 1, func.col_offset):
+    while end < len(file.lines) and is_body_tail(file, end + 1, func.col_offset):
         end += 1
     return range(header_end(file, func) + 1, end + 1)
 
 
-def _is_body_tail(file: CheckInput, number: int, indent: int) -> bool:
+def is_body_tail(file: CheckInput, number: int, indent: int) -> bool:
+    """Report whether line number may still belong to a block indented past indent."""
     if is_code_line(file, number):
         return False
     comment = file.comments.get(number)

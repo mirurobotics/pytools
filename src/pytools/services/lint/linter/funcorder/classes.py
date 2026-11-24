@@ -40,12 +40,19 @@ class Classes:
     tucked: _Users  # the defs above each class with methods that use it
     _fixed: frozenset[int]  # the decls that never move, exempt classes included
     _walls: Walls
+    _plain: _Users  # the users of each class without methods
+    _staying: frozenset[int]  # the classes without methods that can't move
 
     def may_pass(self, moved: Collection[int], passed: Collection[int]) -> bool:
         """Report whether the decls moved may move together past those passed."""
         if not self._fixed.isdisjoint(moved):
             return False
         return not any(self._walls.crossed(idx, passed) for idx in moved)
+
+    def first_uses(self, places: dict[int, int]) -> dict[int, Use]:
+        """Return where each class in uses goes when its users sit at places."""
+        found = _first_uses(self._plain, self._staying, places)
+        return {cls: found[cls] for cls in self.uses}
 
 
 def find_classes(
@@ -69,7 +76,9 @@ def find_classes(
     fixed = kept | {idx for idx in exempt if decls[idx].kind is DeclKind.CLASS}
     uses = _place(decls, plain, walls, fixed)
     inherited = _inherited(plain, uses, graph.above(binders))
-    return Classes(uses, inherited, _tucked(decls, used), fixed, walls)
+    staying = frozenset(plain.keys() - uses.keys())
+    tucked = _tucked(decls, used)
+    return Classes(uses, inherited, tucked, fixed, walls, plain, staying)
 
 
 def _users(
@@ -189,8 +198,9 @@ def _place(
     is. Each round fixes the classes the round before couldn't move.
     """
     staying = fixed & plain.keys()
+    starts = {idx: decl.span.start for idx, decl in decls.items()}
     while True:
-        uses = _first_uses(decls, plain, staying)
+        uses = _first_uses(plain, staying, starts)
         movable = _movable(walls, uses, staying)
         stuck = frozenset(uses) - movable
         if stuck <= staying:
@@ -199,25 +209,26 @@ def _place(
 
 
 def _first_uses(
-    decls: dict[int, Decl], plain: _Users, staying: frozenset[int]
+    plain: _Users, staying: frozenset[int], places: dict[int, int]
 ) -> dict[int, Use]:
     """Return where each class without methods goes, above its first user.
 
     A user that is such a class and can move counts where that class goes, one
-    deeper, so the deeper class sits above it.
+    deeper, so the deeper class sits above it. Any other user sits at its place,
+    or at its own index if places leaves it out.
     """
     uses: dict[int, Use] = {}
     for cls in plain:
-        _resolve(decls, plain, staying, uses, cls)
+        _resolve(plain, staying, uses, cls, places)
     return uses
 
 
 def _resolve(
-    decls: dict[int, Decl],
     plain: _Users,
     staying: frozenset[int],
     uses: dict[int, Use],
     root: int,
+    places: dict[int, int],
 ) -> None:
     """Add root's use to uses, after those of the classes that use it.
 
@@ -231,24 +242,23 @@ def _resolve(
         if todo:
             pending.extend(todo)
         else:
-            uses[pending.pop()] = _use(decls, plain[cls], uses, staying)
+            uses[pending.pop()] = _use(plain[cls], uses, staying, places)
 
 
 def _use(
-    decls: dict[int, Decl],
     users: list[int],
     uses: dict[int, Use],
     staying: frozenset[int],
+    places: dict[int, int],
 ) -> Use:
     """Return the first of users.
 
-    A use through such a class comes before a direct use at the same place. A
-    decl's place is that of its first stub.
+    A use through such a class comes before a direct use at the same place.
     """
     keys = [
         (uses[user].at, 0, -uses[user].depth - 1, user)
         if user in uses and user not in staying
-        else (decls[user].span.start if user in decls else user, 1, 0, user)
+        else (places.get(user, user), 1, 0, user)
         for user in users
     ]
     place, _, depth, user = min(keys)

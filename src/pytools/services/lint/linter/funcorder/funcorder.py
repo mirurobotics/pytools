@@ -6,6 +6,7 @@ from pytools.services.lint.linter.funcorder.model import Model, build, must_prec
 from pytools.services.lint.linter.funcorder.order import arrange
 from pytools.services.lint.linter.funcorder.plain import place, plain_violations
 from pytools.services.lint.linter.funcorder.render import has_shared_lines, render
+from pytools.services.lint.linter.funcorder.walls import is_inert_decl
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
@@ -18,19 +19,33 @@ def check(file: CheckInput) -> list[Diagnostic]:
 def fix(file: CheckInput) -> str | None:
     """Return the source with each scope check reports on laid out in its order.
 
-    Return None when check reports nothing. A scope with statements that share
-    a line is left as it is.
+    Return None when no scope can move, or when the result would not hold the
+    same statements.
     """
     orders: dict[ast.Module | ast.ClassDef, list[int]] = {}
     for scope in _scopes(file.tree):
-        if _check_scope(file, scope) and not has_shared_lines(file, scope):
-            orders[scope] = _fixed_order(file, scope)
-    return render(file, orders) if orders else None
+        order = _fixed_order(file, scope)
+        if order is not None:
+            orders[scope] = order
+    if not orders:
+        return None
+    fixed = render(file, orders)
+    return fixed if _holds_same_statements(file, fixed) else None
 
 
-def _scopes(tree: ast.Module) -> list[ast.Module | ast.ClassDef]:
-    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
-    return [tree, *classes]
+def _fixed_order(
+    file: CheckInput, scope: ast.Module | ast.ClassDef
+) -> list[int] | None:
+    """Return the order to lay scope out in, or None to leave it as it is.
+
+    A scope stays when check reports nothing on it, its statements share a
+    line, or the order would change what runs when it is defined.
+    """
+    if not _check_scope(file, scope) or has_shared_lines(file, scope):
+        return None
+    model = build(file, scope)
+    order = place(model, arrange(model)[0])
+    return order if _is_safe(scope, model, order) else None
 
 
 def _check_scope(
@@ -96,7 +111,43 @@ def _directly_below(model: Model, decl: Decl, order: list[int]) -> list[str]:
     return [f'"{decl.name}" should be directly below "{above}"']
 
 
-def _fixed_order(file: CheckInput, scope: ast.Module | ast.ClassDef) -> list[int]:
-    model = build(file, scope)
-    order, _ = arrange(model)
-    return place(model, order)
+def _is_safe(scope: ast.Module | ast.ClassDef, model: Model, order: list[int]) -> bool:
+    """Report whether order keeps definition-time behaviour.
+
+    Each statement but an inert decl may run code, so those keep their order,
+    and each decl stays below the statements it uses when defined.
+    """
+    calm = {
+        part
+        for decl in model.decls.values()
+        if is_inert_decl(scope, decl)
+        for part in decl.span
+    }
+    active = [idx for idx in order if idx not in calm]
+    rank = {idx: pos for pos, idx in enumerate(order)}
+    starts = {idx: rank[decl.span.start] for idx, decl in model.decls.items()}
+    needs = model.needs.items()
+    is_below = all(rank[need] < starts[idx] for idx, found in needs for need in found)
+    return active == sorted(active) and is_below
+
+
+def _holds_same_statements(file: CheckInput, fixed: str) -> bool:
+    """Report whether fixed parses to file's statements, each scope's in any order."""
+    try:
+        after = ast.parse(fixed)
+    except SyntaxError:
+        return False
+    return _sorted_dump(ast.parse("\n".join(file.lines))) == _sorted_dump(after)
+
+
+def _sorted_dump(tree: ast.Module) -> str:
+    """Return tree dumped with each scope's statements sorted, innermost first."""
+    scopes = _scopes(tree)
+    for scope in reversed(scopes):
+        scope.body.sort(key=ast.dump)
+    return ast.dump(tree)
+
+
+def _scopes(tree: ast.Module) -> list[ast.Module | ast.ClassDef]:
+    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+    return [tree, *classes]

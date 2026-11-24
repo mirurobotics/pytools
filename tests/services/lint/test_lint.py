@@ -106,13 +106,17 @@ def test_run_lint_fails_custom_linter_on_violations(
     assert "Running custom linter...\n2 violation(s) found.\n" in out
 
 
-@pytest.mark.parametrize("fix", [True, False])
+@pytest.mark.parametrize(
+    ("fix", "failed"),
+    [(True, ["custom fix", "custom linter"]), (False, ["custom linter"])],
+)
 def test_run_lint_fails_custom_steps_on_list_error(
-    monkeypatch: pytest.MonkeyPatch, fix: bool
+    monkeypatch: pytest.MonkeyPatch, fix: bool, failed: list[str]
 ) -> None:
     calls = _fake_external(monkeypatch, failing={"list python files"})
-    with pytest.raises(LintError):
-        lint.run_lint(LintOptions(paths=_paths(), fix=fix, linter_config=Config()))
+    opts = LintOptions(paths=_paths(), fix=fix, linter_config=Config())
+    results = lint._run_steps(opts)
+    assert [result.name for result in results if result.failed] == failed
     assert [call[0] for call in calls] == [
         "list python files",
         "ruff check",

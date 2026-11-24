@@ -5,15 +5,29 @@ from pytools.services.lint.linter.funcorder.model import Model
 def place(model: Model, order: list[int]) -> list[int]:
     """Return order with each class without methods that can move put back in.
 
-    One plain_violations reports goes directly above its first user, deeper
-    ones above it; the rest stay directly above the statement below them.
+    Each goes directly above its first user in order, deeper ones above it. One
+    plain_violations passes over keeps its place while that holds there.
     """
     uses = model.classes.uses
+    rank = {idx: pos for pos, idx in enumerate(order)}
+    starts = {idx: decl.span.start for idx, decl in model.decls.items()}
+    places = {idx: rank[starts.get(idx, idx)] for idx in order}
+    found = model.classes.first_uses(places)
     above: dict[int, list[int]] = {}
-    for cls in sorted(uses, key=lambda idx: (-uses[idx].depth, idx)):
-        target = cls + 1 if _is_near(model, cls) else uses[cls].at
+    for cls in sorted(found, key=lambda idx: (-found[idx].depth, idx)):
+        is_kept = found[cls].user == uses[cls].user and _stays_near(model, cls, rank)
+        target = cls + 1 if is_kept else order[found[cls].at]
         above.setdefault(target, []).append(cls)
     return [placed for idx in order for placed in _stacked(above, idx)]
+
+
+def _stays_near(model: Model, cls: int, rank: dict[int, int]) -> bool:
+    """Report whether cls is near its first user and what lies between stays so."""
+    if not _is_near(model, cls):
+        return False
+    at = model.classes.uses[cls].at
+    between = [idx for idx in range(cls + 1, at + 1) if idx in rank]
+    return [rank[idx] for idx in between] == list(range(rank[between[0]], rank[at] + 1))
 
 
 def _stacked(above: dict[int, list[int]], idx: int) -> list[int]:
