@@ -18,6 +18,7 @@ class Walls:
     barriers: frozenset[int]  # may run code or bind a name
     walled: frozenset[int]  # the decls that must not move past a barrier
     runs: frozenset[int]  # may run code, which may use any name the scope binds
+    rivals: list[list[int]]  # bind the same name, so the last one wins
 
     def crossed(self, idx: int, passed: Collection[int]) -> frozenset[int]:
         """Return the statements of passed that the decl at idx must not pass."""
@@ -29,7 +30,8 @@ class Walls:
     def keeps(self, order: list[int]) -> bool:
         """Report whether order keeps what runs when the scope is defined.
 
-        No statement passes one that may run code, and no decl passes a binder.
+        No statement passes one that may run code or binds a name it binds, and
+        no decl passes a binder.
         """
         rank = {idx: pos for pos, idx in enumerate(order)}
         runs = sorted(self.runs)
@@ -37,11 +39,14 @@ class Walls:
         is_ordered = ranks == sorted(ranks) and all(
             bisect_left(runs, idx) == bisect_left(ranks, rank[idx]) for idx in order
         )
-        return is_ordered and not any(
+        groups = [[rank[idx] for idx in group] for group in self.rivals]
+        is_bound = all(group == sorted(group) for group in groups)
+        is_below = not any(
             (idx < other) != (rank[idx] < rank[other])
             for idx, found in self.binders.items()
             for other in found
         )
+        return is_ordered and is_bound and is_below
 
 
 def find_walls(
@@ -68,7 +73,8 @@ def find_walls(
     walled = active | {idx for idx in decls if reads[idx] & bindings.keys()}
     if isinstance(scope, ast.ClassDef):
         walled |= {cls for cls in classes if effects[cls].reads - effects[cls].binds}
-    return Walls(binders, barriers, frozenset(walled), _runs(scope, decls, active))
+    runs = _runs(scope, decls, active)
+    return Walls(binders, barriers, frozenset(walled), runs, _rivals(effects))
 
 
 def _is_inert_decl(scope: ast.Module | ast.ClassDef, decl: Decl) -> bool:
@@ -101,3 +107,12 @@ def _runs(
 
 def _is_decorated(stmt: ast.stmt) -> bool:
     return isinstance(stmt, (*DEFS, ast.ClassDef)) and bool(stmt.decorator_list)
+
+
+def _rivals(effects: list[ImportTimeNames]) -> list[list[int]]:
+    """Return the statements that bind each name more than one binds, in order."""
+    found: dict[str, list[int]] = {}
+    for idx, effect in enumerate(effects):
+        for name in effect.binds:
+            found.setdefault(name, []).append(idx)
+    return [group for group in found.values() if len(group) > 1]

@@ -27,6 +27,7 @@ from framework import route as cache
 def _h(): pass
 def run(): _h()
 """
+_REBOUND: Final = "def _h(): return 1\n_h = 2\ndef run(): return _h\n"
 _NEAR_USER: Final = """\
 def main(): U()
 class P:
@@ -95,6 +96,7 @@ class T:
         pytest.param(_SIDE_EFFECTS, id="definitions-with-side-effects"),
         pytest.param(_DYNAMIC_USE, id="statement-that-runs-code"),
         pytest.param(_RENAMED_DECORATOR, id="decorated-definition"),
+        pytest.param(_REBOUND, id="name-bound-again"),
     ],
 )
 def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
