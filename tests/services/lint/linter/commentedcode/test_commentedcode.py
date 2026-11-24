@@ -212,6 +212,7 @@ def test_check_skips_prose(parse: Parse, comment: str) -> None:
         pytest.param("# pylint: disable=too-many-lines\n", id="pylint-pragma"),
         pytest.param("# coding=utf-8\nimport os\n", id="encoding-declaration"),
         pytest.param("#!/usr/bin/env python\n# coding=utf-8\n", id="coding-on-line-2"),
+        pytest.param("\n# coding=utf-8\n", id="coding-after-blank-line"),
     ],
 )
 def test_check_skips_groups_that_are_not_code(parse: Parse, source: str) -> None:
