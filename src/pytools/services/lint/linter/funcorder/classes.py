@@ -208,63 +208,6 @@ def _place(
         staying |= stuck
 
 
-def _first_uses(
-    plain: _Users, staying: frozenset[int], places: dict[int, int]
-) -> dict[int, Use]:
-    """Return where each class without methods goes, above its first user.
-
-    A user that is such a class and can move counts where that class goes, one
-    deeper, so the deeper class sits above it. Any other user sits at its place,
-    or at its own index if places leaves it out.
-    """
-    uses: dict[int, Use] = {}
-    for cls in plain:
-        _resolve(plain, staying, uses, cls, places)
-    return uses
-
-
-def _resolve(
-    plain: _Users,
-    staying: frozenset[int],
-    uses: dict[int, Use],
-    root: int,
-    places: dict[int, int],
-) -> None:
-    """Add root's use to uses, after those of the classes that use it.
-
-    A stack, not recursion, so a long chain of such classes doesn't overflow.
-    """
-    pending = [root]
-    while pending:
-        cls = pending[-1]
-        moving = [user for user in plain[cls] if user in plain and user not in staying]
-        todo = [user for user in moving if user not in uses]
-        if todo:
-            pending.extend(todo)
-        else:
-            uses[pending.pop()] = _use(plain[cls], uses, staying, places)
-
-
-def _use(
-    users: list[int],
-    uses: dict[int, Use],
-    staying: frozenset[int],
-    places: dict[int, int],
-) -> Use:
-    """Return the first of users.
-
-    A use through such a class comes before a direct use at the same place.
-    """
-    keys = [
-        (uses[user].at, 0, -uses[user].depth - 1, user)
-        if user in uses and user not in staying
-        else (places.get(user, user), 1, 0, user)
-        for user in users
-    ]
-    place, _, depth, user = min(keys)
-    return Use(user, place, -depth)
-
-
 def _movable(
     walls: Walls, uses: dict[int, Use], staying: frozenset[int]
 ) -> frozenset[int]:
@@ -340,3 +283,60 @@ def _has_body(func: Function) -> bool:
         and stmt.value.value is Ellipsis
         for stmt in body
     )
+
+
+def _first_uses(
+    plain: _Users, staying: frozenset[int], places: dict[int, int]
+) -> dict[int, Use]:
+    """Return where each class without methods goes, above its first user.
+
+    A user that is such a class and can move counts where that class goes, one
+    deeper, so the deeper class sits above it. Any other user sits at its place,
+    or at its own index if places leaves it out.
+    """
+    uses: dict[int, Use] = {}
+    for cls in plain:
+        _resolve(plain, staying, uses, cls, places)
+    return uses
+
+
+def _resolve(
+    plain: _Users,
+    staying: frozenset[int],
+    uses: dict[int, Use],
+    root: int,
+    places: dict[int, int],
+) -> None:
+    """Add root's use to uses, after those of the classes that use it.
+
+    A stack, not recursion, so a long chain of such classes doesn't overflow.
+    """
+    pending = [root]
+    while pending:
+        cls = pending[-1]
+        moving = [user for user in plain[cls] if user in plain and user not in staying]
+        todo = [user for user in moving if user not in uses]
+        if todo:
+            pending.extend(todo)
+        else:
+            uses[pending.pop()] = _use(plain[cls], uses, staying, places)
+
+
+def _use(
+    users: list[int],
+    uses: dict[int, Use],
+    staying: frozenset[int],
+    places: dict[int, int],
+) -> Use:
+    """Return the first of users.
+
+    A use through such a class comes before a direct use at the same place.
+    """
+    keys = [
+        (uses[user].at, 0, -uses[user].depth - 1, user)
+        if user in uses and user not in staying
+        else (places.get(user, user), 1, 0, user)
+        for user in users
+    ]
+    place, _, depth, user = min(keys)
+    return Use(user, place, -depth)

@@ -25,9 +25,10 @@ def _stays_near(model: Model, cls: int, rank: dict[int, int]) -> bool:
     """Report whether cls is near its first user and what lies between stays so."""
     if not _is_near(model, cls):
         return False
-    at = model.classes.uses[cls].at
-    between = [idx for idx in range(cls + 1, at + 1) if idx in rank]
-    return [rank[idx] for idx in between] == list(range(rank[between[0]], rank[at] + 1))
+    user = model.classes.uses[cls].at
+    between = [idx for idx in range(cls + 1, user + 1) if idx in rank]
+    expected = range(rank[between[0]], rank[user] + 1)
+    return [rank[idx] for idx in between] == list(expected)
 
 
 def _stacked(above: dict[int, list[int]], idx: int) -> list[int]:

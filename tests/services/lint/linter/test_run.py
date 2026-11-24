@@ -91,7 +91,7 @@ def test_run_fixer_warns_and_skips_unparsable_file(
     assert capsys.readouterr().err.startswith(f"warning: {bad_file}: ")
 
 
-def test_run_fixer_warns_and_keeps_file_it_cannot_write(
+def test_run_fixer_warns_and_keeps_unwritable_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     misplaced = tmp_path / "misplaced.py"
