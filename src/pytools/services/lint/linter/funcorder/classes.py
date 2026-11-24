@@ -22,9 +22,8 @@ class Use:
 class Classes:
     """Where the classes directly in a scope go."""
 
-    plain: _Users  # the users of each used class without methods
-    uses: dict[int, Use]  # where each such class that can move goes
-    plain_needs: dict[int, frozenset[int]]  # needs, with those of classes it uses
+    uses: dict[int, Use]  # where each class without methods that can move goes
+    inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
 
 
@@ -41,8 +40,8 @@ def find_classes(
     used = {cls: found for cls, found in users.items() if found}
     plain = _plain(decls, used)
     uses = _place(decls, plain, needs)
-    plain_needs = _plain_needs(plain, uses, needs)
-    return Classes(plain, uses, plain_needs, _tucked(decls, used))
+    inherited = _inherited(plain, uses, needs)
+    return Classes(uses, inherited, _tucked(decls, used))
 
 
 def _users(
@@ -191,17 +190,25 @@ def _stays_above(uses: dict[int, Use], movable: set[int], use: Use, need: int) -
     return is_deeper and need in movable
 
 
-def _plain_needs(
+def _inherited(
     plain: _Users, uses: dict[int, Use], needs: dict[int, frozenset[int]]
 ) -> dict[int, frozenset[int]]:
-    """Return what each class without methods that can move needs when defined.
+    """Return what each user of classes without methods that can move waits for.
 
-    The ones it uses go above it, so what they need counts as its own.
+    Such a class goes above its first user, so a user waits for what it needs
+    when defined, and for what the classes it uses need, since they go above it.
     """
     inner = {cls: [other for other in uses if cls in plain[other]] for cls in uses}
-    return {
+    chained = {
         cls: needs[cls].union(*(needs[other] for other in graph.reachable(inner, cls)))
         for cls in uses
+    }
+    users = {user for cls in uses for user in plain[cls]}
+    return {
+        user: frozenset(
+            need for cls in uses if user in plain[cls] for need in chained[cls]
+        )
+        for user in users
     }
 
 

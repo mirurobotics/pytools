@@ -26,8 +26,8 @@ class Line:
 
 
 def test_find_classes_chains_methodless_class_needs(parse: Parse) -> None:
-    plain_needs = _find(parse, _CLASS_CHAIN).plain_needs
-    assert plain_needs == {1: frozenset({0}), 2: frozenset({0, 1})}
+    inherited = _find(parse, _CLASS_CHAIN).inherited
+    assert inherited == {2: frozenset({0}), 3: frozenset({0, 1})}
 
 
 def test_find_classes_places_users_that_stay(parse: Parse) -> None:

@@ -10,8 +10,8 @@ def arrange(model: Model) -> tuple[list[int], set[int]]:
     statements it carries, and each class tucked under its users. A statement
     directly above a def or class moves with it, unless that would reorder
     statements, which run in order at import time, or a later def or class uses
-    it when defined. Each class without methods that has a first user is left
-    out, since it goes directly above that user.
+    it when defined. Each class without methods that can move to its first user
+    is left out, since it goes directly above that user.
     """
     decls = model.decls
     blockers = {
@@ -57,7 +57,8 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
 
     A statement no def or class carries is a unit of its own, and so is each
     statement above the first def or class: the header never moves. A class
-    without methods that has a first user carries none: it moves there alone.
+    without methods that can move to its first user carries none: it moves
+    there alone.
     """
     first = min(model.decls, default=0)
     anchored = _anchored(model)
@@ -93,16 +94,10 @@ def _anchored(model: Model) -> set[int]:
 def _inherited_needs(model: Model, unit: list[int]) -> set[int]:
     """Return what the classes without methods unit uses need when defined.
 
-    Such a class that can move goes above its first user, so each user waits for
-    what it needs. One that can't stays put, so no user waits for it.
+    One that can't move stays put, so no user waits for it.
     """
-    classes = model.classes
-    return {
-        need
-        for cls, found in classes.plain_needs.items()
-        if any(idx in classes.plain[cls] for idx in unit)
-        for need in found
-    }
+    inherited = model.classes.inherited
+    return {need for idx in unit for need in inherited.get(idx, frozenset())}
 
 
 def _pick(
