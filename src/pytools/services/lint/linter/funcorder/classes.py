@@ -38,8 +38,8 @@ class Classes:
     uses: dict[int, Use]  # where each class without methods that can move goes
     inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
+    walls: Walls
     _fixed: frozenset[int]  # the decls that never move, exempt classes included
-    _walls: Walls
     _plain: _Users  # the users of each class without methods
     _staying: frozenset[int]  # the classes without methods that can't move
 
@@ -47,7 +47,7 @@ class Classes:
         """Report whether the decls moved may move together past those passed."""
         if not self._fixed.isdisjoint(moved):
             return False
-        return not any(self._walls.crossed(idx, passed) for idx in moved)
+        return not any(self.walls.crossed(idx, passed) for idx in moved)
 
     def first_uses(self, places: dict[int, int]) -> dict[int, Use]:
         """Return where each class in uses goes when its users sit at places."""
@@ -78,7 +78,7 @@ def find_classes(
     inherited = _inherited(plain, uses, graph.above(binders))
     staying = frozenset(plain.keys() - uses.keys())
     tucked = _tucked(decls, used)
-    return Classes(uses, inherited, tucked, fixed, walls, plain, staying)
+    return Classes(uses, inherited, tucked, walls, fixed, plain, staying)
 
 
 def _users(

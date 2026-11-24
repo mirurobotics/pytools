@@ -21,6 +21,12 @@ def _h(): return 1
 result = globals()["_h"]()
 def run(): return _h()
 """
+_RENAMED_DECORATOR: Final = """\
+from framework import route as cache
+@cache("/admin")
+def _h(): pass
+def run(): _h()
+"""
 _NEAR_USER: Final = """\
 def main(): U()
 class P:
@@ -36,6 +42,24 @@ class P:
 def U(p: P): pass
 S = 1
 def W(x=S): pass
+"""
+_SHARED_USER: Final = """\
+def main(): V(); U()
+class A:
+    x: int
+class B:
+    y: int
+def U(): return A(), B()
+def V(): return B()
+"""
+_SHARED_USER_FIXED: Final = """\
+def main(): V(); U()
+class B:
+    y: int
+def V(): return B()
+class A:
+    x: int
+def U(): return A(), B()
 """
 _TRAILING_COMMENT: Final = """\
 class T:
@@ -70,6 +94,7 @@ class T:
         pytest.param("a = 1; b = 2\ndef _h(): pass\ndef run(): _h()\n", id="shared"),
         pytest.param(_SIDE_EFFECTS, id="definitions-with-side-effects"),
         pytest.param(_DYNAMIC_USE, id="statement-that-runs-code"),
+        pytest.param(_RENAMED_DECORATOR, id="decorated-definition"),
     ],
 )
 def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
@@ -90,9 +115,9 @@ def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
             id="helpers-move-with-their-caller",
         ),
         pytest.param(
-            "import x\n# helps\n@cache\ndef _h(): pass\ndef run(): _h()\n",
-            "import x\ndef run(): _h()\n# helps\n@cache\ndef _h(): pass\n",
-            id="comments-and-decorators",
+            "import x\n# helps\ndef _h(): pass\ndef run(): _h()\n",
+            "import x\ndef run(): _h()\n# helps\ndef _h(): pass\n",
+            id="attached-comment",
         ),
         pytest.param(
             "#!/usr/bin/env python3\ndef _h(): pass\ndef run(): _h()\n",
@@ -103,11 +128,6 @@ def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
             "def _h(): pass\ndef run(): _h() \\\n# joined\n",
             "def run(): _h() \\\n# joined\ndef _h(): pass\n",
             id="backslash-continuation",
-        ),
-        pytest.param(
-            "def _h(): pass\n@overload\ndef f(x: int) -> int: ...\ndef f(x): _h()\n",
-            "@overload\ndef f(x: int) -> int: ...\ndef f(x): _h()\ndef _h(): pass\n",
-            id="overload-stubs",
         ),
         pytest.param(
             "def _h(): pass\nN = 3\ndef _g(): return N\ndef main(): _h(); _g()\n",
@@ -157,6 +177,9 @@ def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
             id="placed-class-stays",
         ),
         pytest.param(_NEAR_USER, _NEAR_USER_FIXED, id="near-class-follows-its-user"),
+        pytest.param(
+            _SHARED_USER, _SHARED_USER_FIXED, id="near-class-whose-neighbour-moves"
+        ),
     ],
 )
 def test_fix_orders_module(parse: Parse, source: str, expected: str) -> None:
@@ -203,3 +226,16 @@ def test_fix_follows_a_long_chain(parse: Parse) -> None:
     source = "class C0:\n    x: int\n" + _RUN + chain + make
     expected = _RUN + "class C0:\n    x: int\n" + chain + make
     assert funcorder.fix(parse(source)) == expected
+
+
+@pytest.mark.parametrize(
+    "fixed",
+    [
+        pytest.param("def run(): _h()\n", id="dropped-statement"),
+        pytest.param("def run(): _h()\ndef _h(): return 1\n", id="changed-statement"),
+        pytest.param("def run(): _h(\ndef _h(): pass\n", id="unparsable"),
+    ],
+)
+def test_holds_same_statements_rejects_other_source(parse: Parse, fixed: str) -> None:
+    file = parse("def _h(): pass\ndef run(): _h()\n")
+    assert not funcorder._holds_same_statements(file, fixed)

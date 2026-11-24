@@ -1,3 +1,4 @@
+import stat
 from pathlib import Path
 from typing import Final
 
@@ -73,12 +74,24 @@ def _config() -> Config:
 def test_run_fixer_rewrites_misplaced_file(tmp_path: Path) -> None:
     misplaced = tmp_path / "misplaced.py"
     misplaced.write_text(_MISPLACED, encoding="utf-8")
+    misplaced.chmod(0o640)
     ordered = tmp_path / "ordered.py"
     ordered_bytes = _ORDERED.replace("\n", "\r\n").encode("utf-8-sig")
     ordered.write_bytes(ordered_bytes)
     run_fixer([str(misplaced), str(ordered)], Config())
     assert misplaced.read_text(encoding="utf-8") == _ORDERED
+    assert stat.S_IMODE(misplaced.stat().st_mode) == 0o640
     assert ordered.read_bytes() == ordered_bytes
+
+
+def test_run_fixer_rewrites_file_a_symlink_points_at(tmp_path: Path) -> None:
+    misplaced = tmp_path / "misplaced.py"
+    misplaced.write_text(_MISPLACED, encoding="utf-8")
+    link = tmp_path / "link.py"
+    link.symlink_to(misplaced)
+    run_fixer([str(link)], Config())
+    assert link.is_symlink()
+    assert misplaced.read_text(encoding="utf-8") == _ORDERED
 
 
 def test_run_fixer_warns_and_skips_unparsable_file(

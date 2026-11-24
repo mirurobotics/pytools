@@ -1,15 +1,11 @@
 import ast
-from bisect import bisect_left
-from itertools import accumulate
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.funcorder.decl import Decl
-from pytools.services.lint.linter.funcorder.inert import is_inert_stmt
 from pytools.services.lint.linter.funcorder.model import Model, build, must_precede
 from pytools.services.lint.linter.funcorder.order import arrange
 from pytools.services.lint.linter.funcorder.plain import place, plain_violations
 from pytools.services.lint.linter.funcorder.render import has_shared_lines, render
-from pytools.services.lint.linter.funcorder.walls import is_inert_decl
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
@@ -48,7 +44,7 @@ def _fixed_order(
         return None
     model = build(file, scope)
     order = place(model, arrange(model)[0])
-    return order if _is_safe(scope, model, order) else None
+    return order if model.classes.walls.keeps(order) else None
 
 
 def _check_scope(
@@ -114,37 +110,16 @@ def _directly_below(model: Model, decl: Decl, order: list[int]) -> list[str]:
     return [f'"{decl.name}" should be directly below "{above}"']
 
 
-def _is_safe(scope: ast.Module | ast.ClassDef, model: Model, order: list[int]) -> bool:
-    """Report whether order keeps what runs when scope is defined.
-
-    No statement moves past one that may run code, since such a statement may
-    use any name above it, and each decl stays below the statements it needs.
-    """
-    spans = {part: decl for decl in model.decls.values() for part in decl.span}
-    calm = {
-        idx
-        for idx, stmt in enumerate(scope.body)
-        if (is_inert_decl(scope, spans[idx]) if idx in spans else is_inert_stmt(stmt))
-    }
-    active = sorted(set(order) - calm)
-    seen = list(accumulate((int(idx not in calm) for idx in order), initial=0))
-    is_kept = all(
-        seen[pos] == bisect_left(active, idx) for pos, idx in enumerate(order)
-    )
-    rank = {idx: pos for pos, idx in enumerate(order)}
-    starts = {idx: rank[decl.span.start] for idx, decl in model.decls.items()}
-    needs = model.needs.items()
-    is_below = all(rank[need] < starts[idx] for idx, found in needs for need in found)
-    return is_kept and is_below
-
-
 def _holds_same_statements(file: CheckInput, fixed: str) -> bool:
-    """Report whether fixed parses to file's statements, each scope's in any order."""
+    """Report whether fixed parses to file's statements, each scope's in any order.
+
+    Source nested too deeply to compare counts as different.
+    """
     try:
-        after = ast.parse(fixed)
-    except SyntaxError:
+        before = _sorted_dump(ast.parse("\n".join(file.lines)))
+        return before == _sorted_dump(ast.parse(fixed))
+    except (SyntaxError, RecursionError, MemoryError):
         return False
-    return _sorted_dump(ast.parse("\n".join(file.lines))) == _sorted_dump(after)
 
 
 def _sorted_dump(tree: ast.Module) -> str:

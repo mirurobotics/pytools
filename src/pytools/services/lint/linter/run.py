@@ -51,19 +51,24 @@ def _read(path: Path) -> CheckInput | None:
 
 
 def _write(path: Path, source: str) -> None:
-    """Replace path's content with source in one step, keeping its mode.
+    """Replace the content of the file path names with source in one step.
 
-    On failure it warns and leaves the file as it was.
+    The file keeps its mode, and a symlink keeps pointing at it. On failure it
+    warns and leaves the file as it was.
     """
-    prefix = f".{path.name}."
     try:
+        target = path.resolve()
         with NamedTemporaryFile(
-            "w", encoding="utf-8", dir=path.parent, prefix=prefix, delete_on_close=False
+            "w",
+            encoding="utf-8",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            delete_on_close=False,
         ) as temp:
             temp.write(source)
             temp.close()
-            shutil.copymode(path, temp.name)
-            Path(temp.name).replace(path)
+            shutil.copymode(target, temp.name)
+            Path(temp.name).replace(target)
     except OSError as err:
         _warn(path, err)
 

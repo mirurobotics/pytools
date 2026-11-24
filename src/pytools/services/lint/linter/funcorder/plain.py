@@ -13,22 +13,40 @@ def place(model: Model, order: list[int]) -> list[int]:
     starts = {idx: decl.span.start for idx, decl in model.decls.items()}
     places = {idx: rank[starts.get(idx, idx)] for idx in order}
     found = model.classes.first_uses(places)
+    kept = _kept_near(model, found, rank)
     above: dict[int, list[int]] = {}
     for cls in sorted(found, key=lambda idx: (-found[idx].depth, idx)):
-        is_kept = found[cls].user == uses[cls].user and _stays_near(model, cls, rank)
-        target = cls + 1 if is_kept else order[found[cls].at]
+        target = cls + 1 if cls in kept else order[found[cls].at]
         above.setdefault(target, []).append(cls)
     return [placed for idx in order for placed in _stacked(above, idx)]
 
 
-def _stays_near(model: Model, cls: int, rank: dict[int, int]) -> bool:
-    """Report whether cls is near its first user and what lies between stays so."""
+def _kept_near(model: Model, found: dict[int, Use], rank: dict[int, int]) -> set[int]:
+    """Return the classes plain_violations passes over that keep their place.
+
+    One keeps it while its first user stays the same and stays near it.
+    """
+    uses = model.classes.uses
+    kept: set[int] = set()
+    for cls in sorted(found, reverse=True):
+        is_same = found[cls].user == uses[cls].user
+        if is_same and _stays_near(model, cls, rank, kept):
+            kept.add(cls)
+    return kept
+
+
+def _stays_near(model: Model, cls: int, rank: dict[int, int], kept: set[int]) -> bool:
+    """Report whether cls stays near its first user.
+
+    What lies between them stays together, and each class between keeps its place.
+    """
     if not _is_near(model, cls):
         return False
     user = model.classes.uses[cls].at
+    classes = {idx for idx in range(cls + 1, user) if idx in model.classes.uses}
     between = [idx for idx in range(cls + 1, user + 1) if idx in rank]
     expected = range(rank[between[0]], rank[user] + 1)
-    return [rank[idx] for idx in between] == list(expected)
+    return classes <= kept and [rank[idx] for idx in between] == list(expected)
 
 
 def _stacked(above: dict[int, list[int]], idx: int) -> list[int]:

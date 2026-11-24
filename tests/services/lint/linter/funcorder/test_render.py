@@ -45,6 +45,11 @@ def test_has_shared_lines_in_class(parse: Parse, source: str, expected: bool) ->
             id="attached-comment-moves",
         ),
         pytest.param(
+            "a = 1\n@cache\ndef f(): pass\n",
+            "@cache\ndef f(): pass\na = 1\n",
+            id="decorators-move",
+        ),
+        pytest.param(
             "# header\na = 1\nb = 2\n",
             "# header\nb = 2\na = 1\n",
             id="module-header-stays",
