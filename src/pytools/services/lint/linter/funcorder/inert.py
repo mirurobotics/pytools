@@ -17,23 +17,38 @@ _RUNS: Final = (
     ast.DictComp,
     ast.GeneratorExp,
 )
-_PURE: Final = (
-    "abc.abstractmethod",
-    "builtins.classmethod",
-    "builtins.property",
-    "builtins.staticmethod",
-    "dataclasses.dataclass",
-    "enum.unique",
-    "functools.cache",
-    "functools.cached_property",
-    "functools.lru_cache",
-    "functools.singledispatch",
-    "functools.total_ordering",
-    "functools.wraps",
-    "typing.final",
-    "typing.overload",
-    "typing.override",
-    "typing.runtime_checkable",
+_PURE: Final = frozenset(
+    {
+        "abc.abstractmethod",
+        "abstractmethod",
+        "cache",
+        "cached_property",
+        "classmethod",
+        "dataclass",
+        "dataclasses.dataclass",
+        "enum.unique",
+        "final",
+        "functools.cache",
+        "functools.cached_property",
+        "functools.lru_cache",
+        "functools.singledispatch",
+        "functools.total_ordering",
+        "functools.wraps",
+        "lru_cache",
+        "overload",
+        "override",
+        "property",
+        "runtime_checkable",
+        "singledispatch",
+        "staticmethod",
+        "total_ordering",
+        "typing.final",
+        "typing.overload",
+        "typing.override",
+        "typing.runtime_checkable",
+        "unique",
+        "wraps",
+    }
 )
 
 
@@ -85,7 +100,7 @@ def _are_pure(decorators: list[ast.expr]) -> bool:
     """Report whether each of decorators is a stdlib one known to run no code.
 
     It is named by itself or by its module, and called with only literals or
-    names, if at all.
+    names, if at all. It is matched by name, not by what the file imports.
     """
     return all(_is_pure(decorator) for decorator in decorators)
 
@@ -97,5 +112,10 @@ def _is_pure(decorator: ast.expr) -> bool:
         if not all(isinstance(arg, _PLAIN) for arg in args):
             return False
         target = decorator.func
-    names = {pure.rpartition(".")[2] for pure in _PURE}.union(_PURE)
-    return ast.unparse(target) in names
+    attrs: list[str] = []
+    while isinstance(target, ast.Attribute):
+        attrs.append(target.attr)
+        target = target.value
+    if not isinstance(target, ast.Name):
+        return False
+    return ".".join([target.id, *reversed(attrs)]) in _PURE

@@ -22,13 +22,9 @@ class Size:
     width: int
 def make(p: Point, s: Size): pass
 """
-_DEEPER_ABOVE: Final = """\
-class Point:
-    x: int
-class Line:
-    start: Point
-def make(line: Line): pass
-"""
+_DEEPER_ABOVE: Final = (
+    _POINT + "class Line:\n    start: Point\ndef make(line: Line): pass\n"
+)
 _DEEPER_BETWEEN: Final = """\
 class Point:
     x: int
@@ -265,6 +261,7 @@ def test_plain_violations_reports_misplaced_class(
     "source",
     [
         pytest.param(_DATACLASS, id="dataclass"),
+        pytest.param("class Point:\n    y = (z := 1)\n", id="body-walrus"),
         pytest.param("class Point(Enum):\n    X = 1\n", id="enum"),
         pytest.param("class Point(NamedTuple):\n    x: int\n", id="named-tuple"),
         pytest.param("class Point(TypedDict):\n    x: int\n", id="typed-dict"),

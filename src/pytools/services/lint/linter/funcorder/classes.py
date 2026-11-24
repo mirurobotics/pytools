@@ -64,8 +64,7 @@ def find_classes(
     shadowed = _shadowed_classes(decls, bindings)
     kept = _runs_code(decls, effects, bindings) | shadowed | _writes_outer(decls)
     plain = _plain(decls, used)
-    is_class = isinstance(scope, ast.ClassDef)
-    walls = find_walls(decls, effects, binders, kept, bindings, is_class=is_class)
+    walls = find_walls(scope, decls, effects, binders, kept, bindings)
     exempt = {idx for idx, decl in decls.items() if decl.exempt}
     fixed = kept | {idx for idx in exempt if decls[idx].kind is DeclKind.CLASS}
     uses = _place(decls, plain, walls, fixed)
@@ -201,7 +200,7 @@ def _place(
 
 
 def _first_uses(
-    decls: dict[int, Decl], plain: _Users, fixed: frozenset[int]
+    decls: dict[int, Decl], plain: _Users, staying: frozenset[int]
 ) -> dict[int, Use]:
     """Return where each class without methods goes, above its first user.
 
@@ -210,14 +209,14 @@ def _first_uses(
     """
     uses: dict[int, Use] = {}
     for cls in plain:
-        _resolve(decls, plain, fixed, uses, cls)
+        _resolve(decls, plain, staying, uses, cls)
     return uses
 
 
 def _resolve(
     decls: dict[int, Decl],
     plain: _Users,
-    fixed: frozenset[int],
+    staying: frozenset[int],
     uses: dict[int, Use],
     root: int,
 ) -> None:
@@ -228,19 +227,19 @@ def _resolve(
     pending = [root]
     while pending:
         cls = pending[-1]
-        moving = [user for user in plain[cls] if user in plain and user not in fixed]
+        moving = [user for user in plain[cls] if user in plain and user not in staying]
         todo = [user for user in moving if user not in uses]
         if todo:
             pending.extend(todo)
         else:
-            uses[pending.pop()] = _use(decls, plain[cls], uses, fixed)
+            uses[pending.pop()] = _use(decls, plain[cls], uses, staying)
 
 
 def _use(
     decls: dict[int, Decl],
     users: list[int],
     uses: dict[int, Use],
-    fixed: frozenset[int],
+    staying: frozenset[int],
 ) -> Use:
     """Return the first of users.
 
@@ -249,7 +248,7 @@ def _use(
     """
     keys = [
         (uses[user].at, 0, -uses[user].depth - 1, user)
-        if user in uses and user not in fixed
+        if user in uses and user not in staying
         else (decls[user].first if user in decls else user, 1, 0, user)
         for user in users
     ]
@@ -258,11 +257,11 @@ def _use(
 
 
 def _movable(
-    walls: Walls, uses: dict[int, Use], fixed: frozenset[int]
+    walls: Walls, uses: dict[int, Use], staying: frozenset[int]
 ) -> frozenset[int]:
     """Return the classes that can move to their first user.
 
-    One must not pass a statement it's blocked by, unless that is a deeper
+    One must not pass a statement its walls forbid, unless that is a deeper
     class moving to the same place, so deeper classes are decided first.
     """
     movable: set[int] = set()
@@ -271,7 +270,7 @@ def _movable(
         passed = range(cls + 1, use.at) if cls < use.at else range(use.at, cls)
         crossed = walls.crossed(cls, passed)
         is_movable = all(_moves_with(uses, movable, use, idx) for idx in crossed)
-        if cls not in fixed and is_movable:
+        if cls not in staying and is_movable:
             movable.add(cls)
     return frozenset(movable)
 

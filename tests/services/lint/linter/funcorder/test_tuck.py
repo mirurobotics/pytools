@@ -74,14 +74,10 @@ def _g(): pass
 _CLASS_USER: Final = (
     "class Other:\n    def use(self): return Obj()\ndef run(): pass\n" + _OBJ
 )
-_BASE_NEED: Final = """\
-def run(): return Obj()
-def other(): pass
-class Base:
-    x: int
-class Obj(Base):
-    def ident(self): return 1
-"""
+_BASE_NEED: Final = (
+    "def run(): return Obj()\ndef other(): pass\nclass Base:\n    x: int\n"
+    + "class Obj(Base):\n    def ident(self): return 1\n"
+)
 _NEED_THROUGH_CALL: Final = """\
 def _initialize(): return _helper()
 def run(): return Obj()
@@ -159,6 +155,11 @@ _CARRIED_HINT: Final = (
     + "class Update:\n    global VALUE\n    VALUE = 2\n"
     + _CARRY
     + "def helper(x: VALUE = 0): return x\n"
+)
+_CARRIED_OVERLOAD: Final = (
+    'def make(): return Obj()\nprint("a")\n'
+    + _CARRY
+    + '@overload\ndef helper(x=print("b")): ...\ndef helper(x=0): return x\n'
 )
 _STAR_IMPORT: Final = (
     "def run(): return Obj()\nfrom m import *\ndef other(): pass\n" + _OBJ
@@ -260,6 +261,7 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_HELPER_WAITS, id="would-take-a-helper-past-its-default"),
         pytest.param(_CARRIED_DEFAULT, id="would-take-a-helper-past-a-write"),
         pytest.param(_CARRIED_HINT, id="would-take-a-helper-past-its-hint"),
+        pytest.param(_CARRIED_OVERLOAD, id="would-take-an-overload-past-a-call"),
         pytest.param(_GLOBAL_THROUGH_CALL, id="would-rise-past-a-call"),
         pytest.param(_STAR_IMPORT, id="would-rise-past-a-star-import"),
         pytest.param(_NONLOCAL_WRITE, id="would-rise-past-a-nonlocal-write"),
