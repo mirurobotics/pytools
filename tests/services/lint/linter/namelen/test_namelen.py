@@ -16,75 +16,75 @@ _TEST_AT: Final = "test_" + "a" * 45
 _TEST_OVER: Final = "test_" + "a" * 46
 _LONG: Final = "x" * 31
 
-_REBOUND = f"""\
+_REBOUND: Final = """\
 def f():
-    {_LOCAL_OVER} = 1
-    {_LOCAL_OVER} = 2
+    {0} = 1
+    {0} = 2
 """
-_NESTED = f"""\
+_NESTED: Final = """\
 def outer():
     def inner():
-        {_LOCAL_OVER} = 1
+        {0} = 1
 
-    {_LOCAL_OVER} = 2
+    {0} = 2
 """
-_COMPREHENSION = f"""\
+_COMPREHENSION: Final = """\
 def f():
-    {_LOCAL_OVER} = 1
-    return [{_LOCAL_OVER} for {_LOCAL_OVER} in a]
+    {0} = 1
+    return [{0} for {0} in a]
 """
-_LAMBDA = f"""\
+_LAMBDA: Final = """\
 def f():
-    {_LOCAL_OVER} = 1
-    return lambda {_LOCAL_OVER}: {_LOCAL_OVER}
+    {0} = 1
+    return lambda {0}: {0}
 """
-_COMPREHENSION_WALRUS = f"""\
+_COMPREHENSION_WALRUS: Final = """\
 def f():
-    a = [({_LOCAL_OVER} := b) for b in c]
-    {_LOCAL_OVER} = 1
+    a = [({0} := b) for b in c]
+    {0} = 1
 """
-_TYPE_PARAMETERS = f"""\
-{_LOCAL_OVER} = 1
-type A[{_LOCAL_OVER}] = int
-type B[{_LOCAL_OVER}] = int
-def f[{_LOCAL_OVER}]():
-    global {_LOCAL_OVER}
+_TYPE_PARAMETERS: Final = """\
+{0} = 1
+type A[{0}] = int
+type B[{0}] = int
+def f[{0}]():
+    global {0}
 """
-_NOLINT_ON_PARAMETER = f"""\
+_NOLINT_ON_PARAMETER: Final = """\
 def f(
-    {_LONG},  # nolint: namelen
+    {},  # nolint: namelen
 ):
     pass
 """
-_NOLINT_ON_FIRST_IN_DICT = f"""\
+_NOLINT_ON_FIRST_IN_DICT: Final = """\
 def f():
     return {{
-        "a": ({_LONG} := 1),  # nolint: namelen
-        ({_LONG} := 2): 3,
+        "a": ({0} := 1),  # nolint: namelen
+        ({0} := 2): 3,
     }}
 """
-_NOLINT_ON_MAPPING_REST = f"""\
+_NOLINT_ON_MAPPING_REST: Final = """\
 def f():
     match a:
         case {{
             "k": 1,
-            **{_LONG}  # nolint: namelen
+            **{}  # nolint: namelen
         }}:
             pass
 """
-_NOLINT_ON_EXCEPT_ALIAS = f"""\
+_NOLINT_ON_EXCEPT_ALIAS: Final = """\
 def f():
     try:
         pass
     except (
         E
-    ) as {_LONG}:  # nolint: namelen
+    ) as {}:  # nolint: namelen
         pass
 """
-_NOLINT_IN_EXCEPT_BODY = f"""\
+_NOLINT_IN_EXCEPT_BODY: Final = """\
 try:
     pass
-except E as {_LONG}:
+except E as {}:
     # nolint: namelen
     pass
 """
@@ -140,11 +140,12 @@ def test_check_reports_names_over_their_limit(
 
 
 def test_check_reports_first_binding_in_a_scope(parse: Parse) -> None:
-    assert namelen.check(parse(_REBOUND)) == [_diag(2, _LOCAL_OVER, 20)]
+    source = _REBOUND.format(_LOCAL_OVER)
+    assert namelen.check(parse(source)) == [_diag(2, _LOCAL_OVER, 20)]
 
 
 @pytest.mark.parametrize(
-    ("source", "lines"),
+    ("template", "lines"),
     [
         pytest.param(_NESTED, [3, 5], id="nested-function"),
         pytest.param(_COMPREHENSION, [2, 3], id="comprehension"),
@@ -154,10 +155,10 @@ def test_check_reports_first_binding_in_a_scope(parse: Parse) -> None:
     ],
 )
 def test_check_reports_a_name_once_per_scope(
-    parse: Parse, source: str, lines: list[int]
+    parse: Parse, template: str, lines: list[int]
 ) -> None:
     expected = [_diag(line, _LOCAL_OVER, 20) for line in lines]
-    assert namelen.check(parse(source)) == expected
+    assert namelen.check(parse(template.format(_LOCAL_OVER))) == expected
 
 
 @pytest.mark.parametrize(
@@ -276,10 +277,12 @@ def test_check_ignores_names_it_does_not_bind(parse: Parse, template: str) -> No
         pytest.param(
             f"# nolint: namelen\nclass {_LONG}:\n    pass\n", id="line-above-class"
         ),
-        pytest.param(_NOLINT_ON_PARAMETER, id="parameter-line"),
-        pytest.param(_NOLINT_ON_MAPPING_REST, id="mapping-rest-line"),
-        pytest.param(_NOLINT_ON_EXCEPT_ALIAS, id="except-alias-line"),
-        pytest.param(_NOLINT_ON_FIRST_IN_DICT, id="first-binding-in-dict"),
+        pytest.param(_NOLINT_ON_PARAMETER.format(_LONG), id="parameter-line"),
+        pytest.param(_NOLINT_ON_MAPPING_REST.format(_LONG), id="mapping-rest-line"),
+        pytest.param(_NOLINT_ON_EXCEPT_ALIAS.format(_LONG), id="except-alias-line"),
+        pytest.param(
+            _NOLINT_ON_FIRST_IN_DICT.format(_LONG), id="first-binding-in-dict"
+        ),
     ],
 )
 def test_check_skips_name_with_nolint(parse: Parse, source: str) -> None:
@@ -294,7 +297,7 @@ def test_check_skips_name_with_nolint(parse: Parse, source: str) -> None:
         pytest.param(
             f"{_LONG} = 1\n{_LONG} = 2  # nolint: namelen\n", 1, id="later-binding"
         ),
-        pytest.param(_NOLINT_IN_EXCEPT_BODY, 3, id="except-body"),
+        pytest.param(_NOLINT_IN_EXCEPT_BODY.format(_LONG), 3, id="except-body"),
     ],
 )
 def test_check_reports_name_without_its_nolint(
