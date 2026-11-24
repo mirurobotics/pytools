@@ -72,21 +72,15 @@ def _directly_below(model: Model, decl: Decl, order: list[int]) -> list[str]:
     """Report decl unless it sits right under the def placed above it.
 
     The statements it carries sit between them in both orders, and classes
-    placed by their first users are passed over in both.
+    placed by their first users, which the order leaves out, are passed over.
     """
-    pos, first = order.index(decl.idx), decl.idx
-    while pos > 0 and _is_passed_over(model, order[pos - 1]):
+    pos = order.index(decl.idx)
+    while pos > 0 and order[pos - 1] not in model.decls:
         pos -= 1
-        if order[pos] not in model.plain:
-            first = order[pos]
-    prev = first - 1
+    prev = order[pos] - 1
     while prev in model.plain:
         prev -= 1
     if pos == 0 or order[pos - 1] == prev:
         return []
     above = model.decls[order[pos - 1]].name
     return [f'"{decl.name}" should be directly below "{above}"']
-
-
-def _is_passed_over(model: Model, idx: int) -> bool:
-    return idx not in model.decls or idx in model.plain

@@ -1,5 +1,4 @@
 from pytools.services.lint.linter.funcorder.model import DeclKind, Model, must_precede
-from pytools.services.lint.linter.funcorder.plain import place_plain
 from pytools.services.lint.linter.funcorder.tuck import tuck
 
 
@@ -10,8 +9,8 @@ def arrange(model: Model) -> tuple[list[int], set[int]]:
     statements it carries, and each class tucked under its users. A statement
     directly above a def or a class with methods moves with it, unless that
     would reorder statements, which run in order at import time, or a later def
-    or class uses it when defined. A class without methods goes directly above
-    its first user.
+    or class uses it when defined. A class without methods is left out, since it
+    goes directly above its first user.
     """
     decls = model.decls
     blockers = {
@@ -49,8 +48,7 @@ def _arrange(
         else:
             trees.append(list(units[key]))
     below |= tuck(model, trees, waits)
-    order = [idx for tree in trees for idx in tree]
-    return place_plain(model, units, order), below
+    return [idx for tree in trees for idx in tree], below
 
 
 def _units(model: Model, *, settled: bool) -> list[list[int]]:
