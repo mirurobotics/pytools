@@ -60,6 +60,15 @@ class Obj:
     def ident(self): return 1
 def _helper(): pass
 """
+_SETTER: Final = """\
+def run(): return Obj()
+def other(): pass
+class Obj:
+    @property
+    def size(self): return 1
+    @size.setter
+    def size(self, value): pass
+"""
 _STATEMENTS: Final = """\
 def run(): return Obj()
 A = record("a")
@@ -187,6 +196,11 @@ def _diag(line: int, message: str) -> Diagnostic:
             _TREE_ENDS_BELOW,
             [_diag(5, '"_helper" should be directly below "run"')],
             id="user-tree-ends-below-the-class",
+        ),
+        pytest.param(
+            _SETTER,
+            [_diag(3, '"Obj" should be directly below "run"')],
+            id="class-with-a-property-setter",
         ),
     ],
 )

@@ -91,7 +91,7 @@ def _runs_code(
     in that definition, other than by only loading it.
     """
     local = {name for found in effects for name in found.binds}
-    return frozenset(idx for idx in decls if not effects[idx].runs.isdisjoint(local))
+    return frozenset(idx for idx in decls if not effects[idx].called.isdisjoint(local))
 
 
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:

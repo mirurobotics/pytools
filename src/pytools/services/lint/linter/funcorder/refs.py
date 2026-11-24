@@ -20,17 +20,6 @@ from pytools.services.lint.linter.analysis.names import (
 _ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 _COMPS: Final = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 _TYPE_PARAMS: Final = (ast.TypeVar, ast.ParamSpec, ast.TypeVarTuple)
-_COMPOUND: Final = (
-    ast.If,
-    ast.For,
-    ast.AsyncFor,
-    ast.While,
-    ast.Try,
-    ast.TryStar,
-    ast.Match,
-    ast.With,
-    ast.AsyncWith,
-)
 
 type _Root = ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
 type _Comp = ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
@@ -130,10 +119,13 @@ def _position(node: ast.expr) -> tuple[int, int]:
 
 @dataclass(frozen=True)
 class ImportTimeNames:
-    """The names a statement uses when it runs, outside def and lambda bodies."""
+    """The names a statement uses when it runs, outside def bodies.
 
-    loads: set[str]  # loaded from the scope it's in
-    runs: set[str]  # used other than by only loading them, or read in a lambda
+    A lambda's reads count as called, since the lambda may be called.
+    """
+
+    loads: set[str]  # loaded from the scope it's in, outside lambda bodies
+    called: set[str]  # used other than by only loading them
     binds: frozenset[str]  # bound anywhere it runs, but by an import
 
 
@@ -163,30 +155,35 @@ def import_time_names(
         if _is_load(node) and node.id != own and not _is_hidden(hidden, node.id):
             loads.add(node.id)
         pending.extend(_import_time_parts(file, node, hidden, is_class=is_class))
-    runs = _runs(nodes, loaded)
+    called = _called(nodes, loaded)
     bound = [node for node in nodes if not isinstance(node, ast.alias)]
-    return ImportTimeNames(loads, runs, _bound_names(file, bound))
+    return ImportTimeNames(loads, called, _bound_names(file, bound))
 
 
 def _loaded_parts(node: ast.AST) -> list[ast.AST]:
     """Return the parts of node it only loads, running none of their code.
 
-    Those are an assigned value or annotation, a list or tuple element, and an
-    argument or subscript slice of a name or attribute, such as `list[Vec]`.
+    Those are an annotation, a value assigned to names or attributes without
+    unpacking it, a list or tuple element, and a subscript slice of a name or
+    attribute, such as `list[Vec]`. A call argument may run, since the callee
+    can call it.
     """
-    if isinstance(node, ast.Assign):
+    if isinstance(node, ast.Assign) and all(map(_is_target, node.targets)):
         return [node.value]
     if isinstance(node, ast.AnnAssign):
-        return [node.annotation, *([node.value] if node.value else [])]
+        value = [node.value] if node.value and _is_target(node.target) else []
+        return [node.annotation, *value]
     if isinstance(node, (ast.List, ast.Tuple)):
         return list(node.elts)
     if isinstance(node, _ROOTS):
         return _loaded_def_parts(node)
-    if isinstance(node, ast.Call) and _is_named(node.func):
-        return [*node.args, *(keyword.value for keyword in node.keywords)]
     if isinstance(node, ast.Subscript) and _is_named(node.value):
         return [node.slice]
     return []
+
+
+def _is_target(node: ast.expr) -> bool:
+    return isinstance(node, (ast.Name, ast.Attribute))
 
 
 def _loaded_def_parts(node: _Root) -> list[ast.AST]:
@@ -243,7 +240,7 @@ def _import_time_parts(
     if is_class:
         return outer
     bound = _class_bindings(file, node)
-    params = _type_params(node)
+    params = hidden[2] | _type_params(node)
     body = [(part, (bound, idx, params)) for idx, part in enumerate(node.body)]
     return [*outer, *body]
 
@@ -283,26 +280,33 @@ def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
 
 
 def _class_bindings(file: CheckInput, cls: ast.ClassDef) -> dict[str, int]:
-    """Return the first statement of cls's body that surely binds each name."""
+    """Return the first statement of cls's body that surely binds each name.
+
+    A name the body deletes anywhere may load the module's again.
+    """
+    nodes = [node for stmt in cls.body for node in ast.walk(stmt)]
+    names = [node for node in nodes if isinstance(node, ast.Name)]
+    deleted = {name.id for name in names if isinstance(name.ctx, ast.Del)}
     body = list(enumerate(cls.body))
     return {
         name: idx
         for idx, stmt in reversed(body)
         if _is_definite(stmt)
-        for name in bound_names(file, stmt)
+        for name in bound_names(file, stmt) - deleted
     }
 
 
 def _is_definite(stmt: ast.stmt) -> bool:
     """Report whether stmt surely binds the names it binds once it runs.
 
-    An annotation without a value binds nothing, and a compound statement may
-    skip the statements under it. A walrus may sit where it doesn't run, so a
+    An annotation without a value binds nothing, and a statement holding others
+    in the same scope may skip them. A walrus may sit where it doesn't run, so a
     statement with one counts as unsure.
     """
     is_annotation = isinstance(stmt, ast.AnnAssign) and stmt.value is None
-    has_walrus = any(isinstance(node, ast.NamedExpr) for node in _run_nodes([stmt]))
-    return not (is_annotation or has_walrus or isinstance(stmt, _COMPOUND))
+    nested = _run_nodes([stmt])[1:]
+    is_unsure = any(isinstance(node, (ast.NamedExpr, ast.stmt)) for node in nested)
+    return not (is_annotation or is_unsure)
 
 
 def bound_names(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:
@@ -356,7 +360,7 @@ def _comp_outer_parts(comp: _Comp) -> list[ast.AST]:
     return [comp.generators[0].iter, *targets]
 
 
-def _runs(nodes: list[ast.AST], loaded: set[ast.AST]) -> set[str]:
+def _called(nodes: list[ast.AST], loaded: set[ast.AST]) -> set[str]:
     """Return the names nodes use other than by only loading them, or a lambda reads."""
     used = [node for node in nodes if node not in loaded]
     lambdas = [node for node in nodes if isinstance(node, ast.Lambda)]

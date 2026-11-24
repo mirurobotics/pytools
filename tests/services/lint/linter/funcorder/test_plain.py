@@ -125,6 +125,7 @@ def make(): return Point()
 _NESTED_CLASS_BODY: Final = """\
 Point = int
 class Box:
+    values = [Point for _ in range(3)]
     class Point: pass
     def run(self): pass
     class Other:
@@ -291,7 +292,7 @@ def test_check_places_classes_in_each_class_body(parse: Parse) -> None:
     assert funcorder.check(parse(_CLASS_BODY)) == [Diagnostic("a.py", 3, message)]
 
 
-def test_check_skips_nested_class_body_loads(parse: Parse) -> None:
+def test_check_skips_loads_hidden_in_class_body(parse: Parse) -> None:
     assert funcorder.check(parse(_NESTED_CLASS_BODY)) == []
 
 

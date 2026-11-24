@@ -124,10 +124,13 @@ _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
 _CLASS_LOCAL: Final = """\
 class Other:
     Point = int
-    value = Point(), Size()
+    Gone = int
+    del Gone
+    value = Point(), Size(), Gone()
     Size = int
 """
 _TYPE_PARAMS: Final = "@deco(Point)\ndef make[Point, Size, T](p: T, q=Size): pass\n"
+_OUTER_TYPE_PARAMS: Final = "class Box[Item]:\n    class In:\n        x = Item, Size\n"
 _CLASS_LOCAL_COMPREHENSION: Final = """\
 class Other:
     Point = int
@@ -283,8 +286,9 @@ def test_import_time_names_skips_function_bodies(
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
-        pytest.param(_CLASS_LOCAL, {"Size", "int"}, id="bound-above-not-below"),
+        pytest.param(_CLASS_LOCAL, {"Gone", "Size", "int"}, id="bound-above-not-below"),
         pytest.param(_TYPE_PARAMS, {"Point", "Size", "deco"}, id="type-params"),
+        pytest.param(_OUTER_TYPE_PARAMS, {"Size"}, id="enclosing-type-params"),
         pytest.param(
             _CLASS_LOCAL_COMPREHENSION, {"Point", "int", "range"}, id="comprehension"
         ),
