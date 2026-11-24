@@ -148,15 +148,18 @@ _NONLOCAL_DEFAULT: Final = (
 )
 _BOX: Final = "class Box:\n    def make(self): return self.Obj()\n"
 _UPDATE: Final = "    class Update:\n        STATE.value = 2\n"
-_CARRIED_DEFAULT: Final = """\
-import sys
-def make(): return Obj()
-sys.state = 2
-def other(): pass
-class Obj:
-    def ident(self): return helper()
-def helper(value=sys.state): return value
-"""
+_CARRY: Final = "def other(): pass\nclass Obj:\n    def ident(self): return helper()\n"
+_CARRIED_DEFAULT: Final = (
+    "import sys\ndef make(): return Obj()\nsys.state = 2\n"
+    + _CARRY
+    + "def helper(value=sys.state): return value\n"
+)
+_CARRIED_HINT: Final = (
+    "VALUE = 1\ndef make(): return Obj()\n"
+    + "class Update:\n    global VALUE\n    VALUE = 2\n"
+    + _CARRY
+    + "def helper(x: VALUE = 0): return x\n"
+)
 _STAR_IMPORT: Final = (
     "def run(): return Obj()\nfrom m import *\ndef other(): pass\n" + _OBJ
 )
@@ -256,6 +259,7 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_DECORATED_HELPER, id="tree-holds-a-decorated-def"),
         pytest.param(_HELPER_WAITS, id="would-take-a-helper-past-its-default"),
         pytest.param(_CARRIED_DEFAULT, id="would-take-a-helper-past-a-write"),
+        pytest.param(_CARRIED_HINT, id="would-take-a-helper-past-its-hint"),
         pytest.param(_GLOBAL_THROUGH_CALL, id="would-rise-past-a-call"),
         pytest.param(_STAR_IMPORT, id="would-rise-past-a-star-import"),
         pytest.param(_NONLOCAL_WRITE, id="would-rise-past-a-nonlocal-write"),

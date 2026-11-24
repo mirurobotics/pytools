@@ -189,13 +189,14 @@ def _blocked(
 
     Its binders bind a name it reads when defined. Any statement but an inert
     decl that runs no scope code may run code or bind a name, so a decl whose
-    definition may run code must not pass one, nor may a class that reads a name
-    the scope may bind or, in a class scope, a name its body doesn't bind.
+    definition may run code must not pass one, nor may one that reads a name the
+    scope may bind, nor, in a class scope, a class that reads a name its body
+    doesn't bind.
     """
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     active = {idx for idx, decl in decls.items() if not is_inert(decl.stmt)}
     walls = frozenset(range(len(effects))) - (decls.keys() - kept - active)
-    walled = active | {cls for cls in classes if effects[cls].reads & bindings.keys()}
+    walled = active | {idx for idx in decls if effects[idx].reads & bindings.keys()}
     if is_class:
         walled |= {cls for cls in classes if effects[cls].reads - effects[cls].binds}
     return {
