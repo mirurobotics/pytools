@@ -9,6 +9,7 @@ from pytools.services.lint.linter.analysis.comments import Comment
 type Function = ast.FunctionDef | ast.AsyncFunctionDef
 
 DEFS: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
+ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 
 
 class Rule(StrEnum):
@@ -24,16 +25,6 @@ class Rule(StrEnum):
     COMMENTEDCODE = "commentedcode"
     MUTABLEGLOBAL = "mutableglobal"
     FUNCORDER = "funcorder"
-
-
-@dataclass(frozen=True)
-class CheckInput:
-    """One parsed file for the rule checks."""
-
-    path: str
-    tree: ast.Module
-    lines: list[str]
-    comments: dict[int, Comment]
 
 
 @dataclass(frozen=True)
@@ -58,6 +49,16 @@ def walk_outside(
         yield node
         if not isinstance(node, stop):
             pending.extend(reversed(list(ast.iter_child_nodes(node))))
+
+
+@dataclass(frozen=True)
+class CheckInput:
+    """One parsed file for the rule checks."""
+
+    path: str
+    tree: ast.Module
+    lines: list[str]
+    comments: dict[int, Comment]
 
 
 def function_body_lines(file: CheckInput) -> set[int]:

@@ -1,18 +1,14 @@
 import ast
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
-from pytools.services.lint.linter.funcorder.model import (
-    Decl,
-    DeclKind,
-    Model,
-    build,
-    must_precede,
-)
+from pytools.services.lint.linter.funcorder.decl import Decl
+from pytools.services.lint.linter.funcorder.model import Model, build, must_precede
 from pytools.services.lint.linter.funcorder.order import arrange
+from pytools.services.lint.linter.funcorder.plain import plain_violations
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
-    """Report defs out of control-flow order in the module and each class."""
+    """Report defs and classes out of order in the module and each class."""
     scopes: list[ast.Module | ast.ClassDef] = [file.tree, *_classes(file.tree)]
     diags = [diag for scope in scopes for diag in _check_scope(file, scope)]
     return sorted(diags, key=lambda diag: diag.line)
@@ -27,17 +23,22 @@ def _check_scope(
 ) -> list[Diagnostic]:
     model = build(file, scope)
     order, below = arrange(model)
-    return [
+    diags = [
         Diagnostic(file.path, decl.stmt.lineno, message)
         for decl in model.decls.values()
         for message in _violations(model, decl, order, below)
     ]
+    diags.extend(
+        Diagnostic(file.path, model.decls[cls].stmt.lineno, message)
+        for cls, message in plain_violations(model).items()
+    )
+    return diags
 
 
 def _violations(
     model: Model, decl: Decl, order: list[int], below: set[int]
 ) -> list[str]:
-    if decl.kind is DeclKind.EXEMPT:
+    if decl.exempt:
         return []
     found = [_stepdown(model, decl), _rank_order(model, decl)]
     messages = [message for message in found if message is not None]
@@ -65,12 +66,16 @@ def _rank_order(model: Model, decl: Decl) -> str | None:
 def _directly_below(model: Model, decl: Decl, order: list[int]) -> list[str]:
     """Report decl unless it sits right under the def placed above it.
 
-    The statements it carries sit between them in both orders.
+    The statements it carries sit between them in both orders, and classes
+    placed by their first users, which the order leaves out, are passed over.
     """
     pos = order.index(decl.idx)
     while pos > 0 and order[pos - 1] not in model.decls:
         pos -= 1
-    if pos == 0 or order[pos - 1] == order[pos] - 1:
+    prev = order[pos] - 1
+    while prev in model.classes.uses:
+        prev -= 1
+    if pos == 0 or order[pos - 1] == prev:
         return []
     above = model.decls[order[pos - 1]].name
     return [f'"{decl.name}" should be directly below "{above}"']

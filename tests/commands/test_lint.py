@@ -11,11 +11,6 @@ from pytools.services.lint.linter.analysis.analysis import Rule
 from pytools.services.lint.linter.rules import Config
 
 
-class _TwoRules(StrEnum):
-    FUNCLEN = "funclen"
-    OTHER = "other"
-
-
 def _every_flag_argv() -> list[str]:
     return [
         "--max-func-len",
@@ -177,6 +172,11 @@ def test_lint_options_sets_every_config_field() -> None:
         if getattr(config, field.name) == getattr(Config(), field.name)
     ]
     assert unset == []
+
+
+class _TwoRules(StrEnum):
+    FUNCLEN = "funclen"
+    OTHER = "other"
 
 
 def test_lint_options_excludes_every_other_rule(

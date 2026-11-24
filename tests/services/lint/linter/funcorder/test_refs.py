@@ -121,6 +121,24 @@ except ValueError as err:
     pass
 """
 _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
+_CLASS_LOCAL: Final = """\
+class Other:
+    Point = Gone = Lost = int
+    del Gone
+    def drop(self): del Point
+    try: pass
+    except E as Lost: pass
+    value = Point(), Size(), Gone(), Lost()
+    Size = int
+"""
+_TYPE_PARAMS: Final = "@deco(Point)\ndef make[Point, Size, T](p: T, q=Size): pass\n"
+_OUTER_TYPE_PARAMS: Final = "class Box[Item]:\n    class In:\n        x = Item, Size\n"
+_CLASS_LOCAL_COMPREHENSION: Final = """\
+class Other:
+    Point = int
+    Size = int
+    values = [[Size for _ in Point()] for Size in range(Size())]
+"""
 
 
 @pytest.mark.parametrize(
@@ -128,9 +146,7 @@ _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
     [
         pytest.param("def run(): b(); a(); b()\n", ["b", "a", "b"], id="call-order"),
         pytest.param(_NESTED_DEF, ["helper"], id="nested-def"),
-        pytest.param(
-            _NESTED_DEF_OUTER_PARTS, ["deco", "make"], id="nested-def-outer-parts"
-        ),
+        pytest.param(_NESTED_DEF_OUTER_PARTS, ["deco", "make"], id="outer-parts"),
         pytest.param("def run(): return lambda: helper()\n", ["helper"], id="lambda"),
         pytest.param(_COMPREHENSION_THEN_CALL, ["helper"], id="comprehension-target"),
         pytest.param(
@@ -144,11 +160,7 @@ _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
             ["helper"],
             id="call-in-comprehension",
         ),
-        pytest.param(
-            "def run(): return [x for x in helper()]\n",
-            ["helper"],
-            id="first-iterable",
-        ),
+        pytest.param("def run(): [x for x in h()]\n", ["h"], id="first-iterable"),
         pytest.param(
             "def run(): return [helper for helper in helper()]\n",
             ["helper"],
@@ -156,6 +168,7 @@ _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
         ),
         pytest.param(_GLOBAL, ["cache", "helper", "helper"], id="global"),
         pytest.param(_CLASS, ["helper"], id="class-methods"),
+        pytest.param("def run(k=lambda: h()): pass\n", ["h"], id="lambda-default"),
     ],
 )
 def test_called_names_returns_names_run_when_called(
@@ -211,11 +224,7 @@ def _module_calls(parse: Parse, source: str) -> list[str]:
         pytest.param(_CLASSMETHOD, ["build"], id="cls"),
         pytest.param(_STATICMETHOD, [], id="staticmethod"),
         pytest.param("class T:\n    def run(): helper()\n", [], id="no-parameters"),
-        pytest.param(
-            "class T:\n    def run(self, other): other.help()\n",
-            [],
-            id="other-object",
-        ),
+        pytest.param("class T:\n    def run(self, o): o.h()\n", [], id="other-object"),
         pytest.param(_NESTED_CLASS, [], id="nested-class"),
         pytest.param(
             "class T:\n    def run(self): self.helper = 1\n", [], id="attribute-write"
@@ -258,12 +267,35 @@ def _method_calls(parse: Parse, source: str) -> list[str]:
         ),
         pytest.param(_METHOD_NAMED_LIKE_DECORATOR, {"retry"}, id="method-decorator"),
         pytest.param(_DEEP_STATEMENT, {"make"}, id="deep-expression"),
+        pytest.param("x = [(lambda: P)() for P in t]\n", {"t"}, id="lambda-call"),
+        pytest.param("x = (lambda: [P for P in t])()\n", {"t"}, id="lambda-loop"),
+        pytest.param("x = (lambda: (lambda h: h)(0))()\n", set(), id="nested-lambda"),
+        pytest.param("x = (lambda P: P)(0)\n", set(), id="lambda-parameter"),
     ],
 )
 def test_import_time_names_skips_function_bodies(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
-    assert refs.import_time_names(parse(source).tree.body[-1]) == expected
+    file = parse(source)
+    assert refs.import_time_names(file, file.tree, file.tree.body[-1]).loads == expected
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(_CLASS_LOCAL, {"E", "Gone", "Lost", "Size", "int"}, id="local"),
+        pytest.param(_TYPE_PARAMS, {"Point", "Size", "deco"}, id="type-params"),
+        pytest.param(_OUTER_TYPE_PARAMS, {"Size"}, id="enclosing-type-params"),
+        pytest.param(
+            _CLASS_LOCAL_COMPREHENSION, {"Point", "int", "range"}, id="comprehension"
+        ),
+    ],
+)
+def test_import_time_names_skips_class_local_names(
+    parse: Parse, source: str, expected: set[str]
+) -> None:
+    file = parse(source)
+    assert refs.import_time_names(file, file.tree, file.tree.body[-1]).loads == expected
 
 
 @pytest.mark.parametrize(

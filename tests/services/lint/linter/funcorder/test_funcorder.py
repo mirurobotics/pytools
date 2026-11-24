@@ -46,6 +46,41 @@ class T:
     def _e(self): pass  # nolint: funcorder
     def b(self): pass
 """
+_CLASS_ABOVE_CALLEE: Final = """\
+def run(): return _make()
+class Point:
+    x: int
+def _make(): return Point()
+"""
+_WRITE_ABOVE: Final = """\
+import sys
+def make(): return Obj()
+class Update:
+    sys.state = 2
+def other(): pass
+class Obj:
+    captured = sys.state
+    def ident(self): return 1
+"""
+_DECORATED_ABOVE: Final = """\
+from plugins import register, REGISTRY
+def make(): return Point()
+@register
+def other(): pass
+class Point:
+    names = list(REGISTRY)
+"""
+_EXEMPT_CLASS: Final = (
+    "def _h(): pass\nclass R:  # nolint: funcorder\n    def run(self): _h()\n"
+)
+_CLASS_STAYS_BETWEEN: Final = """\
+def h(): return P()
+X = 1
+def run(): _f()
+class P:
+    x = X
+def _f(): pass
+"""
 _STEPDOWN: Final = """\
 def _helper(): pass
 def _other(): _helper()
@@ -81,11 +116,7 @@ def main(): _helper()
 if __name__ == "__main__":
     main()
 """
-_PUBLIC_METHOD_ENTRY: Final = """\
-class T:
-    def _a(self): pass
-    def b(self): pass
-"""
+_METHOD_ENTRY: Final = "class T:\n    def _a(self): pass\n    def b(self): pass\n"
 _METHODS: Final = """\
 class T:
     def _helper(self): pass
@@ -148,9 +179,34 @@ def _diag(line: int, message: str) -> Diagnostic:
         ),
         pytest.param(_EXEMPT_CALLER, id="exempt-caller"),
         pytest.param(_EXEMPT_METHOD_IN_GROUP, id="exempt-method-inside-its-group"),
+        pytest.param(_CLASS_ABOVE_CALLEE, id="methodless-class-above-callee"),
+        pytest.param(_WRITE_ABOVE, id="class-would-pass-a-write"),
+        pytest.param(_DECORATED_ABOVE, id="class-would-pass-a-decorator"),
+        pytest.param(_EXEMPT_CLASS, id="helper-above-an-exempt-class"),
+        pytest.param(
+            "def helper(): pass\ndef run(v=(lambda: helper())()): pass\n",
+            id="lambda-called-in-a-default",
+        ),
+        pytest.param(
+            "def h(): pass\ndef run(a=(lambda h: h)(0), b=(lambda: h())()): pass\n",
+            id="lambdas-called-in-defaults",
+        ),
     ],
 )
 def test_check_skips_ordered_source(parse: Parse, source: str) -> None:
+    assert funcorder.check(parse(source)) == []
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        pytest.param("class P(B := object): pass\n", id="base"),
+        pytest.param("@(B := deco)\nclass P: pass\n", id="decorator"),
+        pytest.param("class P(metaclass=(B := type)): pass\n", id="keyword"),
+    ],
+)
+def test_check_keeps_class_whose_header_binds(parse: Parse, header: str) -> None:
+    source = header + "def f(v: B): pass\ndef make(): return P()\n"
     assert funcorder.check(parse(source)) == []
 
 
@@ -212,6 +268,16 @@ def test_check_skips_ordered_source(parse: Parse, source: str) -> None:
             [_diag(1, '"_helper" should be below its last caller "main"')],
             id="main-guard",
         ),
+        pytest.param(
+            _CLASS_STAYS_BETWEEN,
+            [_diag(6, '"_f" should be directly below "run"')],
+            id="methodless-class-that-stays-between",
+        ),
+        pytest.param(
+            "def _h(): pass\ndef run(key=lambda: _h()): pass\n",
+            [_diag(1, '"_h" should be below its last caller "run"')],
+            id="lambda-in-a-default",
+        ),
     ],
 )
 def test_check_reports_def_out_of_order(
@@ -224,7 +290,7 @@ def test_check_reports_def_out_of_order(
     ("source", "expected"),
     [
         pytest.param(
-            _PUBLIC_METHOD_ENTRY,
+            _METHOD_ENTRY,
             [_diag(3, '"T.b" should be above private "T._a"')],
             id="public-method-entry-first",
         ),

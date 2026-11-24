@@ -1,6 +1,5 @@
 import ast
 from dataclasses import dataclass
-from enum import Enum, auto
 from itertools import chain, pairwise
 from typing import Final
 
@@ -11,6 +10,9 @@ from pytools.services.lint.linter.analysis.analysis import (
     Rule,
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
+from pytools.services.lint.linter.funcorder import graph
+from pytools.services.lint.linter.funcorder.classes import Classes, find_classes
+from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.refs import (
     bound_names,
     called_names,
@@ -18,26 +20,6 @@ from pytools.services.lint.linter.funcorder.refs import (
 )
 
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-
-
-class DeclKind(Enum):
-    """How a decl takes part in its scope's order."""
-
-    PUBLIC = auto()
-    PRIVATE = auto()  # named with a leading underscore, and not a dunder
-    EXEMPT = auto()  # a def with a nolint, which keeps its place
-    CLASS = auto()  # one caller, through its methods' calls
-
-
-@dataclass(frozen=True)
-class Decl:
-    """A def or class in a scope, one of the units the scope is ordered by."""
-
-    idx: int
-    stmt: Function | ast.ClassDef
-    name: str
-    kind: DeclKind
-    first: int  # its first stub, such as a property getter, or idx without one
 
 
 @dataclass(frozen=True)
@@ -58,6 +40,7 @@ class Model:
     used: frozenset[int]  # defs referenced anywhere in the scope
     waiting: frozenset[int]  # cycle members placed only after a cycle caller
     needs: dict[int, frozenset[int]]  # statements a decl uses when defined
+    classes: Classes  # where the classes go
 
 
 def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
@@ -70,21 +53,28 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         idx: [ref for ref in found if decls[ref].kind is not DeclKind.CLASS]
         for idx, found in refs.items()
     }
-    reach = {idx: _reachable(callees, idx) for idx in callees}
-    loads = [import_time_names(stmt) for stmt in scope.body]
-    import_time = [_import_time_reach(found, names, refs) for found in loads]
-    pinned = _pinned(import_time, reach)
+    reach = {idx: graph.reachable(callees, idx) for idx in callees}
+    effects = [import_time_names(file, scope, stmt) for stmt in scope.body]
+    loads = [found.loads for found in effects]
+    import_time = [graph.import_time_reach(found, names, refs) for found in loads]
+    pinned = graph.pinned(import_time, reach)
     calls = {
         idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
         for idx, found in callees.items()
     }
-    comps = _components(reach)
-    callers = {idx: _callers_of(calls, comps, idx, in_cycle=False) for idx in decls}
-    cycles = {idx: _callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
+    comps = graph.components(reach)
+    callers = {
+        idx: graph.callers_of(calls, comps, idx, in_cycle=False) for idx in decls
+    }
+    cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    needs = _needs(file, scope.body, decls, loads)
-    return Model(scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs)
+    binders = _binders(file, scope.body, decls, loads)
+    needs = graph.above(binders)
+    classes = find_classes(file, scope, decls, refs, effects, binders)
+    return Model(
+        scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
+    )
 
 
 def _stubs(stmts: list[ast.stmt]) -> frozenset[int]:
@@ -123,22 +113,23 @@ def _decl(
     first = idx
     while first - 1 in stubs:
         first -= 1
-    kind = _kind(file, stmt, scope.body[first:idx])
-    return Decl(idx, stmt, prefix + stmt.name, kind, first)
+    exempt = _is_exempt(file, stmt, scope.body[first:idx])
+    span = range(first, idx + 1)
+    return Decl(idx, stmt, prefix + stmt.name, _kind(stmt), span, exempt)
 
 
-def _kind(
+def _is_exempt(
     file: CheckInput, stmt: Function | ast.ClassDef, merged: list[ast.stmt]
-) -> DeclKind:
-    """Return stmt's kind; a dunder is Python's entry point, so it is public.
+) -> bool:
+    """Report whether a funcorder nolint sits on stmt or a def merged into it."""
+    defs = [stmt, *(stub for stub in merged if isinstance(stub, DEFS))]
+    return any(has_def_nolint(file, func, Rule.FUNCORDER) for func in defs)
 
-    A nolint on any def merged into stmt exempts it too.
-    """
+
+def _kind(stmt: Function | ast.ClassDef) -> DeclKind:
+    """Return stmt's kind; a dunder is Python's entry point, so it is public."""
     if isinstance(stmt, ast.ClassDef):
         return DeclKind.CLASS
-    defs = [stmt, *(stub for stub in merged if isinstance(stub, DEFS))]
-    if any(has_def_nolint(file, func, Rule.FUNCORDER) for func in defs):
-        return DeclKind.EXEMPT
     is_dunder = stmt.name.startswith("__") and stmt.name.endswith("__")
     if is_dunder or not stmt.name.startswith("_"):
         return DeclKind.PUBLIC
@@ -155,77 +146,20 @@ def _refs(
 
     The stubs decl replaces, such as a property getter, call for it too.
     """
-    stmts = scope.body[decl.first : decl.idx + 1]
     found = [
         names[name]
-        for stmt in stmts
-        for name in called_names(file, scope, stmt)
+        for part in decl.span
+        for name in called_names(file, scope, scope.body[part])
         if name in names
     ]
     return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
 
 
-def _import_time_reach(
-    loads: set[str], names: dict[str, int], refs: dict[int, list[int]]
-) -> set[int]:
-    """Return the decls a statement loads at import time, and all they refer to.
-
-    Following every reference, not only the calls that run, may pin more than
-    needed, but never too little.
-    """
-    used = {names[name] for name in loads if name in names}
-    return used.union(*(_reachable(refs, idx) for idx in used))
-
-
-def _reachable(callees: dict[int, list[int]], start: int) -> set[int]:
-    seen: set[int] = set()
-    pending = list(callees[start])
-    while pending:
-        idx = pending.pop()
-        if idx not in seen:
-            seen.add(idx)
-            pending.extend(callees[idx])
-    return seen
-
-
-def _pinned(import_time: list[set[int]], reach: dict[int, set[int]]) -> set[int]:
-    """Return the decls an import-time use needs that a caller below it reaches.
-
-    The rule would move such a decl below that caller, past the use. A def
-    counts as below its own decorators and defaults.
-    """
-    last = {idx: caller for caller in sorted(reach) for idx in reach[caller]}
-    return {
-        idx
-        for use, needed in enumerate(import_time)
-        for idx in needed
-        if last.get(idx, -1) >= use
-    }
-
-
 def _is_enforced(
     decls: dict[int, Decl], caller: int, callee: int, pinned: set[int]
 ) -> bool:
-    kinds = (decls[caller].kind, decls[callee].kind)
-    return DeclKind.EXEMPT not in kinds and callee not in pinned
-
-
-def _components(reach: dict[int, set[int]]) -> dict[int, int]:
-    """Label each def with its cycle's first member, or itself outside a cycle."""
-    return {
-        idx: min([idx, *(other for other in reach[idx] if idx in reach[other])])
-        for idx in reach
-    }
-
-
-def _callers_of(
-    calls: dict[int, list[int]], comps: dict[int, int], idx: int, *, in_cycle: bool
-) -> list[int]:
-    return [
-        caller
-        for caller, found in calls.items()
-        if idx in found and (comps[caller] == comps[idx]) == in_cycle
-    ]
+    is_exempt = decls[caller].exempt or decls[callee].exempt
+    return not is_exempt and callee not in pinned
 
 
 def _waiting(
@@ -251,7 +185,7 @@ def _openers(
 ) -> dict[int, int | None]:
     openers: dict[int, int | None] = {}
     for idx, decl in decls.items():
-        if decl.kind is DeclKind.EXEMPT:
+        if decl.exempt:
             continue
         if callers[idx]:
             openers[comps[idx]] = None
@@ -260,24 +194,24 @@ def _openers(
     return openers
 
 
-def _needs(
+def _binders(
     file: CheckInput,
     stmts: list[ast.stmt],
     decls: dict[int, Decl],
     loads: list[set[str]],
 ) -> dict[int, frozenset[int]]:
-    """Return the statements above each decl that it uses when defined.
+    """Return the statements that bind or delete a name each decl uses when defined.
 
     The stubs merged into a decl are defined with it.
     """
     binds = [bound_names(file, stmt) for stmt in stmts]
     defined = {
-        idx: {name for found in loads[decl.first : idx + 1] for name in found}
+        idx: {name for part in decl.span for name in loads[part]}
         for idx, decl in decls.items()
     }
     return {
-        idx: frozenset(other for other in range(idx) if binds[other] & defined[idx])
-        for idx in decls
+        idx: frozenset(other for other, names in enumerate(binds) if names & used)
+        for idx, used in defined.items()
     }
 
 
@@ -287,4 +221,5 @@ def must_precede(model: Model, decl: Decl, other: Decl) -> bool:
     It must when other is a private def nothing calls.
     """
     is_unused = decl.idx not in model.used and other.idx not in model.used
-    return (decl.kind, other.kind) == (DeclKind.PUBLIC, DeclKind.PRIVATE) and is_unused
+    is_ranked = not (decl.exempt or other.exempt) and is_unused
+    return (decl.kind, other.kind) == (DeclKind.PUBLIC, DeclKind.PRIVATE) and is_ranked

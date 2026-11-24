@@ -55,6 +55,52 @@ B = record("b")
 def _h(): pass
 def run(): _h(); _g()
 """
+_CLASS_NEEDS: Final = """\
+def run(): _f(); _make()
+def _make(): return 1
+class P:
+    x = _make
+def _f(p: P): pass
+"""
+_CLASS_STAYS: Final = """\
+def main(): _a(); _b()
+def _a(): return Point()
+def _b(): pass
+X = 1
+class Point:
+    x = X
+"""
+_DEFAULT_FROM_CLASS_THAT_STAYS: Final = """\
+def make(): _d(); return F()
+X = 1
+class F:
+    y = X
+def _d(p=F()): pass
+"""
+_WAITS_WHERE_CLASS_GOES: Final = """\
+def main(): _b(); _a()
+def _a(): return P()
+class P:
+    x: int
+def _b(p=P()): pass
+"""
+_CARRIED_PAST_CLASS: Final = """\
+def main(): _a(); _b()
+def _a(): pass
+X = 1
+class P:
+    x: int
+def _b(p=P()): pass
+"""
+_CLASS_CHAIN_NEEDS: Final = """\
+def run(): _f(); _make()
+def _make(): return 1
+class Q:
+    x = _make
+class P:
+    q: Q
+def _f(p: P): pass
+"""
 
 
 @pytest.mark.parametrize(
@@ -122,6 +168,32 @@ def test_check_skips_def_directly_below(parse: Parse, source: str) -> None:
         ),
         pytest.param(
             _DEFAULT_BELOW_CALLER, ([0, 1, 2, 3], set()), id="def-waits-for-its-default"
+        ),
+        pytest.param(
+            _CLASS_NEEDS, ([0, 1, 3], {1, 3}), id="user-waits-for-class-needs"
+        ),
+        pytest.param(
+            _CLASS_CHAIN_NEEDS,
+            ([0, 1, 4], {1, 4}),
+            id="user-waits-for-class-chain-needs",
+        ),
+        pytest.param(
+            _CLASS_STAYS, ([0, 1, 2, 3, 4], {1, 2}), id="user-skips-class-that-stays"
+        ),
+        pytest.param(
+            _DEFAULT_FROM_CLASS_THAT_STAYS,
+            ([0, 1, 2, 3], set()),
+            id="def-waits-for-class-that-stays",
+        ),
+        pytest.param(
+            _WAITS_WHERE_CLASS_GOES,
+            ([0, 1, 3], {1, 3}),
+            id="def-waits-for-where-its-class-goes",
+        ),
+        pytest.param(
+            _CARRIED_PAST_CLASS,
+            ([0, 1, 2, 4], {1, 2, 4}),
+            id="statement-carried-past-class-that-moves",
         ),
     ],
 )
