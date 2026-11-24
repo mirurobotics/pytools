@@ -40,10 +40,11 @@ class _StepResult:
 
 
 def _run_steps(opts: LintOptions) -> list[_StepResult]:
+    """Run each step; fixes run first, so ruff tidies the code they move."""
     files = external.list_python_files(opts.paths)
-    fix = [("custom fix", lambda: _run_custom_fixer(opts, files))] if opts.fix else []
+    fixes = [("custom fix", lambda: _run_custom_fixer(opts, files))] if opts.fix else []
     steps = [
-        *fix,
+        *fixes,
         ("ruff check", lambda: external.run_ruff_check(opts.paths, fix=opts.fix)),
         ("ruff format", lambda: external.run_ruff_format(opts.paths, fix=opts.fix)),
         ("custom linter", lambda: _run_custom_linter(opts, files)),

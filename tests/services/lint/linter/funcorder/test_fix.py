@@ -10,6 +10,7 @@ type Parse = Callable[[str], CheckInput]
 
 _RUN: Final = "def run(x: int | None) -> list[int]: pass\n"
 _PLACED: Final = "class P:\n    x: int\nX = 0\ndef run(): _h(); return P()\n"
+_DEEPER: Final = "class Point:\n    x: int\nclass Line:\n    start: Point\n"
 _SHARED_LINE: Final = """\
 a = 1; b = 2
 def _h(): pass
@@ -73,6 +74,11 @@ def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
             "class P:\n    x: int\ndef other(): pass\nORIGIN = P()\n",
             "def other(): pass\nclass P:\n    x: int\nORIGIN = P()\n",
             id="methodless-class-above-statement-user",
+        ),
+        pytest.param(
+            _DEEPER + "def other(): pass\ndef make(): return Line()\n",
+            "def other(): pass\n" + _DEEPER + "def make(): return Line()\n",
+            id="deeper-class-above-its-user",
         ),
         pytest.param(
             "def _h(): pass\n" + _PLACED,

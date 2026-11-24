@@ -19,8 +19,7 @@ def has_shared_lines(file: CheckInput, scope: ast.Module | ast.ClassDef) -> bool
 def render(file: CheckInput, orders: dict[ast.Module | ast.ClassDef, list[int]]) -> str:
     """Return file's source with each scope's statements laid out in its order.
 
-    A statement moves with the comments and blank lines above it; ruff format
-    sets the spacing afterwards.
+    A statement moves with the comments and blank lines above it.
     """
     found = (_region(file, scope, order) for scope, order in orders.items())
     regions = sorted(found, key=lambda region: region.chunks[0].start)
