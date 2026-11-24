@@ -24,21 +24,6 @@ def _paths() -> list[str]:
     return ["src", "tests"]
 
 
-def _fake_run(
-    monkeypatch: pytest.MonkeyPatch, returncode: int, stdout: str = ""
-) -> list[Call]:
-    calls: list[Call] = []
-
-    def fake_run(
-        command: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess[str]:
-        calls.append((command, kwargs))
-        return subprocess.CompletedProcess(command, returncode, stdout=stdout)
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    return calls
-
-
 def test_list_python_files_lists_relative_to_cwd(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -94,3 +79,18 @@ def test_runner_runs_tool_with_shared_config(
     calls = _fake_run(monkeypatch, returncode)
     command = [sys.executable, "-m", *tool_args, *_paths()]
     assert (runner(), calls) == (passed, [(command, {"check": False})])
+
+
+def _fake_run(
+    monkeypatch: pytest.MonkeyPatch, returncode: int, stdout: str = ""
+) -> list[Call]:
+    calls: list[Call] = []
+
+    def fake_run(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, returncode, stdout=stdout)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    return calls

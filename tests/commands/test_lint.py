@@ -38,16 +38,6 @@ def _every_flag_config() -> Config:
     )
 
 
-def _parse(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    add_lint_command(parser.add_subparsers())
-    return parser.parse_args(["lint", *argv])
-
-
-def _fail_lint(_opts: LintOptions) -> None:
-    raise LintError
-
-
 def test_add_lint_command_defaults() -> None:
     args = _parse([])
     defaults = (
@@ -164,6 +154,10 @@ def test_lint_handler_exits_on_lint_error(monkeypatch: pytest.MonkeyPatch) -> No
     assert isinstance(excinfo.value.__cause__, LintError)
 
 
+def _fail_lint(_opts: LintOptions) -> None:
+    raise LintError
+
+
 @pytest.mark.parametrize(
     ("argv", "expected"),
     [
@@ -191,3 +185,9 @@ def test_lint_options_excludes_every_other_rule(
     monkeypatch.setattr(lint, "Rule", _TwoRules)
     config = lint._lint_options(_parse(["--rule", "funclen"])).linter_config
     assert {str(rule) for rule in config.exclude} == {"other"}
+
+
+def _parse(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    add_lint_command(parser.add_subparsers())
+    return parser.parse_args(["lint", *argv])

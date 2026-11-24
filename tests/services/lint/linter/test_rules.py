@@ -20,6 +20,19 @@ total = 0
 """
 
 
+@pytest.mark.parametrize(
+    "exclude",
+    [
+        pytest.param(frozenset(), id="none"),
+        *(pytest.param(frozenset({rule}), id=rule) for rule in Rule),
+    ],
+)
+def test_run_checks_honors_exclude(parse: Parse, exclude: frozenset[Rule]) -> None:
+    config = Config(max_func_len=1, max_file_len=1, max_nest_depth=1, exclude=exclude)
+    expected = [diag for rule, diag in _diagnostics().items() if rule not in exclude]
+    assert run_checks(parse(_SOURCE), config) == expected
+
+
 def _diagnostics() -> dict[Rule, Diagnostic]:
     return {
         Rule.FUNCLEN: Diagnostic("a.py", 1, "function f is 3 lines (limit 1)"),
@@ -57,16 +70,3 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
             " or a function instead",
         ),
     }
-
-
-@pytest.mark.parametrize(
-    "exclude",
-    [
-        pytest.param(frozenset(), id="none"),
-        *(pytest.param(frozenset({rule}), id=rule) for rule in Rule),
-    ],
-)
-def test_run_checks_honors_exclude(parse: Parse, exclude: frozenset[Rule]) -> None:
-    config = Config(max_func_len=1, max_file_len=1, max_nest_depth=1, exclude=exclude)
-    expected = [diag for rule, diag in _diagnostics().items() if rule not in exclude]
-    assert run_checks(parse(_SOURCE), config) == expected

@@ -33,47 +33,10 @@ _SUCCESS_OUTPUT: Final = (
 )
 
 
-def _paths() -> list[str]:
-    return ["src", "tests"]
-
-
-def _files() -> list[str]:
-    return ["src/a.py", "tests/test_a.py"]
-
-
 @pytest.fixture
 def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make every step and the total take zero seconds."""
     monkeypatch.setattr(lint, "time", SimpleNamespace(monotonic=lambda: 0.0))
-
-
-def _fake_external(monkeypatch: pytest.MonkeyPatch, failing: set[str]) -> list[Call]:
-    calls: list[Call] = []
-
-    def record(name: str, paths: list[str], arg: bool | Config | None) -> bool:
-        calls.append((name, paths, arg))
-        return name not in failing
-
-    def list_python_files(paths: list[str]) -> list[str] | None:
-        return _files() if record("list python files", paths, None) else None
-
-    def run_linter(files: list[str], config: Config) -> int:
-        return 0 if record("custom linter", files, config) else _VIOLATIONS
-
-    monkeypatch.setattr(external, "list_python_files", list_python_files)
-    monkeypatch.setattr(lint, "run_linter", run_linter)
-    monkeypatch.setattr(
-        external,
-        "run_ruff_format",
-        lambda paths, *, fix: record("ruff format", paths, fix),
-    )
-    monkeypatch.setattr(
-        external,
-        "run_ruff_check",
-        lambda paths, *, fix: record("ruff check", paths, fix),
-    )
-    monkeypatch.setattr(external, "run_mypy", lambda paths: record("mypy", paths, None))
-    return calls
 
 
 @pytest.mark.usefixtures("frozen_clock")
@@ -131,6 +94,43 @@ def test_run_lint_fails_custom_linter_on_list_error(
         "list python files",
         "mypy",
     ]
+
+
+def _fake_external(monkeypatch: pytest.MonkeyPatch, failing: set[str]) -> list[Call]:
+    calls: list[Call] = []
+
+    def record(name: str, paths: list[str], arg: bool | Config | None) -> bool:
+        calls.append((name, paths, arg))
+        return name not in failing
+
+    def list_python_files(paths: list[str]) -> list[str] | None:
+        return _files() if record("list python files", paths, None) else None
+
+    def run_linter(files: list[str], config: Config) -> int:
+        return 0 if record("custom linter", files, config) else _VIOLATIONS
+
+    monkeypatch.setattr(external, "list_python_files", list_python_files)
+    monkeypatch.setattr(lint, "run_linter", run_linter)
+    monkeypatch.setattr(
+        external,
+        "run_ruff_format",
+        lambda paths, *, fix: record("ruff format", paths, fix),
+    )
+    monkeypatch.setattr(
+        external,
+        "run_ruff_check",
+        lambda paths, *, fix: record("ruff check", paths, fix),
+    )
+    monkeypatch.setattr(external, "run_mypy", lambda paths: record("mypy", paths, None))
+    return calls
+
+
+def _files() -> list[str]:
+    return ["src/a.py", "tests/test_a.py"]
+
+
+def _paths() -> list[str]:
+    return ["src", "tests"]
 
 
 def test_print_timings(capsys: pytest.CaptureFixture[str]) -> None:
