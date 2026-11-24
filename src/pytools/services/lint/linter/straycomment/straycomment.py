@@ -6,6 +6,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     elif_branch,
     function_body_lines,
     is_code_line,
+    line_groups,
     module_header_end,
 )
 from pytools.services.lint.linter.analysis.comments import is_directive
@@ -18,7 +19,7 @@ _MESSAGE = (
 def check(file: CheckInput) -> list[Diagnostic]:
     """Report comment groups outside functions that sit directly above no statement."""
     starts = _statement_starts(file.tree)
-    groups = _groups(_candidate_lines(file))
+    groups = line_groups(_candidate_lines(file))
     stray = [group for group in groups if group[-1] + 1 not in starts]
     lines = [_first_prose(file, group) for group in stray]
     return [Diagnostic(file.path, line, _MESSAGE) for line in lines if line is not None]
@@ -43,16 +44,6 @@ def _candidate_lines(file: CheckInput) -> list[int]:
     skipped = header | function_body_lines(file)
     outside = [number for number in sorted(file.comments) if number not in skipped]
     return [number for number in outside if not is_code_line(file, number)]
-
-
-def _groups(lines: list[int]) -> list[list[int]]:
-    groups: list[list[int]] = []
-    for number in lines:
-        if groups and groups[-1][-1] == number - 1:
-            groups[-1].append(number)
-        else:
-            groups.append([number])
-    return groups
 
 
 def _first_prose(file: CheckInput, group: list[int]) -> int | None:

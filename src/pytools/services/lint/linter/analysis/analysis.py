@@ -144,3 +144,14 @@ def elif_branch(stmt: ast.If) -> ast.If | None:
     if isinstance(branch, ast.If) and branch.col_offset == stmt.col_offset:
         return branch
     return None
+
+
+def line_groups(lines: list[int]) -> list[list[int]]:
+    """Split sorted line numbers into groups of consecutive lines."""
+    groups: list[list[int]] = []
+    for number in lines:
+        if groups and groups[-1][-1] == number - 1:
+            groups[-1].append(number)
+        else:
+            groups.append([number])
+    return groups
