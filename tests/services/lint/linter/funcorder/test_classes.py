@@ -1,3 +1,4 @@
+import ast
 from collections.abc import Callable
 from typing import Final
 
@@ -211,6 +212,18 @@ def run(): pass
 points = [Point for Point in map(lambda raw: Point(raw), RAW)]
 def last(): return Point()
 """
+_NONLOCAL_WRITE: Final = """\
+def build():
+    value = 1
+    class Box:
+        class Update:
+            nonlocal value
+            value = 2
+        def other(self): pass
+        captured = value
+        def make(self): return self.Update()
+    return Box
+"""
 _USER_STAYS: Final = """\
 def make(): return Line()
 X = 1
@@ -289,6 +302,12 @@ def test_find_classes_finds_users_in_lambdas(
     parse: Parse, source: str, user: int
 ) -> None:
     assert _find(parse, source).uses[0].user == user
+
+
+def test_find_classes_keeps_class_writing_nonlocal(parse: Parse) -> None:
+    file = parse(_NONLOCAL_WRITE)
+    box = next(node for node in ast.walk(file.tree) if isinstance(node, ast.ClassDef))
+    assert model.build(file, box).classes.uses == {}
 
 
 def test_find_classes_places_users_that_stay(parse: Parse) -> None:

@@ -36,7 +36,7 @@ class Classes:
     uses: dict[int, Use]  # where each class without methods that can move goes
     inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
-    _kept: frozenset[int]  # runs scope code, or a class shadowed or declaring a global
+    _kept: frozenset[int]  # runs scope code, or a class shadowed or writing outer names
     _blocked: dict[int, frozenset[int]]  # the statements each class must not move past
 
     def may_pass(self, moved: Collection[int], passed: Collection[int]) -> bool:
@@ -67,7 +67,7 @@ def find_classes(
     used = {cls: found for cls, found in users.items() if found}
     bindings = scope_bindings(file, scope)
     shadowed = _shadowed_classes(decls, bindings)
-    kept = _runs_code(decls, effects, bindings) | shadowed | _writes_globals(decls)
+    kept = _runs_code(decls, effects, bindings) | shadowed | _writes_outer(decls)
     plain = _plain(decls, used)
     blocked = _blocked(decls, effects, binders, kept, bindings)
     uses = _place(decls, plain, blocked, kept)
@@ -147,18 +147,18 @@ def _bare_def_names(decls: dict[int, Decl], bindings: Counter[str]) -> set[str]:
     }
 
 
-def _writes_globals(decls: dict[int, Decl]) -> frozenset[int]:
-    """Return the classes whose body, outside its defs, declares a name global.
+def _writes_outer(decls: dict[int, Decl]) -> frozenset[int]:
+    """Return the classes whose body, outside its defs, declares a global or nonlocal.
 
     Such a body may rebind a name another class reads, as running scope code may.
     """
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    return frozenset(idx for idx in classes if _has_global(decls[idx]))
+    return frozenset(idx for idx in classes if _has_outer_write(decls[idx]))
 
 
-def _has_global(decl: Decl) -> bool:
+def _has_outer_write(decl: Decl) -> bool:
     nodes = walk_outside(decl.stmt.body, DEFS)
-    return any(isinstance(node, ast.Global) for node in nodes)
+    return any(isinstance(node, (ast.Global, ast.Nonlocal)) for node in nodes)
 
 
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
