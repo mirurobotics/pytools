@@ -93,34 +93,6 @@ def _var_kind(scope: _Scope) -> NameKind:
     return NameKind.LOCAL_VAR
 
 
-def _scope_key(name: DeclaredName, declared: set[str]) -> ast.AST | str | None:
-    """Return name's key in its scope, or None if global or nonlocal moves it.
-
-    Each type parameter has an annotation scope of its own, which the body's
-    global and nonlocal statements don't reach.
-    """
-    if isinstance(name.node, _TYPE_PARAMS):
-        return name.node
-    return None if name.text in declared else name.text
-
-
-def _own_parts(scope: _Scope) -> list[ast.AST]:
-    """Return the parts of scope whose names bind in it.
-
-    Only a comprehension's loop targets are its own; a walrus in it binds in
-    the scope around it.
-    """
-    if isinstance(scope, ast.Module):
-        return list(scope.body)
-    if isinstance(scope, ast.ClassDef):
-        return [*scope.type_params, *scope.body]
-    if isinstance(scope, ast.Lambda):
-        return [*_params(scope.args), scope.body]
-    if isinstance(scope, ast.FunctionDef | ast.AsyncFunctionDef):
-        return [*scope.type_params, *_params(scope.args), *scope.body]
-    return [gen.target for gen in scope.generators]
-
-
 def _scope_nodes(nodes: list[ast.AST]) -> Iterator[ast.AST]:
     """Yield nodes and the nodes under them that bind in the scope holding them.
 
@@ -152,13 +124,30 @@ def _outer_parts(scope: _Nested) -> list[ast.AST]:
     return [*elements, *tests]
 
 
+def _defaults(args: ast.arguments) -> list[ast.AST]:
+    return [default for default in (*args.defaults, *args.kw_defaults) if default]
+
+
+def _own_parts(scope: _Scope) -> list[ast.AST]:
+    """Return the parts of scope whose names bind in it.
+
+    Only a comprehension's loop targets are its own; a walrus in it binds in
+    the scope around it.
+    """
+    if isinstance(scope, ast.Module):
+        return list(scope.body)
+    if isinstance(scope, ast.ClassDef):
+        return [*scope.type_params, *scope.body]
+    if isinstance(scope, ast.Lambda):
+        return [*_params(scope.args), scope.body]
+    if isinstance(scope, ast.FunctionDef | ast.AsyncFunctionDef):
+        return [*scope.type_params, *_params(scope.args), *scope.body]
+    return [gen.target for gen in scope.generators]
+
+
 def _params(args: ast.arguments) -> list[ast.arg]:
     params = [*args.posonlyargs, *args.args, args.vararg, *args.kwonlyargs, args.kwarg]
     return [param for param in params if param is not None]
-
-
-def _defaults(args: ast.arguments) -> list[ast.AST]:
-    return [default for default in (*args.defaults, *args.kw_defaults) if default]
 
 
 def _binding(
@@ -200,3 +189,14 @@ def _clause_binding(
         last_line = node.end_lineno or node.lineno
         return DeclaredName(node.rest, node.lineno, last_line, var_kind, node)
     return None
+
+
+def _scope_key(name: DeclaredName, declared: set[str]) -> ast.AST | str | None:
+    """Return name's key in its scope, or None if global or nonlocal moves it.
+
+    Each type parameter has an annotation scope of its own, which the body's
+    global and nonlocal statements don't reach.
+    """
+    if isinstance(name.node, _TYPE_PARAMS):
+        return name.node
+    return None if name.text in declared else name.text

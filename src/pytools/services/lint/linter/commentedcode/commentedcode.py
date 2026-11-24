@@ -79,6 +79,24 @@ def _line(number: int, comment: str) -> _Line:
     return _Line(number, body.removeprefix(" "), is_indented)
 
 
+def _first_non_blank(run: list[_Line]) -> int:
+    lines = (line.number for line in run[:-1] if line.text.strip())
+    return next(lines, run[-1].number)
+
+
+def _code_line(run: list[_Line]) -> int | None:
+    """Return the first unindented line that is code on its own.
+
+    A lone line was already checked as its run; indented lines are examples
+    under prose.
+    """
+    if len(run) == 1:
+        return None
+    lines = (line for line in run if not line.is_indented)
+    code = (line.number for line in lines if _is_code(line.text))
+    return next(code, None)
+
+
 def _is_code(text: str) -> bool:
     source = textwrap.dedent(text)
     tree = _parse(source)
@@ -161,21 +179,3 @@ def _is_code_stmt(stmt: ast.stmt) -> bool:
     if isinstance(stmt, ast.AnnAssign):
         return stmt.value is not None
     return not isinstance(stmt, _NOT_CODE)
-
-
-def _first_non_blank(run: list[_Line]) -> int:
-    lines = (line.number for line in run[:-1] if line.text.strip())
-    return next(lines, run[-1].number)
-
-
-def _code_line(run: list[_Line]) -> int | None:
-    """Return the first unindented line that is code on its own.
-
-    A lone line was already checked as its run; indented lines are examples
-    under prose.
-    """
-    if len(run) == 1:
-        return None
-    lines = (line for line in run if not line.is_indented)
-    code = (line.number for line in lines if _is_code(line.text))
-    return next(code, None)
