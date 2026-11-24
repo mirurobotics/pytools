@@ -1,13 +1,17 @@
 from pytools.services.lint.linter.funcorder.model import DeclKind, Model, must_precede
+from pytools.services.lint.linter.funcorder.plain import place_plain
+from pytools.services.lint.linter.funcorder.tuck import tuck
 
 
 def arrange(model: Model) -> tuple[list[int], set[int]]:
     """Return the scope's statements in order, and those placed under a caller.
 
     The second holds each def placed directly under a caller, with the
-    statements it carries. A statement directly above a def or class moves with
-    it, unless that would reorder statements, which run in order at import time,
-    or a later def or class uses it when defined.
+    statements it carries, and each class tucked under its users. A statement
+    directly above a def or a class with methods moves with it, unless that
+    would reorder statements, which run in order at import time, or a later def
+    or class uses it when defined. A class without methods goes directly above
+    its first user.
     """
     decls = model.decls
     blockers = {
@@ -24,30 +28,37 @@ def _arrange(
     model: Model, blockers: dict[int, set[int]], *, settled: bool
 ) -> tuple[list[int], set[int]]:
     units = {unit[-1]: unit for unit in _units(model, settled=settled)}
+    inherited = {idx: _plain_needs(model, units[idx]) for idx in model.decls}
     waits = {
-        idx: (blockers[idx] | model.needs[idx]) - set(units[idx]) for idx in model.decls
+        idx: (blockers[idx] | model.needs[idx] | inherited[idx]) - set(units[idx])
+        for idx in model.decls
     }
-    left = dict.fromkeys(units)
+    left = dict.fromkeys(key for key in units if key not in model.plain)
     stack: list[int] = []
-    done: set[int] = set()
-    order: list[int] = []
+    done = set(model.plain)
+    trees: list[list[int]] = []
     below: set[int] = set()
     while left:
         key, is_below = _pick(model, left, stack, done, waits)
         del left[key]
         stack.append(key)
         done.update(units[key])
-        order.extend(units[key])
         if is_below:
             below.update(units[key])
-    return order, below
+            trees[-1].extend(units[key])
+        else:
+            trees.append(list(units[key]))
+    below |= tuck(model, trees, waits)
+    order = [idx for tree in trees for idx in tree]
+    return place_plain(model, units, order), below
 
 
 def _units(model: Model, *, settled: bool) -> list[list[int]]:
     """Split the scope into each def or class with the statements it carries.
 
     A statement no def or class carries is a unit of its own, and so is each
-    statement above the first def or class: the header never moves.
+    statement above the first def or class: the header never moves. A class
+    without methods carries none: it moves to its first user alone.
     """
     first = min(model.decls, default=0)
     anchored = _anchored(model)
@@ -55,10 +66,10 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
     pending: list[int] = []
     for idx in range(len(model.stmts)):
         is_carried = idx > first and not settled and idx not in anchored
-        if idx in model.decls:
+        if idx in model.decls and idx not in model.plain:
             units.append([*pending, idx])
             pending = []
-        elif idx in model.stubs or is_carried:
+        elif idx in model.stubs or (is_carried and idx not in model.decls):
             pending.append(idx)
         else:
             units.extend([held] for held in [*pending, idx])
@@ -78,6 +89,23 @@ def _anchored(model: Model) -> set[int]:
         for stmt in needed
         if any(stmt < other < idx for other in model.decls)
     }
+
+
+def _plain_needs(model: Model, unit: list[int]) -> set[int]:
+    """Return what the classes without methods unit uses need when defined.
+
+    Such a class goes above its first user, so each user waits for what it
+    needs, and for what the classes it uses need in turn.
+    """
+    plain = model.plain
+    pending = [cls for cls, users in plain.items() if any(idx in unit for idx in users)]
+    seen: set[int] = set()
+    while pending:
+        cls = pending.pop()
+        if cls not in seen:
+            seen.add(cls)
+            pending.extend(other for other, users in plain.items() if cls in users)
+    return {need for cls in seen for need in model.needs[cls]}
 
 
 def _pick(

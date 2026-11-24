@@ -20,6 +20,8 @@ from pytools.services.lint.linter.funcorder.refs import (
 
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
+type _Users = dict[int, list[int]]
+
 
 class DeclKind(Enum):
     """How a decl takes part in its scope's order."""
@@ -59,11 +61,14 @@ class Model:
     used: frozenset[int]  # defs referenced anywhere in the scope
     waiting: frozenset[int]  # cycle members placed only after a cycle caller
     needs: dict[int, frozenset[int]]  # statements a decl uses when defined
+    plain: _Users  # the users of each used class without methods
+    tucked: _Users  # the users of each used class with methods
 
 
 def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     """Return the calls between the defs and classes directly in scope."""
-    stubs = _stubs(scope.body)
+    stmts = scope.body
+    stubs = _stubs(stmts)
     decls = _decls(file, scope, stubs)
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
     refs = {idx: _refs(file, scope, decl, names) for idx, decl in decls.items()}
@@ -72,7 +77,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         for idx, found in refs.items()
     }
     reach = {idx: graph.reachable(callees, idx) for idx in callees}
-    loads = [import_time_names(stmt) for stmt in scope.body]
+    loads = [import_time_names(stmt) for stmt in stmts]
     import_time = [graph.import_time_reach(found, names, refs) for found in loads]
     pinned = graph.pinned(import_time, reach)
     calls = {
@@ -86,8 +91,11 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    needs = _needs(file, scope.body, decls, loads)
-    return Model(scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs)
+    needs = _needs(file, stmts, decls, loads)
+    plain, tucked = _class_users(file, scope, decls, names, refs, loads)
+    return Model(
+        stmts, decls, stubs, calls, callers, cycles, used, waiting, needs, plain, tucked
+    )
 
 
 def _stubs(stmts: list[ast.stmt]) -> frozenset[int]:
@@ -226,6 +234,60 @@ def _needs(
         idx: frozenset(other for other in range(idx) if binds[other] & defined[idx])
         for idx in decls
     }
+
+
+def _class_users(
+    file: CheckInput,
+    scope: ast.Module | ast.ClassDef,
+    decls: dict[int, Decl],
+    names: dict[str, int],
+    refs: dict[int, list[int]],
+    loads: list[set[str]],
+) -> tuple[_Users, _Users]:
+    """Return the users of each class without methods, then of each with them.
+
+    A class's users are the statements that refer to it, when run or when
+    called. The stubs merged into a decl refer for it.
+    """
+    merged = {
+        stub: idx for idx, decl in decls.items() for stub in range(decl.first, idx)
+    }
+    referred = [set(refs.get(idx, [])) for idx in range(len(scope.body))]
+    for idx, stmt in enumerate(scope.body):
+        named = set(loads[idx])
+        if idx not in decls and idx not in merged:
+            named.update(called_names(file, scope, stmt))
+        owner = merged.get(idx, idx)
+        referred[owner].update(names[name] for name in named if name in names)
+    users = {
+        cls: [idx for idx, found in enumerate(referred) if cls in found and idx != cls]
+        for cls, decl in decls.items()
+        if decl.kind is DeclKind.CLASS
+    }
+    used = {cls: found for cls, found in users.items() if found}
+    tucked = {cls: found for cls, found in used.items() if _has_methods(decls[cls])}
+    return _plain(decls, used), tucked
+
+
+def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
+    """Return the users of each class without methods.
+
+    Such classes that use each other in a cycle are left out, since none of
+    them has a first user to go above.
+    """
+    plain = {cls: found for cls, found in users.items() if not _has_methods(decls[cls])}
+    within = {
+        cls: [user for user in found if user in plain] for cls, found in plain.items()
+    }
+    return {
+        cls: found
+        for cls, found in plain.items()
+        if cls not in graph.reachable(within, cls)
+    }
+
+
+def _has_methods(decl: Decl) -> bool:
+    return any(isinstance(stmt, DEFS) for stmt in decl.stmt.body)
 
 
 def must_precede(model: Model, decl: Decl, other: Decl) -> bool:
