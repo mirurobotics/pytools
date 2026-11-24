@@ -58,7 +58,9 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         for idx, decl in decls.items()
         if decl.kind is not DeclKind.CLASS
     }
-    callees = {idx: _callees(file, scope, decl, by_name) for idx, decl in decls.items()}
+    callees = {
+        idx: _callees(file, scope, decl, stubs, by_name) for idx, decl in decls.items()
+    }
     pinned = _pinned(scope.body, by_name)
     calls = {
         idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
@@ -120,10 +122,18 @@ def _callees(
     file: CheckInput,
     scope: ast.Module | ast.ClassDef,
     decl: Decl,
+    stubs: frozenset[int],
     by_name: dict[str, int],
 ) -> list[int]:
-    """Return the defs decl calls, in the order it first calls them."""
-    names = called_names(file, scope, decl.stmt)
+    """Return the defs decl calls, in the order it first calls them.
+
+    The stubs decl replaces, such as a property getter, call for it too.
+    """
+    first = decl.idx
+    while first - 1 in stubs:
+        first -= 1
+    stmts = scope.body[first : decl.idx + 1]
+    names = [name for stmt in stmts for name in called_names(file, scope, stmt)]
     found = [by_name[name] for name in names if name in by_name]
     return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
 

@@ -15,7 +15,7 @@ type _Root = ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
 
 
 def called_names(
-    file: CheckInput, scope: ast.Module | ast.ClassDef, stmt: Function | ast.ClassDef
+    file: CheckInput, scope: ast.Module | ast.ClassDef, stmt: ast.stmt
 ) -> list[str]:
     """Return the names stmt calls, in order, in code that runs only when called.
 
@@ -26,8 +26,8 @@ def called_names(
     return _free_calls(file, stmt)
 
 
-def _receiver_calls(file: CheckInput, stmt: Function | ast.ClassDef) -> list[str]:
-    if isinstance(stmt, ast.ClassDef):
+def _receiver_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
+    if not isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef):
         return []
     receiver = _receiver(stmt)
     nodes = _body_nodes(stmt)
@@ -51,7 +51,7 @@ def _receiver(func: Function) -> str | None:
     return None if is_static or not params else params[0].arg
 
 
-def _free_calls(file: CheckInput, stmt: Function | ast.ClassDef) -> list[str]:
+def _free_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
     """Return the names stmt refers to in code that runs only when called."""
     nodes = walk_outside([stmt], _ROOTS)
     roots = [node for node in nodes if isinstance(node, _ROOTS)]
