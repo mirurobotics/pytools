@@ -37,6 +37,7 @@ class Decl:
     stmt: Function | ast.ClassDef
     name: str
     kind: DeclKind
+    first: int  # its first stub, such as a property getter, or idx without one
 
 
 @dataclass(frozen=True)
@@ -64,13 +65,14 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     stubs = _stubs(scope.body)
     decls = _decls(file, scope, stubs)
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
-    refs = {idx: _refs(file, scope, decl, stubs, names) for idx, decl in decls.items()}
+    refs = {idx: _refs(file, scope, decl, names) for idx, decl in decls.items()}
     callees = {
         idx: [ref for ref in found if decls[ref].kind is not DeclKind.CLASS]
         for idx, found in refs.items()
     }
     reach = {idx: _reachable(callees, idx) for idx in callees}
-    import_time = [_import_time_reach(stmt, names, refs) for stmt in scope.body]
+    loads = [import_time_names(stmt) for stmt in scope.body]
+    import_time = [_import_time_reach(found, names, refs) for found in loads]
     pinned = _pinned(import_time, reach)
     calls = {
         idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
@@ -81,7 +83,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: _callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    needs = _needs(file, scope.body, decls, stubs)
+    needs = _needs(file, scope.body, decls, loads)
     return Model(scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs)
 
 
@@ -118,8 +120,11 @@ def _decl(
     stmt: Function | ast.ClassDef,
 ) -> Decl:
     prefix = f"{scope.name}." if isinstance(scope, ast.ClassDef) else ""
-    merged = scope.body[_first_merged(stubs, idx) : idx]
-    return Decl(idx, stmt, prefix + stmt.name, _kind(file, stmt, merged))
+    first = idx
+    while first - 1 in stubs:
+        first -= 1
+    kind = _kind(file, stmt, scope.body[first:idx])
+    return Decl(idx, stmt, prefix + stmt.name, kind, first)
 
 
 def _kind(
@@ -144,14 +149,13 @@ def _refs(
     file: CheckInput,
     scope: ast.Module | ast.ClassDef,
     decl: Decl,
-    stubs: frozenset[int],
     names: dict[str, int],
 ) -> list[int]:
     """Return the decls decl calls or refers to, in the order it first does.
 
     The stubs decl replaces, such as a property getter, call for it too.
     """
-    stmts = scope.body[_first_merged(stubs, decl.idx) : decl.idx + 1]
+    stmts = scope.body[decl.first : decl.idx + 1]
     found = [
         names[name]
         for stmt in stmts
@@ -162,14 +166,14 @@ def _refs(
 
 
 def _import_time_reach(
-    stmt: ast.stmt, names: dict[str, int], refs: dict[int, list[int]]
+    loads: set[str], names: dict[str, int], refs: dict[int, list[int]]
 ) -> set[int]:
-    """Return the decls stmt uses at import time, and every decl they refer to.
+    """Return the decls a statement loads at import time, and all they refer to.
 
     Following every reference, not only the calls that run, may pin more than
     needed, but never too little.
     """
-    used = {names[name] for name in import_time_names(stmt) if name in names}
+    used = {names[name] for name in loads if name in names}
     return used.union(*(_reachable(refs, idx) for idx in used))
 
 
@@ -260,30 +264,21 @@ def _needs(
     file: CheckInput,
     stmts: list[ast.stmt],
     decls: dict[int, Decl],
-    stubs: frozenset[int],
+    loads: list[set[str]],
 ) -> dict[int, frozenset[int]]:
     """Return the statements above each decl that it uses when defined.
 
     The stubs merged into a decl are defined with it.
     """
     binds = [bound_names(file, stmt) for stmt in stmts]
-    loads = {idx: _defined_loads(stmts, stubs, idx) for idx in decls}
+    defined = {
+        idx: {name for found in loads[decl.first : idx + 1] for name in found}
+        for idx, decl in decls.items()
+    }
     return {
-        idx: frozenset(other for other in range(idx) if binds[other] & loads[idx])
+        idx: frozenset(other for other in range(idx) if binds[other] & defined[idx])
         for idx in decls
     }
-
-
-def _defined_loads(stmts: list[ast.stmt], stubs: frozenset[int], idx: int) -> set[str]:
-    merged = stmts[_first_merged(stubs, idx) : idx + 1]
-    return {name for stmt in merged for name in import_time_names(stmt)}
-
-
-def _first_merged(stubs: frozenset[int], idx: int) -> int:
-    """Return the first of the defs merged into the decl at idx."""
-    while idx - 1 in stubs:
-        idx -= 1
-    return idx
 
 
 def must_precede(model: Model, decl: Decl, other: Decl) -> bool:
