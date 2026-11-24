@@ -10,6 +10,10 @@ from pytools.services.lint.linter.analysis.nolint import has_name_nolint
 
 _MIN_NAME_LEN: Final = 3
 
+# i for iteration, a and b for comparison, ok, id and db as common shorthands.
+_ALLOWED: Final = frozenset({"_", "i", "a", "b", "ok", "id", "db"})
+_VARIABLES: Final = frozenset({NameKind.MODULE_VAR, NameKind.LOCAL_VAR})
+
 
 def check(file: CheckInput) -> list[Diagnostic]:
     """Report parameters and variables whose names are too short to read."""
@@ -18,8 +22,7 @@ def check(file: CheckInput) -> list[Diagnostic]:
 
 
 def _check_name(file: CheckInput, name: DeclaredName) -> Diagnostic | None:
-    is_variable = name.kind in (NameKind.MODULE_VAR, NameKind.LOCAL_VAR)
-    if not is_variable or not _is_too_short(name.text):
+    if name.kind not in _VARIABLES or not _is_too_short(name.text):
         return None
     if has_name_nolint(file, name, Rule.VARNAME):
         return None
@@ -31,12 +34,4 @@ def _check_name(file: CheckInput, name: DeclaredName) -> Diagnostic | None:
 
 
 def _is_too_short(text: str) -> bool:
-    return len(text) < _MIN_NAME_LEN and not _is_allowed(text)
-
-
-def _is_allowed(text: str) -> bool:
-    """Report whether text is a common short name.
-
-    i for iteration, a and b for comparison, ok, id and db as common shorthands.
-    """
-    return text in {"_", "i", "a", "b", "ok", "id", "db"}
+    return len(text) < _MIN_NAME_LEN and text not in _ALLOWED

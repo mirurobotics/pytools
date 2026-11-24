@@ -2,12 +2,24 @@ import ast
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TypeGuard
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     header_end,
     walk_outside,
+)
+
+_TYPE_PARAMS: Final = (ast.TypeVar, ast.ParamSpec, ast.TypeVarTuple)
+_SCOPES: Final = (
+    ast.FunctionDef,
+    ast.AsyncFunctionDef,
+    ast.Lambda,
+    ast.ClassDef,
+    ast.ListComp,
+    ast.SetComp,
+    ast.DictComp,
+    ast.GeneratorExp,
 )
 
 type _Nested = (
@@ -49,26 +61,9 @@ class DeclaredName:
 def declared_names(file: CheckInput) -> list[DeclaredName]:
     """Return the first binding of each name in every scope of file, in line order."""
     scopes: list[_Scope] = [file.tree]
-    scopes += [node for node in ast.walk(file.tree) if _is_scope(node)]
+    scopes += [node for node in ast.walk(file.tree) if isinstance(node, _SCOPES)]
     names = [name for scope in scopes for name in _first_bindings(file, scope)]
     return sorted(names, key=lambda name: name.line)
-
-
-def _is_scope(node: ast.AST) -> TypeGuard[_Nested]:
-    return isinstance(node, _scope_types())
-
-
-def _scope_types() -> tuple[type[ast.AST], ...]:
-    return (
-        ast.FunctionDef,
-        ast.AsyncFunctionDef,
-        ast.Lambda,
-        ast.ClassDef,
-        ast.ListComp,
-        ast.SetComp,
-        ast.DictComp,
-        ast.GeneratorExp,
-    )
 
 
 def _first_bindings(file: CheckInput, scope: _Scope) -> list[DeclaredName]:
@@ -104,7 +99,7 @@ def _scope_key(name: DeclaredName, declared: set[str]) -> ast.AST | str | None:
     Each type parameter has an annotation scope of its own, which the body's
     global and nonlocal statements don't reach.
     """
-    if isinstance(name.node, ast.TypeVar | ast.ParamSpec | ast.TypeVarTuple):
+    if isinstance(name.node, _TYPE_PARAMS):
         return name.node
     return None if name.text in declared else name.text
 
@@ -133,9 +128,9 @@ def _scope_nodes(nodes: list[ast.AST]) -> Iterator[ast.AST]:
     defaults, annotations, decorators and bases and a walrus in a comprehension.
     A parameter is entered only through its outer parts.
     """
-    for node in walk_outside(nodes, (*_scope_types(), ast.arg)):
+    for node in walk_outside(nodes, (*_SCOPES, ast.arg)):
         yield node
-        if _is_scope(node):
+        if isinstance(node, _SCOPES):
             yield from _scope_nodes(_outer_parts(node))
 
 
@@ -175,7 +170,7 @@ def _binding(
         return DeclaredName(node.name, node.lineno, node.lineno, func_kind, node)
     if isinstance(node, ast.ClassDef):
         return DeclaredName(node.name, node.lineno, node.lineno, NameKind.CLASS, node)
-    if isinstance(node, ast.TypeVar | ast.ParamSpec | ast.TypeVarTuple):
+    if isinstance(node, _TYPE_PARAMS):
         return DeclaredName(
             node.name, node.lineno, node.lineno, NameKind.TYPE_PARAM, node
         )

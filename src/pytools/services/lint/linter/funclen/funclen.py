@@ -1,4 +1,5 @@
 import ast
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
@@ -11,6 +12,8 @@ from pytools.services.lint.linter.analysis.analysis import (
     walk_outside,
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
+
+_LITERALS: Final = (ast.Constant, ast.JoinedStr, ast.List, ast.Tuple, ast.Set, ast.Dict)
 
 
 def check(file: CheckInput, max_len: int) -> list[Diagnostic]:
@@ -45,19 +48,14 @@ def _count_lines(file: CheckInput, func: Function) -> int:
 
 
 def _literal_tail_lines(body: list[ast.stmt]) -> set[int]:
-    literal_types = _literal_types()
-    nodes = list(walk_outside(body, literal_types))
-    literals = [node for node in nodes if isinstance(node, literal_types)]
+    nodes = list(walk_outside(body, _LITERALS))
+    literals = [node for node in nodes if isinstance(node, _LITERALS)]
     skip = {
         line for lit in literals for line in range(lit.lineno + 1, _end_line(lit) + 1)
     }
     code_starts = {getattr(node, "lineno", None) for node in nodes}
     closing_lines = {_end_line(lit) for lit in literals}
     return skip - (closing_lines & code_starts)
-
-
-def _literal_types() -> tuple[type[ast.expr], ...]:
-    return (ast.Constant, ast.JoinedStr, ast.List, ast.Tuple, ast.Set, ast.Dict)
 
 
 def _end_line(node: ast.expr | ast.stmt) -> int:

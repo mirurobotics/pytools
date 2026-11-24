@@ -19,6 +19,8 @@ from pytools.services.lint.linter.analysis.comments import is_directive
 from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
 
 _MESSAGE: Final = "commented-out code; delete it instead"
+_CODE_EXPRS: Final = (ast.Call, ast.Await, ast.Yield, ast.YieldFrom)
+_NOT_CODE: Final = (ast.Pass, ast.Break, ast.Continue, ast.Global, ast.Nonlocal)
 _ENCODING: Final = r"#.*?coding[:=]\s*[-\w.]+"
 
 
@@ -147,9 +149,7 @@ def _is_plausible(stmt: ast.stmt) -> bool:
 
     An expression statement other than a call reads as a phrase.
     """
-    if not isinstance(stmt, ast.Expr):
-        return True
-    return isinstance(stmt.value, ast.Call | ast.Await | ast.Yield | ast.YieldFrom)
+    return not isinstance(stmt, ast.Expr) or isinstance(stmt.value, _CODE_EXPRS)
 
 
 def _is_code_stmt(stmt: ast.stmt) -> bool:
@@ -160,9 +160,7 @@ def _is_code_stmt(stmt: ast.stmt) -> bool:
     """
     if isinstance(stmt, ast.AnnAssign):
         return stmt.value is not None
-    return not isinstance(
-        stmt, ast.Pass | ast.Break | ast.Continue | ast.Global | ast.Nonlocal
-    )
+    return not isinstance(stmt, _NOT_CODE)
 
 
 def _first_non_blank(run: list[_Line]) -> int:
