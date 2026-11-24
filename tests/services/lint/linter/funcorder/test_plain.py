@@ -94,6 +94,15 @@ class Other:
     Point: type
     value = Point()
 """
+_BRANCH_BINDING: Final = """\
+class Point:
+    x: int
+def run(): pass
+class Other:
+    if FLAG:
+        Point = int
+    value = Point()
+"""
 _NOLINT: Final = """\
 class Point:  # nolint: funcorder
     x: int
@@ -175,6 +184,9 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
         ),
         pytest.param(
             _ANNOTATION_ONLY, {0: f'{_REPORT} "Other"'}, id="class-annotation-only"
+        ),
+        pytest.param(
+            _BRANCH_BINDING, {0: f'{_REPORT} "Other"'}, id="class-binding-in-a-branch"
         ),
         pytest.param(_NOLINT + _RUN + _MAKE, {0: f'{_REPORT} "make"'}, id="nolint"),
     ],

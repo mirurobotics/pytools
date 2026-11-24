@@ -17,10 +17,21 @@ from pytools.services.lint.linter.analysis.names import (
 
 _ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 _COMPS: Final = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+_COMPOUND: Final = (
+    ast.If,
+    ast.For,
+    ast.AsyncFor,
+    ast.While,
+    ast.Try,
+    ast.TryStar,
+    ast.Match,
+    ast.With,
+    ast.AsyncWith,
+)
 
 type _Root = ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
 type _Comp = ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
-type _Hidden = tuple[dict[str, int], int]
+type _Hidden = tuple[dict[str, int], int, frozenset[str]]
 
 
 def called_names(
@@ -122,7 +133,7 @@ def import_time_names(file: CheckInput, stmt: ast.stmt) -> set[str]:
     stack, not recursion, so deep nesting doesn't overflow.
     """
     own = stmt.name if isinstance(stmt, DEFS) else ""
-    pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0))]
+    pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0, frozenset()))]
     names: set[str] = set()
     while pending:
         node, hidden = pending.pop()
@@ -138,8 +149,8 @@ def import_time_names(file: CheckInput, stmt: ast.stmt) -> set[str]:
 
 
 def _is_hidden(hidden: _Hidden, name: str) -> bool:
-    bound, idx = hidden
-    return bound.get(name, idx) < idx
+    bound, idx, local = hidden
+    return name in local or bound.get(name, idx) < idx
 
 
 def _import_time_parts(
@@ -148,21 +159,24 @@ def _import_time_parts(
     """Return the parts of node that run when it does, with the names they hide.
 
     A name a class body binds hides the module's in later statements of that
-    body, but not in its comprehensions past their first iterable.
+    body, but not in its comprehensions past their first iterable. There, the
+    targets of that comprehension and those around it hide names instead.
     """
     if isinstance(node, _ROOTS):
         return [(part, hidden) for part in outer_parts(node)]
     if isinstance(node, _COMPS):
         first = node.generators[0].iter
+        local = hidden[2] | _bound_names(file, _run_nodes(own_parts(node)))
         rest: list[tuple[ast.AST, _Hidden]] = [
-            (part, ({}, 0)) for part in _inner_parts(node)
+            (part, ({}, 0, local)) for part in _inner_parts(node)
         ]
         return [(first, hidden), *rest]
     if not isinstance(node, ast.ClassDef):
         return [(part, hidden) for part in ast.iter_child_nodes(node)]
     bound = _class_bindings(file, node)
     outer = [(part, hidden) for part in outer_parts(node)]
-    return [*outer, *((part, (bound, idx)) for idx, part in enumerate(node.body))]
+    body = enumerate(node.body)
+    return [*outer, *((part, (bound, idx, frozenset())) for idx, part in body)]
 
 
 def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
@@ -178,17 +192,24 @@ def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
 
 
 def _class_bindings(file: CheckInput, cls: ast.ClassDef) -> dict[str, int]:
-    """Return the first statement of cls's body that binds each name.
-
-    An annotation without a value binds nothing.
-    """
+    """Return the first statement of cls's body that surely binds each name."""
     body = list(enumerate(cls.body))
     return {
         name: idx
         for idx, stmt in reversed(body)
-        if not (isinstance(stmt, ast.AnnAssign) and stmt.value is None)
+        if _is_definite(stmt)
         for name in bound_names(file, stmt)
     }
+
+
+def _is_definite(stmt: ast.stmt) -> bool:
+    """Report whether stmt surely binds the names it binds once it runs.
+
+    An annotation without a value binds nothing, and a compound statement may
+    skip the statements under it.
+    """
+    is_annotation = isinstance(stmt, ast.AnnAssign) and stmt.value is None
+    return not is_annotation and not isinstance(stmt, _COMPOUND)
 
 
 def bound_names(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:
