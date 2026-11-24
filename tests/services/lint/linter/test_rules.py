@@ -53,7 +53,8 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
         Rule.MUTABLEGLOBAL: Diagnostic(
             "a.py",
             8,
-            "mutable global variable: use a Final constant or a function instead",
+            "mutable global variable: use a Final constant, a type statement"
+            " or a function instead",
         ),
     }
 

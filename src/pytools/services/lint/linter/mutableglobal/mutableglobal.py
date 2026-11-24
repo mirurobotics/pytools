@@ -9,7 +9,10 @@ from pytools.services.lint.linter.analysis.names import (
 )
 from pytools.services.lint.linter.analysis.nolint import has_nolint_at_or_above
 
-_MESSAGE: Final = "mutable global variable: use a Final constant or a function instead"
+_MESSAGE: Final = (
+    "mutable global variable: use a Final constant, a type statement"
+    " or a function instead"
+)
 
 
 def check(file: CheckInput) -> list[Diagnostic]:

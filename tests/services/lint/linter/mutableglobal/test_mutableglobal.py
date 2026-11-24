@@ -59,7 +59,10 @@ __all__ = [
 ]
 """
 _LONG_CHAIN: Final = "LINE: Final = " + '"a" + ' * 2000 + '"a"\n'
-_MESSAGE: Final = "mutable global variable: use a Final constant or a function instead"
+_MESSAGE: Final = (
+    "mutable global variable: use a Final constant, a type statement"
+    " or a function instead"
+)
 
 
 def _diags(*lines: int) -> list[Diagnostic]:
