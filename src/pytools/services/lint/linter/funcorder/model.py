@@ -68,7 +68,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    needs = _needs(file, stmts, decls, loads)
+    needs = _needs(file, stmts, decls, loads, import_time)
     classes = find_classes(file, scope, decls, refs, loads, needs)
     return Model(
         stmts, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
@@ -197,10 +197,12 @@ def _needs(
     stmts: list[ast.stmt],
     decls: dict[int, Decl],
     loads: list[set[str]],
+    import_time: list[set[int]],
 ) -> dict[int, frozenset[int]]:
     """Return the statements above each decl that it uses when defined.
 
-    The stubs merged into a decl are defined with it.
+    The stubs merged into a decl are defined with it, and a decl it uses then
+    brings all that decl refers to, which may run then too.
     """
     binds = [bound_names(file, stmt) for stmt in stmts]
     defined = {
@@ -208,8 +210,13 @@ def _needs(
         for idx, decl in decls.items()
     }
     return {
-        idx: frozenset(other for other in range(idx) if binds[other] & defined[idx])
-        for idx in decls
+        idx: frozenset(
+            other
+            for other in range(idx)
+            if binds[other] & defined[idx]
+            or any(other in reached for reached in import_time[decl.first : idx + 1])
+        )
+        for idx, decl in decls.items()
     }
 
 
