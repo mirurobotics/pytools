@@ -31,9 +31,7 @@ def test_find_classes_chains_methodless_class_needs(parse: Parse) -> None:
 
 
 def test_find_classes_places_users_that_stay(parse: Parse) -> None:
-    found = _find(parse, _USER_STAYS)
-    expected = ({2: Use(3, 3, 0), 3: Use(0, 0, 0)}, frozenset({2}))
-    assert (found.uses, found.movable) == expected
+    assert _find(parse, _USER_STAYS).uses == {2: Use(3, 3, 0)}
 
 
 def _find(parse: Parse, source: str) -> Classes:

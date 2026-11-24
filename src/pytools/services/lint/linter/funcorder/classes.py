@@ -23,8 +23,7 @@ class Classes:
     """Where the classes directly in a scope go."""
 
     plain: _Users  # the users of each used class without methods
-    uses: dict[int, Use]  # where each such class goes
-    movable: frozenset[int]  # the ones that can go there
+    uses: dict[int, Use]  # where each such class that can move goes
     plain_needs: dict[int, frozenset[int]]  # needs, with those of classes it uses
     tucked: _Users  # the defs above each class with methods that use it
 
@@ -41,9 +40,9 @@ def find_classes(
     users = _users(file, scope, decls, refs, loads)
     used = {cls: found for cls, found in users.items() if found}
     plain = _plain(decls, used)
-    uses, movable = _place(decls, plain, needs)
-    plain_needs = _plain_needs(plain, movable, needs)
-    return Classes(plain, uses, movable, plain_needs, _tucked(decls, used))
+    uses = _place(decls, plain, needs)
+    plain_needs = _plain_needs(plain, uses, needs)
+    return Classes(plain, uses, plain_needs, _tucked(decls, used))
 
 
 def _users(
@@ -94,8 +93,8 @@ def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
 
 def _place(
     decls: dict[int, Decl], plain: _Users, needs: dict[int, frozenset[int]]
-) -> tuple[dict[int, Use], frozenset[int]]:
-    """Return where each class without methods goes, and the ones that can.
+) -> dict[int, Use]:
+    """Return where each class without methods that can move goes.
 
     One that can't move stays put, so the classes it uses go above it where it
     is. Each round fixes the classes the round before couldn't move.
@@ -106,7 +105,7 @@ def _place(
         movable = _movable(needs, uses, fixed)
         stuck = frozenset(uses) - movable
         if stuck <= fixed:
-            return uses, movable
+            return {cls: use for cls, use in uses.items() if cls in movable}
         fixed |= stuck
 
 
@@ -193,18 +192,16 @@ def _stays_above(uses: dict[int, Use], movable: set[int], use: Use, need: int) -
 
 
 def _plain_needs(
-    plain: _Users, movable: frozenset[int], needs: dict[int, frozenset[int]]
+    plain: _Users, uses: dict[int, Use], needs: dict[int, frozenset[int]]
 ) -> dict[int, frozenset[int]]:
     """Return what each class without methods that can move needs when defined.
 
     The ones it uses go above it, so what they need counts as its own.
     """
-    inner = {
-        cls: [other for other in movable if cls in plain[other]] for cls in movable
-    }
+    inner = {cls: [other for other in uses if cls in plain[other]] for cls in uses}
     return {
         cls: needs[cls].union(*(needs[other] for other in graph.reachable(inner, cls)))
-        for cls in movable
+        for cls in uses
     }
 
 

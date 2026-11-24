@@ -70,6 +70,13 @@ X = 1
 class Point:
     x = X
 """
+_DEFAULT_FROM_CLASS_THAT_STAYS: Final = """\
+def make(): _d(); return F()
+X = 1
+class F:
+    y = X
+def _d(p=F()): pass
+"""
 _CLASS_CHAIN_NEEDS: Final = """\
 def run(): _f()
 C = 1
@@ -153,7 +160,12 @@ def test_check_skips_def_directly_below(parse: Parse, source: str) -> None:
             id="user-waits-for-class-chain-needs",
         ),
         pytest.param(
-            _CLASS_STAYS, ([0, 1, 2, 3], {1, 2}), id="user-skips-class-that-stays"
+            _CLASS_STAYS, ([0, 1, 2, 3, 4], {1, 2}), id="user-skips-class-that-stays"
+        ),
+        pytest.param(
+            _DEFAULT_FROM_CLASS_THAT_STAYS,
+            ([0, 1, 2, 3], set()),
+            id="def-waits-for-class-that-stays",
         ),
     ],
 )

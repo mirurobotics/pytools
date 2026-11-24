@@ -33,9 +33,9 @@ def _arrange(
         idx: (blockers[idx] | model.needs[idx] | inherited[idx]) - set(units[idx])
         for idx in model.decls
     }
-    left = dict.fromkeys(key for key in units if key not in model.classes.plain)
+    left = dict.fromkeys(key for key in units if key not in model.classes.uses)
     stack: list[int] = []
-    done = set(model.classes.plain)
+    done = set(model.classes.uses)
     trees: list[list[int]] = []
     below: set[int] = set()
     while left:
@@ -65,7 +65,7 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
     pending: list[int] = []
     for idx in range(len(model.stmts)):
         is_carried = idx > first and not settled and idx not in anchored
-        if idx in model.decls and idx not in model.classes.plain:
+        if idx in model.decls and idx not in model.classes.uses:
             units.append([*pending, idx])
             pending = []
         elif idx in model.stubs or (is_carried and idx not in model.decls):

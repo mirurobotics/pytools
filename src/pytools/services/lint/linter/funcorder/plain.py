@@ -12,7 +12,7 @@ def plain_violations(model: Model) -> dict[int, str]:
     uses = model.classes.uses
     return {
         cls: _message(model, cls, uses[cls])
-        for cls in sorted(model.classes.movable)
+        for cls in sorted(uses)
         if not _is_near(model, cls)
     }
 

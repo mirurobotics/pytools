@@ -73,7 +73,7 @@ def _directly_below(model: Model, decl: Decl, order: list[int]) -> list[str]:
     while pos > 0 and order[pos - 1] not in model.decls:
         pos -= 1
     prev = order[pos] - 1
-    while prev in model.classes.plain:
+    while prev in model.classes.uses:
         prev -= 1
     if pos == 0 or order[pos - 1] == prev:
         return []
