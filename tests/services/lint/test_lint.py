@@ -15,9 +15,6 @@ from pytools.services.lint.linter.rules import Config
 
 type Call = tuple[str, list[str], bool | Config | None]
 
-_PATHS = ["src", "tests"]
-_FILES = ["src/a.py", "tests/test_a.py"]
-_CONFIG = Config()
 _VIOLATIONS: Final = 2
 _SUCCESS_OUTPUT: Final = (
     "Running ruff check...\n"
@@ -36,6 +33,14 @@ _SUCCESS_OUTPUT: Final = (
 )
 
 
+def _paths() -> list[str]:
+    return ["src", "tests"]
+
+
+def _files() -> list[str]:
+    return ["src/a.py", "tests/test_a.py"]
+
+
 @pytest.fixture
 def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make every step and the total take zero seconds."""
@@ -50,7 +55,7 @@ def _fake_external(monkeypatch: pytest.MonkeyPatch, failing: set[str]) -> list[C
         return name not in failing
 
     def list_python_files(paths: list[str]) -> list[str] | None:
-        return _FILES if record("list python files", paths, None) else None
+        return _files() if record("list python files", paths, None) else None
 
     def run_linter(files: list[str], config: Config) -> int:
         return 0 if record("custom linter", files, config) else _VIOLATIONS
@@ -77,13 +82,13 @@ def test_run_lint_runs_every_step(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fix: bool
 ) -> None:
     calls = _fake_external(monkeypatch, failing=set())
-    lint.run_lint(LintOptions(paths=_PATHS, fix=fix, linter_config=_CONFIG))
+    lint.run_lint(LintOptions(paths=_paths(), fix=fix, linter_config=Config()))
     assert calls == [
-        ("ruff check", _PATHS, fix),
-        ("ruff format", _PATHS, fix),
-        ("list python files", _PATHS, None),
-        ("custom linter", _FILES, _CONFIG),
-        ("mypy", _PATHS, None),
+        ("ruff check", _paths(), fix),
+        ("ruff format", _paths(), fix),
+        ("list python files", _paths(), None),
+        ("custom linter", _files(), Config()),
+        ("mypy", _paths(), None),
     ]
     assert capsys.readouterr().out == _SUCCESS_OUTPUT
 
@@ -93,7 +98,7 @@ def test_run_lint_collects_failures_from_every_step(
 ) -> None:
     calls = _fake_external(monkeypatch, failing={"ruff format", "mypy"})
     with pytest.raises(LintError):
-        lint.run_lint(LintOptions(paths=_PATHS, fix=True, linter_config=_CONFIG))
+        lint.run_lint(LintOptions(paths=_paths(), fix=True, linter_config=Config()))
     assert [call[0] for call in calls] == [
         "ruff check",
         "ruff format",
@@ -109,7 +114,7 @@ def test_run_lint_fails_custom_linter_on_violations(
 ) -> None:
     _fake_external(monkeypatch, failing={"custom linter"})
     with pytest.raises(LintError):
-        lint.run_lint(LintOptions(paths=_PATHS, fix=True, linter_config=_CONFIG))
+        lint.run_lint(LintOptions(paths=_paths(), fix=True, linter_config=Config()))
     out = capsys.readouterr().out
     assert "Running custom linter...\n2 violation(s) found.\n" in out
 
@@ -119,7 +124,7 @@ def test_run_lint_fails_custom_linter_on_list_error(
 ) -> None:
     calls = _fake_external(monkeypatch, failing={"list python files"})
     with pytest.raises(LintError):
-        lint.run_lint(LintOptions(paths=_PATHS, fix=True, linter_config=_CONFIG))
+        lint.run_lint(LintOptions(paths=_paths(), fix=True, linter_config=Config()))
     assert [call[0] for call in calls] == [
         "ruff check",
         "ruff format",
