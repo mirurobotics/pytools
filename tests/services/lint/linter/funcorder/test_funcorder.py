@@ -52,6 +52,14 @@ class Point:
     x: int
 def _make(): return Point()
 """
+_CLASS_STAYS_BETWEEN: Final = """\
+def h(): return P()
+X = 1
+def run(): _f()
+class P:
+    x = X
+def _f(): pass
+"""
 _STEPDOWN: Final = """\
 def _helper(): pass
 def _other(): _helper()
@@ -218,6 +226,11 @@ def test_check_skips_ordered_source(parse: Parse, source: str) -> None:
             _MAIN_GUARD,
             [_diag(1, '"_helper" should be below its last caller "main"')],
             id="main-guard",
+        ),
+        pytest.param(
+            _CLASS_STAYS_BETWEEN,
+            [_diag(6, '"_f" should be directly below "run"')],
+            id="methodless-class-that-stays-between",
         ),
     ],
 )
