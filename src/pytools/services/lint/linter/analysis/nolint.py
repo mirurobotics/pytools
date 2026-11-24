@@ -1,5 +1,6 @@
 import ast
 import re
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
@@ -12,7 +13,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 from pytools.services.lint.linter.analysis.comments import Comment
 from pytools.services.lint.linter.analysis.names import DeclaredName
 
-_NOLINT = re.compile(r"#\s*nolint:([^#]*)")
+_NOLINT: Final = r"#\s*nolint:([^#]*)"
 
 
 def has_name_nolint(file: CheckInput, name: DeclaredName, rule: Rule) -> bool:
@@ -53,7 +54,7 @@ def has_nolint_on_lines(
 
 
 def _is_nolint_for(comment: str, rule: Rule) -> bool:
-    match = _NOLINT.search(comment)
+    match = re.search(_NOLINT, comment)
     if match is None:
         return False
     entries = (entry.split() for entry in match.group(1).split(","))
