@@ -51,7 +51,7 @@ match a:
 
 def test_scopes_match_the_nested_scope_type() -> None:
     nested = typing.get_args(names._Nested.__value__)
-    assert set(names._SCOPES) == set(nested)
+    assert set(names._scope_types()) == set(nested)
 
 
 def test_declared_names_gives_each_kind_in_line_order(parse: Parse) -> None:

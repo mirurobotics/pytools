@@ -2,22 +2,12 @@ import ast
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import TypeGuard
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     header_end,
     walk_outside,
-)
-
-_SCOPES = (
-    ast.FunctionDef,
-    ast.AsyncFunctionDef,
-    ast.Lambda,
-    ast.ClassDef,
-    ast.ListComp,
-    ast.SetComp,
-    ast.DictComp,
-    ast.GeneratorExp,
 )
 
 type _Nested = (
@@ -59,9 +49,26 @@ class DeclaredName:
 def declared_names(file: CheckInput) -> list[DeclaredName]:
     """Return the first binding of each name in every scope of file, in line order."""
     scopes: list[_Scope] = [file.tree]
-    scopes += [node for node in ast.walk(file.tree) if isinstance(node, _SCOPES)]
+    scopes += [node for node in ast.walk(file.tree) if _is_scope(node)]
     names = [name for scope in scopes for name in _first_bindings(file, scope)]
     return sorted(names, key=lambda name: name.line)
+
+
+def _is_scope(node: ast.AST) -> TypeGuard[_Nested]:
+    return isinstance(node, _scope_types())
+
+
+def _scope_types() -> tuple[type[ast.AST], ...]:
+    return (
+        ast.FunctionDef,
+        ast.AsyncFunctionDef,
+        ast.Lambda,
+        ast.ClassDef,
+        ast.ListComp,
+        ast.SetComp,
+        ast.DictComp,
+        ast.GeneratorExp,
+    )
 
 
 def _first_bindings(file: CheckInput, scope: _Scope) -> list[DeclaredName]:
@@ -126,9 +133,9 @@ def _scope_nodes(nodes: list[ast.AST]) -> Iterator[ast.AST]:
     defaults, annotations, decorators and bases and a walrus in a comprehension.
     A parameter is entered only through its outer parts.
     """
-    for node in walk_outside(nodes, (*_SCOPES, ast.arg)):
+    for node in walk_outside(nodes, (*_scope_types(), ast.arg)):
         yield node
-        if isinstance(node, _SCOPES):
+        if _is_scope(node):
             yield from _scope_nodes(_outer_parts(node))
 
 
