@@ -7,7 +7,8 @@ def plain_violations(model: Model) -> dict[int, str]:
 
     Statements may sit between them, and so may other such classes placed above
     the same user, as deep or less. A class that would rise past a statement it
-    uses when defined is left alone, since that move raises NameError.
+    uses when defined is left alone, since that move raises NameError, and so is
+    one whose definition may run code from the scope.
     """
     uses = model.classes.uses
     return {

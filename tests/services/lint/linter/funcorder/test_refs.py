@@ -104,9 +104,8 @@ class T:
         def run(self): self.help()
 """
 _CLASS_BODY: Final = """\
-@deco
 class T(Base):
-    X = make(x, A.get())
+    X = make()
     def run(self): body()
 """
 _METHOD_NAMED_LIKE_DECORATOR: Final = """\
@@ -128,6 +127,7 @@ class Other:
     value = Point(), Size()
     Size = int
 """
+_TYPE_PARAMS: Final = "@deco(Point)\ndef make[Point, Size, T](p: T, q=Size): pass\n"
 _CLASS_LOCAL_COMPREHENSION: Final = """\
 class Other:
     Point = int
@@ -265,7 +265,7 @@ def _method_calls(parse: Parse, source: str) -> list[str]:
             "def run(x: Arg) -> Ret: body()\n", {"Arg", "Ret"}, id="annotations"
         ),
         pytest.param("f = lambda x=make(): body()\n", {"make"}, id="lambda-default"),
-        pytest.param(_CLASS_BODY, {"A", "Base", "deco", "make", "x"}, id="class-body"),
+        pytest.param(_CLASS_BODY, {"Base", "make"}, id="class-body"),
         pytest.param(
             "@value.setter\ndef value(new): pass\n", set(), id="own-name-in-decorator"
         ),
@@ -277,13 +277,14 @@ def test_import_time_names_skips_function_bodies(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
     file = parse(source)
-    assert refs.import_time_names(file, file.tree.body[-1])[0] == expected
+    assert refs.import_time_names(file, file.tree, file.tree.body[-1]) == expected
 
 
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
         pytest.param(_CLASS_LOCAL, {"Size", "int"}, id="bound-above-not-below"),
+        pytest.param(_TYPE_PARAMS, {"Point", "Size", "deco"}, id="type-params"),
         pytest.param(
             _CLASS_LOCAL_COMPREHENSION, {"Point", "int", "range"}, id="comprehension"
         ),
@@ -293,13 +294,8 @@ def test_import_time_names_skips_class_local_names(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
     file = parse(source)
-    assert refs.import_time_names(file, file.tree.body[-1])[0] == expected
+    assert refs.import_time_names(file, file.tree, file.tree.body[-1]) == expected
 
-
-def test_import_time_names_returns_called_names(parse: Parse) -> None:
-    file = parse(_CLASS_BODY)
-    _, called = refs.import_time_names(file, file.tree.body[-1])
-    assert called == {"A", "deco", "make", "x"}
 
 
 @pytest.mark.parametrize(

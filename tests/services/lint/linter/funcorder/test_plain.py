@@ -128,6 +128,27 @@ VALUE = 1
 class Point:
     current = Config.load()
 """
+_SUBCLASS_HOOK: Final = """\
+class Plugin:
+    def __init_subclass__(cls): _REGISTRY[cls.__name__] = cls
+def load(): return Point()
+_REGISTRY = {}
+class Point(Plugin): pass
+"""
+_LAMBDA_KEY: Final = """\
+def make(): return Point()
+ORDER = {"a": 0}
+class Point:
+    names = sorted(["a"], key=lambda n: ORDER[n])
+"""
+_NESTED_CLASS_BODY: Final = """\
+Point = int
+class Box:
+    class Point: pass
+    def run(self): pass
+    class Other:
+        value = Point()
+"""
 _NOLINT: Final = """\
 class Point:  # nolint: funcorder
     x: int
@@ -158,7 +179,9 @@ def run():
         pytest.param(_USER_STAYS, id="class-user-that-stays"),
         pytest.param("def make(p: 'Point'): pass\n" + _POINT, id="string-annotation"),
         pytest.param(_CYCLE, id="classes-using-each-other"),
-        pytest.param(_CALL_ON_A_CLASS, id="move-would-pass-what-its-calls-read"),
+        pytest.param(_CALL_ON_A_CLASS, id="definition-calls-into-scope"),
+        pytest.param(_SUBCLASS_HOOK, id="base-may-run-code"),
+        pytest.param(_LAMBDA_KEY, id="definition-runs-a-lambda"),
     ],
 )
 def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
@@ -265,6 +288,10 @@ def test_plain_violations_skips_class_with_methods(parse: Parse, source: str) ->
 def test_check_places_classes_in_each_class_body(parse: Parse) -> None:
     message = 'class "Box.Point" should be directly above its first user "Box.make"'
     assert funcorder.check(parse(_CLASS_BODY)) == [Diagnostic("a.py", 3, message)]
+
+
+def test_check_skips_nested_class_body_loads(parse: Parse) -> None:
+    assert funcorder.check(parse(_NESTED_CLASS_BODY)) == []
 
 
 def test_check_skips_classes_in_function_bodies(parse: Parse) -> None:

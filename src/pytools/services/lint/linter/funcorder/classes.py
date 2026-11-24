@@ -9,7 +9,8 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.funcorder import graph
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
-from pytools.services.lint.linter.funcorder.refs import called_names
+from pytools.services.lint.linter.analysis.names import outer_parts
+from pytools.services.lint.linter.funcorder.refs import bound_names, called_names
 
 type _Users = dict[int, list[int]]
 
@@ -43,10 +44,11 @@ def find_classes(
     """Return where the classes in scope go, from the statements that use them."""
     users = _users(file, scope, decls, refs, loads)
     used = {cls: found for cls, found in users.items() if found}
+    runs = _runs_code(file, scope, decls)
     plain = _plain(decls, used)
-    uses = _place(decls, plain, needs)
+    uses = _place(decls, plain, needs, runs)
     inherited = _inherited(plain, uses, needs)
-    return Classes(uses, inherited, _tucked(decls, used))
+    return Classes(uses, inherited, _tucked(decls, used, runs))
 
 
 def _users(
@@ -78,6 +80,82 @@ def _users(
     }
 
 
+def _runs_code(
+    file: CheckInput, scope: ast.Module | ast.ClassDef, decls: dict[int, Decl]
+) -> frozenset[int]:
+    """Return the classes whose definition may run code from scope.
+
+    That code may read a statement a move would pass, so such a class never
+    moves. A lambda may run it, and so may a call or decorator that names
+    anything scope binds but an import. A base or keyword that names such a
+    thing may too, unless it's a class without methods that runs none itself.
+    """
+    local = {
+        name
+        for stmt in scope.body
+        if not isinstance(stmt, (ast.Import, ast.ImportFrom))
+        for name in bound_names(file, stmt)
+    }
+    names = {decl.stmt.name: idx for idx, decl in decls.items()}
+    runs: set[int] = set()
+    for cls in sorted(decls):
+        stmt = decls[cls].stmt
+        if not isinstance(stmt, ast.ClassDef):
+            continue
+        parents = [names.get(name) for name in _loaded(outer_parts(stmt)) & local]
+        is_safe = all(_is_plain_parent(decls, runs, parent) for parent in parents)
+        if _calls_into(stmt, local) or not is_safe:
+            runs.add(cls)
+    return frozenset(runs)
+
+
+def _is_plain_parent(
+    decls: dict[int, Decl], runs: set[int], parent: int | None
+) -> bool:
+    if parent is None or parent in runs:
+        return False
+    decl = decls[parent]
+    return decl.kind is DeclKind.CLASS and not _has_methods(decl)
+
+
+def _calls_into(stmt: ast.ClassDef, local: set[str]) -> bool:
+    """Report whether defining stmt runs a lambda, or calls something in local.
+
+    A decorator counts as a call, and a call may call what it's passed.
+    """
+    nodes = _definition_nodes(stmt)
+    scopes = [node for node in nodes if isinstance(node, (*DEFS, ast.ClassDef))]
+    decorators = [dec for scope in scopes for dec in scope.decorator_list]
+    calls = [node for node in nodes if isinstance(node, ast.Call)]
+    has_lambda = any(isinstance(node, ast.Lambda) for node in nodes)
+    return has_lambda or not _loaded([*calls, *decorators]).isdisjoint(local)
+
+
+def _definition_nodes(stmt: ast.ClassDef) -> list[ast.AST]:
+    """Return the nodes that run when stmt is defined: all but def and lambda bodies.
+
+    A stack, not recursion, so deep nesting doesn't overflow.
+    """
+    pending: list[ast.AST] = [stmt]
+    nodes: list[ast.AST] = []
+    while pending:
+        node = pending.pop()
+        nodes.append(node)
+        if isinstance(node, DEFS):
+            pending.extend(outer_parts(node))
+        elif not isinstance(node, ast.Lambda):
+            pending.extend(ast.iter_child_nodes(node))
+    return nodes
+
+
+def _loaded(parts: list[ast.AST]) -> set[str]:
+    return {node.id for part in parts for node in ast.walk(part) if _is_load(node)}
+
+
+def _is_load(node: ast.AST) -> bool:
+    return isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+
+
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
     """Return the users of each class without methods.
 
@@ -96,14 +174,17 @@ def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
 
 
 def _place(
-    decls: dict[int, Decl], plain: _Users, needs: dict[int, frozenset[int]]
+    decls: dict[int, Decl],
+    plain: _Users,
+    needs: dict[int, frozenset[int]],
+    runs: frozenset[int],
 ) -> dict[int, Use]:
     """Return where each class without methods that can move goes.
 
     One that can't move stays put, so the classes it uses go above it where it
     is. Each round fixes the classes the round before couldn't move.
     """
-    fixed: frozenset[int] = frozenset()
+    fixed = runs & plain.keys()
     while True:
         uses = _first_uses(decls, plain, fixed)
         movable = _movable(needs, uses, fixed)
@@ -217,13 +298,16 @@ def _inherited(
     }
 
 
-def _tucked(decls: dict[int, Decl], users: _Users) -> _Users:
-    """Return the defs above each class with methods that use it."""
+def _tucked(decls: dict[int, Decl], users: _Users, runs: frozenset[int]) -> _Users:
+    """Return the defs above each class with methods that use it.
+
+    A class whose definition may run code from the scope is left out.
+    """
     defs = {idx for idx, decl in decls.items() if decl.kind is not DeclKind.CLASS}
     above = {
         cls: [user for user in found if user < cls and user in defs]
         for cls, found in users.items()
-        if _has_methods(decls[cls])
+        if _has_methods(decls[cls]) and cls not in runs
     }
     return {cls: found for cls, found in above.items() if found}
 

@@ -112,12 +112,13 @@ def outer_parts(scope: _Nested) -> list[ast.AST]:
     if isinstance(scope, ast.ClassDef):
         return [*scope.decorator_list, *scope.bases, *scope.keywords]
     if isinstance(scope, ast.Lambda):
-        return _defaults(scope.args)
+        return param_defaults(scope.args)
     if isinstance(scope, DEFS):
         params = _params(scope.args)
         annotations = [param.annotation for param in params if param.annotation]
         returns = [scope.returns] if scope.returns else []
-        return [*scope.decorator_list, *_defaults(scope.args), *annotations, *returns]
+        defaults = param_defaults(scope.args)
+        return [*scope.decorator_list, *defaults, *annotations, *returns]
     if isinstance(scope, ast.DictComp):
         elements = [scope.key, scope.value]
     else:
@@ -126,7 +127,8 @@ def outer_parts(scope: _Nested) -> list[ast.AST]:
     return [*elements, *tests]
 
 
-def _defaults(args: ast.arguments) -> list[ast.AST]:
+def param_defaults(args: ast.arguments) -> list[ast.AST]:
+    """Return the default values of args."""
     return [default for default in (*args.defaults, *args.kw_defaults) if default]
 
 

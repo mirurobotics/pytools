@@ -13,11 +13,12 @@ from pytools.services.lint.linter.analysis.names import (
     binding,
     outer_parts,
     own_parts,
+    param_defaults,
 )
 
 _ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 _COMPS: Final = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
-_CHAINS: Final = (ast.Attribute, ast.Subscript, ast.Starred)
+_TYPE_PARAMS: Final = (ast.TypeVar, ast.ParamSpec, ast.TypeVarTuple)
 _COMPOUND: Final = (
     ast.If,
     ast.For,
@@ -126,45 +127,32 @@ def _position(node: ast.expr) -> tuple[int, int]:
     return node.lineno, node.col_offset
 
 
-def import_time_names(file: CheckInput, stmt: ast.stmt) -> tuple[set[str], set[str]]:
-    """Return the names stmt loads and calls outside function and lambda bodies.
+def import_time_names(
+    file: CheckInput, scope: ast.Module | ast.ClassDef, stmt: ast.stmt
+) -> set[str]:
+    """Return the names stmt loads outside function and lambda bodies.
 
     A def's outer parts run before its name is bound, so its own name there is
     the def it replaces, such as the getter in a property's setter decorator. A
-    stack, not recursion, so deep nesting doesn't overflow.
+    class nested in a class body can't see that body's names, so only its outer
+    parts count there. A stack, not recursion, so deep nesting doesn't overflow.
     """
     own = stmt.name if isinstance(stmt, DEFS) else ""
     pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0, frozenset()))]
-    loads: list[ast.Name] = []
-    callees: set[ast.AST] = set()
+    if isinstance(scope, ast.ClassDef) and isinstance(stmt, ast.ClassDef):
+        pending = _outer_parts_hiding(stmt, ({}, 0, frozenset()))
+    names: set[str] = set()
     while pending:
         node, hidden = pending.pop()
-        callees.update(_callees(node, callees))
         if (
             isinstance(node, ast.Name)
             and isinstance(node.ctx, ast.Load)
             and node.id != own
             and not _is_hidden(hidden, node.id)
         ):
-            loads.append(node)
+            names.add(node.id)
         pending.extend(_import_time_parts(file, node, hidden))
-    called = {node.id for node in loads if node in callees}
-    return {node.id for node in loads}, called
-
-
-def _callees(node: ast.AST, callees: set[ast.AST]) -> list[ast.AST]:
-    """Return the parts of node that may be called, given those of its parents.
-
-    A call may call what it's passed too, a decorator is called, and calling an
-    attribute or item may run the object it's on.
-    """
-    if isinstance(node, ast.Call):
-        return [node.func, *node.args, *(keyword.value for keyword in node.keywords)]
-    if isinstance(node, (*DEFS, ast.ClassDef)):
-        return list(node.decorator_list)
-    if node in callees and isinstance(node, _CHAINS):
-        return [node.value]
-    return []
+    return names
 
 
 def _is_hidden(hidden: _Hidden, name: str) -> bool:
@@ -209,8 +197,7 @@ def _outer_parts_hiding(
     """
     bound, idx, local = hidden
     typed = (bound, idx, local | _type_params(node))
-    args = None if isinstance(node, ast.ClassDef) else node.args
-    defaults = [*args.defaults, *args.kw_defaults] if args else []
+    defaults = [] if isinstance(node, ast.ClassDef) else param_defaults(node.args)
     decorators = [] if isinstance(node, ast.Lambda) else node.decorator_list
     outside = [*decorators, *defaults]
     return [(part, hidden if part in outside else typed) for part in outer_parts(node)]
@@ -219,7 +206,8 @@ def _outer_parts_hiding(
 def _type_params(node: _Root | ast.ClassDef) -> frozenset[str]:
     if isinstance(node, ast.Lambda):
         return frozenset()
-    return frozenset(param.name for param in node.type_params)
+    params = node.type_params
+    return frozenset(param.name for param in params if isinstance(param, _TYPE_PARAMS))
 
 
 def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:

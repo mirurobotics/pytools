@@ -48,14 +48,13 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     stubs = _stubs(scope.body)
     decls = _decls(file, scope, stubs)
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
-    called = {idx: _called(file, scope, decl) for idx, decl in decls.items()}
-    refs = {idx: _refs(idx, found, names) for idx, found in called.items()}
+    refs = {idx: _refs(file, scope, decl, names) for idx, decl in decls.items()}
     callees = {
         idx: [ref for ref in found if decls[ref].kind is not DeclKind.CLASS]
         for idx, found in refs.items()
     }
     reach = {idx: graph.reachable(callees, idx) for idx in callees}
-    loads, runs = _import_time(file, scope.body)
+    loads = [import_time_names(file, scope, stmt) for stmt in scope.body]
     import_time = [graph.import_time_reach(found, names, refs) for found in loads]
     pinned = graph.pinned(import_time, reach)
     calls = {
@@ -69,8 +68,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    reads = _def_time_reads(runs, names, refs, called)
-    needs = _needs(file, scope.body, decls, loads, import_time, reads)
+    needs = _needs(file, scope.body, decls, loads)
     classes = find_classes(file, scope, decls, refs, loads, needs)
     return Model(
         scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
@@ -135,29 +133,24 @@ def _kind(
     return DeclKind.PRIVATE
 
 
-def _called(
-    file: CheckInput, scope: ast.Module | ast.ClassDef, decl: Decl
-) -> list[str]:
-    """Return the names decl calls or refers to when called, in order.
+def _refs(
+    file: CheckInput,
+    scope: ast.Module | ast.ClassDef,
+    decl: Decl,
+    names: dict[str, int],
+) -> list[int]:
+    """Return the decls decl calls or refers to, in the order it first does.
 
     The stubs decl replaces, such as a property getter, call for it too.
     """
     stmts = scope.body[decl.first : decl.idx + 1]
-    return [name for stmt in stmts for name in called_names(file, scope, stmt)]
-
-
-def _refs(idx: int, called: list[str], names: dict[str, int]) -> list[int]:
-    """Return the decls a decl calls or refers to, in the order it first does."""
-    found = [names[name] for name in called if name in names]
-    return [ref for ref in dict.fromkeys(found) if ref != idx]
-
-
-def _import_time(
-    file: CheckInput, stmts: list[ast.stmt]
-) -> tuple[list[set[str]], list[set[str]]]:
-    """Return the names each statement loads, and those it calls, when it runs."""
-    found = [import_time_names(file, stmt) for stmt in stmts]
-    return [loads for loads, _ in found], [calls for _, calls in found]
+    found = [
+        names[name]
+        for stmt in stmts
+        for name in called_names(file, scope, stmt)
+        if name in names
+    ]
+    return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
 
 
 def _is_enforced(
@@ -199,50 +192,23 @@ def _openers(
     return openers
 
 
-def _def_time_reads(
-    runs: list[set[str]],
-    names: dict[str, int],
-    refs: dict[int, list[int]],
-    called: dict[int, list[str]],
-) -> list[set[str]]:
-    """Return the names each statement reads through the decls it calls.
-
-    A decl called when the statement runs may run all it refers to too.
-    """
-    ran = [graph.import_time_reach(found, names, refs) for found in runs]
-    return [{name for idx in found for name in called[idx]} for found in ran]
-
-
 def _needs(
     file: CheckInput,
     stmts: list[ast.stmt],
     decls: dict[int, Decl],
     loads: list[set[str]],
-    import_time: list[set[int]],
-    reads: list[set[str]],
 ) -> dict[int, frozenset[int]]:
     """Return the statements above each decl that it uses when defined.
 
-    The stubs merged into a decl are defined with it. A decl it uses then brings
-    all that decl refers to, which may run then too, and one it calls then also
-    brings the names it reads.
+    The stubs merged into a decl are defined with it.
     """
     binds = [bound_names(file, stmt) for stmt in stmts]
-    used = [found | reads[idx] for idx, found in enumerate(loads)]
     defined = {
-        idx: {name for found in used[decl.first : idx + 1] for name in found}
-        for idx, decl in decls.items()
-    }
-    reached = {
-        idx: {other for found in import_time[decl.first : idx + 1] for other in found}
+        idx: {name for found in loads[decl.first : idx + 1] for name in found}
         for idx, decl in decls.items()
     }
     return {
-        idx: frozenset(
-            other
-            for other in range(idx)
-            if binds[other] & defined[idx] or other in reached[idx]
-        )
+        idx: frozenset(other for other in range(idx) if binds[other] & defined[idx])
         for idx in decls
     }
 
