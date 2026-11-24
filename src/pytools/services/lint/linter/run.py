@@ -13,10 +13,8 @@ def run_linter(files: list[str], config: Config) -> int:
 
 
 def _process_file(path: Path, config: Config) -> int:
-    try:
-        file = _parse(path, path.read_text(encoding="utf-8-sig"))
-    except (OSError, SyntaxError, UnicodeDecodeError) as err:
-        sys.stderr.write(f"warning: {path}: {err}\n")
+    file = _read(path)
+    if file is None:
         return 0
     diags = run_checks(file, config)
     for diag in diags:
@@ -25,24 +23,26 @@ def _process_file(path: Path, config: Config) -> int:
 
 
 def run_fixer(files: list[str], config: Config) -> None:
-    """Rewrite each file the rules' fixes change.
-
-    A file that can't be read or parsed is skipped; the linter warns about it.
-    """
+    """Rewrite each file the rules' fixes change."""
     for file in files:
         _fix_file(Path(file), config)
 
 
 def _fix_file(path: Path, config: Config) -> None:
-    try:
-        file = _parse(path, path.read_text(encoding="utf-8-sig"))
-    except (OSError, SyntaxError, UnicodeDecodeError):
+    file = _read(path)
+    if file is None:
         return
     fixed = run_fixes(file, config)
     if fixed is not None:
         path.write_text(fixed, encoding="utf-8")
 
 
-def _parse(path: Path, source: str) -> CheckInput:
-    tree = ast.parse(source, filename=str(path))
+def _read(path: Path) -> CheckInput | None:
+    """Return path parsed, or None after a warning if it can't be read or parsed."""
+    try:
+        source = path.read_text(encoding="utf-8-sig")
+        tree = ast.parse(source, filename=str(path))
+    except (OSError, SyntaxError, UnicodeDecodeError) as err:
+        sys.stderr.write(f"warning: {path}: {err}\n")
+        return None
     return CheckInput(str(path), tree, source.split("\n"), collect_comments(source))

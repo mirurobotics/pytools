@@ -40,27 +40,26 @@ class _StepResult:
 
 
 def _run_steps(opts: LintOptions) -> list[_StepResult]:
-    fixes = [("custom fix", lambda: _run_custom_fixer(opts))] if opts.fix else []
+    files = external.list_python_files(opts.paths)
+    fix = [("custom fix", lambda: _run_custom_fixer(opts, files))] if opts.fix else []
     steps = [
-        *fixes,
+        *fix,
         ("ruff check", lambda: external.run_ruff_check(opts.paths, fix=opts.fix)),
         ("ruff format", lambda: external.run_ruff_format(opts.paths, fix=opts.fix)),
-        ("custom linter", lambda: _run_custom_linter(opts)),
+        ("custom linter", lambda: _run_custom_linter(opts, files)),
         ("mypy", lambda: external.run_mypy(opts.paths)),
     ]
     return [_timed_run(name, run) for name, run in steps]
 
 
-def _run_custom_fixer(opts: LintOptions) -> bool:
-    files = external.list_python_files(opts.paths)
+def _run_custom_fixer(opts: LintOptions, files: list[str] | None) -> bool:
     if files is None:
         return False
     run_fixer(files, opts.linter_config)
     return True
 
 
-def _run_custom_linter(opts: LintOptions) -> bool:
-    files = external.list_python_files(opts.paths)
+def _run_custom_linter(opts: LintOptions, files: list[str] | None) -> bool:
     if files is None:
         return False
     count = run_linter(files, opts.linter_config)
