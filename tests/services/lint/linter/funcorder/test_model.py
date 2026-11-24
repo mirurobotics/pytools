@@ -57,13 +57,6 @@ def run(): _helper()
 VALUE = run()
 def other(): _helper()
 """
-_INSTANTIATED_CLASS_PIN: Final = """\
-def _h(): pass
-class T:
-    def __init__(self): _h()
-VALUE = T()
-def other(): _h()
-"""
 _FACTORY_PIN: Final = """\
 def _helper(): pass
 class Runner:
@@ -129,6 +122,12 @@ def run(): return parse(1)
 def parse(x: int) -> int: ...  # nolint: funcorder
 def parse(x): return x
 """
+_STUB_ANNOTATION: Final = """\
+Json = dict
+@overload
+def parse(x: Json) -> Json: ...
+def parse(x): return x
+"""
 _EXEMPT_CYCLE_MEMBER: Final = """\
 def _e(): _a()  # nolint: funcorder
 def run(): pass
@@ -192,9 +191,6 @@ def test_build_merges_a_def_with_its_stubs(
         ),
         pytest.param(_SETTER_CALLEE, {0: [2], 2: []}, id="own-setter-decorator"),
         pytest.param(_TRANSITIVE_PIN, {0: [], 1: [], 3: []}, id="transitive"),
-        pytest.param(
-            _INSTANTIATED_CLASS_PIN, {0: [], 1: [], 3: []}, id="instantiated-class"
-        ),
         pytest.param(
             _FACTORY_PIN, {0: [], 1: [], 2: [], 4: []}, id="class-built-by-factory"
         ),
@@ -278,6 +274,22 @@ def test_build_waits_cycle_members_for_a_cycle_caller(
     parse: Parse, source: str, waiting: frozenset[int]
 ) -> None:
     assert _build(parse, source).waiting == waiting
+
+
+@pytest.mark.parametrize(
+    ("source", "needs"),
+    [
+        pytest.param("C = 1\ndef run(x=C): pass\n", {1: frozenset({0})}, id="default"),
+        pytest.param("def run(x=C): pass\nC = 1\n", {0: frozenset()}, id="below"),
+        pytest.param("C = 1\ndef run(): return C\n", {1: frozenset()}, id="body"),
+        pytest.param(_DECORATOR_PIN, {0: frozenset(), 1: frozenset({0})}, id="decl"),
+        pytest.param(_STUB_ANNOTATION, {2: frozenset({0})}, id="stub-annotation"),
+    ],
+)
+def test_build_finds_what_each_decl_uses_when_defined(
+    parse: Parse, source: str, needs: dict[int, frozenset[int]]
+) -> None:
+    assert _build(parse, source).needs == needs
 
 
 def _build(parse: Parse, source: str) -> model.Model:

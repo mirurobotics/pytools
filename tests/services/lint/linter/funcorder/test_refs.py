@@ -114,6 +114,12 @@ class Client:
     @retry
     def retry(self): pass
 """
+_EXCEPT_AT_TOP: Final = """\
+try:
+    pass
+except ValueError as err:
+    pass
+"""
 _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
 
 
@@ -258,3 +264,22 @@ def test_import_time_names_skips_function_bodies(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
     assert refs.import_time_names(parse(source).tree.body[-1]) == expected
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param("C: Final = 1\n", {"C"}, id="assignment"),
+        pytest.param("import os.path\n", {"os"}, id="dotted-import"),
+        pytest.param("from a import b as c\n", {"c"}, id="import-alias"),
+        pytest.param("for x in items: pass\n", {"x"}, id="for-target"),
+        pytest.param(_EXCEPT_AT_TOP, {"err"}, id="except-alias"),
+        pytest.param("[(y := x) for x in items]\n", {"y"}, id="comprehension-walrus"),
+        pytest.param("def run(): helper = 1\n", {"run"}, id="def"),
+    ],
+)
+def test_bound_names_returns_names_stmt_binds(
+    parse: Parse, source: str, expected: set[str]
+) -> None:
+    file = parse(source)
+    assert refs.bound_names(file, file.tree.body[-1]) == expected

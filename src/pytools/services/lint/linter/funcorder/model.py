@@ -81,7 +81,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: _callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    needs = _needs(file, scope.body, decls)
+    needs = _needs(file, scope.body, decls, stubs)
     return Model(scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs)
 
 
@@ -159,13 +159,6 @@ def _refs(
         if name in names
     ]
     return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
-
-
-def _first_merged(stubs: frozenset[int], idx: int) -> int:
-    """Return the first of the defs merged into the decl at idx."""
-    while idx - 1 in stubs:
-        idx -= 1
-    return idx
 
 
 def _import_time_reach(
@@ -264,21 +257,33 @@ def _openers(
 
 
 def _needs(
-    file: CheckInput, stmts: list[ast.stmt], decls: dict[int, Decl]
+    file: CheckInput,
+    stmts: list[ast.stmt],
+    decls: dict[int, Decl],
+    stubs: frozenset[int],
 ) -> dict[int, frozenset[int]]:
-    """Return the statements above each decl that it uses when defined."""
-    binds = {
-        idx: bound_names(file, stmt)
-        for idx, stmt in enumerate(stmts)
-        if idx not in decls
-    }
-    loads = {idx: import_time_names(decl.stmt) for idx, decl in decls.items()}
+    """Return the statements above each decl that it uses when defined.
+
+    The stubs merged into a decl are defined with it.
+    """
+    binds = [bound_names(file, stmt) for stmt in stmts]
+    loads = {idx: _defined_loads(stmts, stubs, idx) for idx in decls}
     return {
-        idx: frozenset(
-            stmt for stmt, bound in binds.items() if stmt < idx and bound & loads[idx]
-        )
+        idx: frozenset(other for other in range(idx) if binds[other] & loads[idx])
         for idx in decls
     }
+
+
+def _defined_loads(stmts: list[ast.stmt], stubs: frozenset[int], idx: int) -> set[str]:
+    merged = stmts[_first_merged(stubs, idx) : idx + 1]
+    return {name for stmt in merged for name in import_time_names(stmt)}
+
+
+def _first_merged(stubs: frozenset[int], idx: int) -> int:
+    """Return the first of the defs merged into the decl at idx."""
+    while idx - 1 in stubs:
+        idx -= 1
+    return idx
 
 
 def must_precede(model: Model, decl: Decl, other: Decl) -> bool:
