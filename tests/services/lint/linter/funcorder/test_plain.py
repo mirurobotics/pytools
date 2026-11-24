@@ -12,6 +12,7 @@ _POINT: Final = "class Point:\n    x: int\n"
 _RUN: Final = "def run(): pass\n"
 _MAKE: Final = "def make(): return Point()\n"
 _REPORT: Final = 'class "Point" should be directly above its first user'
+_PLUGIN_REPORT: Final = 'class "Plugin" should be directly above its first user "Point"'
 _LINE_REPORT: Final = 'class "Line" should be directly above its first user "make"'
 _STATEMENT_BETWEEN: Final = """\
 class Point:
@@ -38,14 +39,16 @@ class Point:
     x: int
 class Size:
     width: int
-class Line(Size): pass
+class Line:
+    size: Size
 def make(p: Point, line: Line): pass
 """
 _DEEPER_RISES: Final = """\
 def make(): return Line()
 class Point:
     x: int
-class Line(Point): pass
+class Line:
+    start: Point
 """
 _USER_STAYS: Final = """\
 def make(): return Line()
@@ -65,9 +68,9 @@ class Point:
 _CYCLE: Final = """\
 def run(): return A, B
 class A:
-    other = lambda: B()
+    other: B
 class B:
-    other = lambda: A()
+    other: A
 """
 _DATACLASS: Final = "@dataclass(frozen=True)\nclass Point:\n    x: int\n"
 _PROTOCOL: Final = """\
@@ -119,28 +122,6 @@ class Box[Point]:
     value: Point
 def make(): return Point()
 """
-_CALL_ON_A_CLASS: Final = """\
-class Config:
-    @classmethod
-    def load(cls): return cls(VALUE)
-def make(): return Point()
-VALUE = 1
-class Point:
-    current = Config.load()
-"""
-_SUBCLASS_HOOK: Final = """\
-class Plugin:
-    def __init_subclass__(cls): _REGISTRY[cls.__name__] = cls
-def load(): return Point()
-_REGISTRY = {}
-class Point(Plugin): pass
-"""
-_LAMBDA_KEY: Final = """\
-def make(): return Point()
-ORDER = {"a": 0}
-class Point:
-    names = sorted(["a"], key=lambda n: ORDER[n])
-"""
 _NESTED_CLASS_BODY: Final = """\
 Point = int
 class Box:
@@ -148,6 +129,27 @@ class Box:
     def run(self): pass
     class Other:
         value = Point()
+    if FLAG:
+        class Third:
+            value = Point()
+"""
+_HOOK_ASSIGNED: Final = """\
+def _register(cls): REGISTRY.append(cls)
+class Plugin:
+    __init_subclass__ = _register
+def load(): return Point()
+REGISTRY = []
+class Point(Plugin): pass
+"""
+_ITEM_OF_LOCAL: Final = """\
+class Settings:
+    def __getitem__(self, key): return VALUE
+SETTINGS = Settings()
+def make(): return Point()
+VALUE = 1
+def other(): pass
+class Point:
+    value = SETTINGS["key"]
 """
 _NOLINT: Final = """\
 class Point:  # nolint: funcorder
@@ -179,9 +181,7 @@ def run():
         pytest.param(_USER_STAYS, id="class-user-that-stays"),
         pytest.param("def make(p: 'Point'): pass\n" + _POINT, id="string-annotation"),
         pytest.param(_CYCLE, id="classes-using-each-other"),
-        pytest.param(_CALL_ON_A_CLASS, id="definition-calls-into-scope"),
-        pytest.param(_SUBCLASS_HOOK, id="base-may-run-code"),
-        pytest.param(_LAMBDA_KEY, id="definition-runs-a-lambda"),
+        pytest.param(_ITEM_OF_LOCAL, id="definition-indexes-a-local"),
     ],
 )
 def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
@@ -241,6 +241,7 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
             _WALRUS_BINDING, {0: f'{_REPORT} "Other"'}, id="class-binding-by-walrus"
         ),
         pytest.param(_TYPE_PARAM, {0: f'{_REPORT} "make"'}, id="class-type-param"),
+        pytest.param(_HOOK_ASSIGNED, {1: _PLUGIN_REPORT}, id="base-is-bound-in-scope"),
         pytest.param(_NOLINT + _RUN + _MAKE, {0: f'{_REPORT} "make"'}, id="nolint"),
     ],
 )

@@ -1,5 +1,6 @@
 import ast
-from typing import Final
+from dataclasses import dataclass
+from typing import Final, TypeGuard
 
 from pytools.services.lint.linter.analysis.analysis import (
     DEFS,
@@ -127,32 +128,86 @@ def _position(node: ast.expr) -> tuple[int, int]:
     return node.lineno, node.col_offset
 
 
+@dataclass(frozen=True)
+class ImportTimeNames:
+    """The names a statement uses when it runs, outside def and lambda bodies."""
+
+    loads: set[str]  # loaded from the scope it's in
+    runs: set[str]  # used other than by only loading them, or read in a lambda
+    binds: frozenset[str]  # bound anywhere it runs, but by an import
+
+
 def import_time_names(
     file: CheckInput, scope: ast.Module | ast.ClassDef, stmt: ast.stmt
-) -> set[str]:
-    """Return the names stmt loads outside function and lambda bodies.
+) -> ImportTimeNames:
+    """Return the names stmt uses outside function and lambda bodies.
 
     A def's outer parts run before its name is bound, so its own name there is
-    the def it replaces, such as the getter in a property's setter decorator. A
-    class nested in a class body can't see that body's names, so only its outer
-    parts count there. A stack, not recursion, so deep nesting doesn't overflow.
+    the def it replaces, such as the getter in a property's setter decorator.
+    In a class scope, a nested class body or a comprehension past its first
+    iterable can't see the scope's names, so it's left out. A name used other
+    than by only loading it may run that object's code, and so may one a lambda
+    reads, since the lambda may be called. A stack, not recursion, so deep
+    nesting doesn't overflow.
     """
     own = stmt.name if isinstance(stmt, DEFS) else ""
+    is_class = isinstance(scope, ast.ClassDef)
     pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0, frozenset()))]
-    if isinstance(scope, ast.ClassDef) and isinstance(stmt, ast.ClassDef):
-        pending = _outer_parts_hiding(stmt, ({}, 0, frozenset()))
-    names: set[str] = set()
+    nodes: list[ast.AST] = []
+    loads: set[str] = set()
+    loaded: set[ast.AST] = set()
     while pending:
         node, hidden = pending.pop()
-        if (
-            isinstance(node, ast.Name)
-            and isinstance(node.ctx, ast.Load)
-            and node.id != own
-            and not _is_hidden(hidden, node.id)
-        ):
-            names.add(node.id)
-        pending.extend(_import_time_parts(file, node, hidden))
-    return names
+        nodes.append(node)
+        loaded.update(_loaded_parts(node))
+        if _is_load(node) and node.id != own and not _is_hidden(hidden, node.id):
+            loads.add(node.id)
+        pending.extend(_import_time_parts(file, node, hidden, is_class=is_class))
+    runs = _runs(nodes, loaded)
+    bound = [node for node in nodes if not isinstance(node, ast.alias)]
+    return ImportTimeNames(loads, runs, _bound_names(file, bound))
+
+
+def _loaded_parts(node: ast.AST) -> list[ast.AST]:
+    """Return the parts of node it only loads, running none of their code.
+
+    Those are an assigned value or annotation, a list or tuple element, and an
+    argument or subscript slice of a name or attribute, such as `list[Vec]`.
+    """
+    if isinstance(node, ast.Assign):
+        return [node.value]
+    if isinstance(node, ast.AnnAssign):
+        return [node.annotation, *([node.value] if node.value else [])]
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return list(node.elts)
+    if isinstance(node, _ROOTS):
+        return _loaded_def_parts(node)
+    if isinstance(node, ast.Call) and _is_named(node.func):
+        return [*node.args, *(keyword.value for keyword in node.keywords)]
+    if isinstance(node, ast.Subscript) and _is_named(node.value):
+        return [node.slice]
+    return []
+
+
+def _loaded_def_parts(node: _Root) -> list[ast.AST]:
+    """Return a def's or lambda's defaults, annotations and setter's def."""
+    if isinstance(node, ast.Lambda):
+        return param_defaults(node.args)
+    decorators = node.decorator_list
+    loaded = [part for part in outer_parts(node) if part not in decorators]
+    replaced = [dec.value for dec in decorators if _is_on(dec, node.name)]
+    return [*loaded, *replaced]
+
+
+def _is_on(decorator: ast.expr, name: str) -> bool:
+    value = decorator.value if isinstance(decorator, ast.Attribute) else None
+    return isinstance(value, ast.Name) and value.id == name
+
+
+def _is_named(node: ast.expr) -> bool:
+    while isinstance(node, ast.Attribute):
+        node = node.value
+    return isinstance(node, ast.Name)
 
 
 def _is_hidden(hidden: _Hidden, name: str) -> bool:
@@ -161,7 +216,7 @@ def _is_hidden(hidden: _Hidden, name: str) -> bool:
 
 
 def _import_time_parts(
-    file: CheckInput, node: ast.AST, hidden: _Hidden
+    file: CheckInput, node: ast.AST, hidden: _Hidden, *, is_class: bool
 ) -> list[tuple[ast.AST, _Hidden]]:
     """Return the parts of node that run when it does, with the names they hide.
 
@@ -169,11 +224,14 @@ def _import_time_parts(
     body, but not in its comprehensions past their first iterable. There, the
     targets of that comprehension and those around it hide names instead. A
     class's or def's type parameters hide names in its body and annotations.
+    In a class scope, only the parts that can see the scope's names count.
     """
     if isinstance(node, _ROOTS):
         return _outer_parts_hiding(node, hidden)
     if isinstance(node, _COMPS):
         first = node.generators[0].iter
+        if is_class:
+            return [(first, hidden)]
         local = hidden[2] | _bound_names(file, _run_nodes(own_parts(node)))
         rest: list[tuple[ast.AST, _Hidden]] = [
             (part, ({}, 0, local)) for part in _inner_parts(node)
@@ -181,9 +239,11 @@ def _import_time_parts(
         return [(first, hidden), *rest]
     if not isinstance(node, ast.ClassDef):
         return [(part, hidden) for part in ast.iter_child_nodes(node)]
+    outer = _outer_parts_hiding(node, hidden)
+    if is_class:
+        return outer
     bound = _class_bindings(file, node)
     params = _type_params(node)
-    outer = _outer_parts_hiding(node, hidden)
     body = [(part, (bound, idx, params)) for idx, part in enumerate(node.body)]
     return [*outer, *body]
 
@@ -294,3 +354,15 @@ def _comp_outer_parts(comp: _Comp) -> list[ast.AST]:
     nodes = walk_outside([comp], (*_ROOTS, ast.ClassDef))
     targets = [node.target for node in nodes if isinstance(node, ast.NamedExpr)]
     return [comp.generators[0].iter, *targets]
+
+
+def _runs(nodes: list[ast.AST], loaded: set[ast.AST]) -> set[str]:
+    """Return the names nodes use other than by only loading them, or a lambda reads."""
+    used = [node for node in nodes if node not in loaded]
+    lambdas = [node for node in nodes if isinstance(node, ast.Lambda)]
+    reads = [node for lam in lambdas for node in ast.walk(lam.body)]
+    return {node.id for node in [*used, *reads] if _is_load(node)}
+
+
+def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:
+    return isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)

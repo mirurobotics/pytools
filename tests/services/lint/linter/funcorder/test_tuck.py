@@ -109,6 +109,25 @@ class Obj:
     value = _initialize()
     def ident(self): return 1
 """
+_OWN_DEF_CALLED: Final = """\
+def run(): return Obj()
+VALUE = 1
+def other(): pass
+class Obj:
+    def _compute(): return VALUE
+    x = _compute()
+    def ident(self): return 1
+"""
+_DECORATED_HELPER: Final = """\
+def _register(fn): REGISTRY.append(fn); return fn
+def run(): return Obj()
+REGISTRY = []
+def other(): pass
+class Obj:
+    def ident(self): return _g()
+@_register
+def _g(): pass
+"""
 _HELPER_WAITS: Final = """\
 def run(): return Obj()
 def other(): pass
@@ -196,6 +215,8 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_STATEMENT_NEED, id="would-rise-past-a-statement-it-uses"),
         pytest.param(_NEED_THROUGH_CALL, id="would-rise-past-what-its-body-calls"),
         pytest.param(_VALUE_THROUGH_CALL, id="would-rise-past-what-its-calls-read"),
+        pytest.param(_OWN_DEF_CALLED, id="definition-calls-its-own-def"),
+        pytest.param(_DECORATED_HELPER, id="tree-holds-a-decorated-def"),
         pytest.param(_HELPER_WAITS, id="would-take-a-helper-past-its-default"),
     ],
 )

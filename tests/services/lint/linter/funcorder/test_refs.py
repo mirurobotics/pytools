@@ -277,7 +277,7 @@ def test_import_time_names_skips_function_bodies(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
     file = parse(source)
-    assert refs.import_time_names(file, file.tree, file.tree.body[-1]) == expected
+    assert refs.import_time_names(file, file.tree, file.tree.body[-1]).loads == expected
 
 
 @pytest.mark.parametrize(
@@ -294,7 +294,7 @@ def test_import_time_names_skips_class_local_names(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
     file = parse(source)
-    assert refs.import_time_names(file, file.tree, file.tree.body[-1]) == expected
+    assert refs.import_time_names(file, file.tree, file.tree.body[-1]).loads == expected
 
 
 

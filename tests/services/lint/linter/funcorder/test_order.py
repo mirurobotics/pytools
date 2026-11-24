@@ -97,7 +97,8 @@ def run(): _f(); _make()
 def _make(): return 1
 class Q:
     x = _make
-class P(Q): pass
+class P:
+    q: Q
 def _f(p: P): pass
 """
 

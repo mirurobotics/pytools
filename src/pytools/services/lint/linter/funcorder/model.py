@@ -54,7 +54,8 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         for idx, found in refs.items()
     }
     reach = {idx: graph.reachable(callees, idx) for idx in callees}
-    loads = [import_time_names(file, scope, stmt) for stmt in scope.body]
+    effects = [import_time_names(file, scope, stmt) for stmt in scope.body]
+    loads = [found.loads for found in effects]
     import_time = [graph.import_time_reach(found, names, refs) for found in loads]
     pinned = graph.pinned(import_time, reach)
     calls = {
@@ -69,7 +70,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
     needs = _needs(file, scope.body, decls, loads)
-    classes = find_classes(file, scope, decls, refs, loads, needs)
+    classes = find_classes(file, scope, decls, refs, effects, needs)
     return Model(
         scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
     )
