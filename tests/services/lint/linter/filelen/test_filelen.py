@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -7,12 +8,12 @@ from pytools.services.lint.linter.filelen import filelen
 
 type Parse = Callable[[str], CheckInput]
 
-_THREE_LINES = """\
+_THREE_LINES: Final = """\
 a = 1
 b = 2
 c = 3
 """
-_SHEBANG_COMMENTS_AND_BLANKS = """\
+_SHEBANG_COMMENTS_AND_BLANKS: Final = """\
 #!/usr/bin/env python
 # note
 
@@ -21,29 +22,29 @@ a = 1
 b = 2  # trailing
 
 """
-_DOCSTRING = """\
+_DOCSTRING: Final = """\
 '''Doc.
 More.
 '''
 a = 1
 """
-_LIST = """\
+_LIST: Final = """\
 a = [
     1,
     2,
 ]
 """
-_STRING = """\
+_STRING: Final = """\
 a = '''
 text
 '''
 """
-_HASH_IN_STRING = """\
+_HASH_IN_STRING: Final = """\
 a = '''
 # not a comment
 '''
 """
-_NOLINT_ON_DOCSTRING_END = """\
+_NOLINT_ON_DOCSTRING_END: Final = """\
 '''Doc.
 '''  # nolint: filelen
 b = 2

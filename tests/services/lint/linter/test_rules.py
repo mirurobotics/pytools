@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -7,7 +8,7 @@ from pytools.services.lint.linter.rules import Config, run_checks
 
 type Parse = Callable[[str], CheckInput]
 
-_SOURCE = """\
+_SOURCE: Final = """\
 def f(parameter_name_too_long, n):
     if a:
         if b:

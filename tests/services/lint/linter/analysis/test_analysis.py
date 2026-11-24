@@ -1,5 +1,6 @@
 import ast
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -16,7 +17,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 
 type Parse = Callable[[str], CheckInput]
 
-_FUNCTIONS = """\
+_FUNCTIONS: Final = """\
 class A:
     def method(self):
         def inner():
@@ -30,11 +31,11 @@ async def b():
 def c():
     pass
 """
-_WALK = """\
+_WALK: Final = """\
 a = [b]
 c = d
 """
-_SOURCE = """\
+_SOURCE: Final = """\
 a = 1
 
     # comment
@@ -44,7 +45,7 @@ c = '''
 '''
 # spaced \t
 """
-_FUNCTION_BODIES = """\
+_FUNCTION_BODIES: Final = """\
 def helper(
     first,
 ):
@@ -57,7 +58,7 @@ class Point:
         return inner
 LIMIT = 1
 """
-_MODULE_HEADER = """\
+_MODULE_HEADER: Final = """\
 #!/usr/bin/env python3
 # Copyright 2026 Example.
 

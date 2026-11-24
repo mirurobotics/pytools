@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -6,7 +7,7 @@ from pytools.services.lint.linter.rules import Config
 from pytools.services.lint.linter.run import run_linter
 
 _CONFIG = Config(max_func_len=1)
-_TWO_LONG_FUNCTIONS = """\
+_TWO_LONG_FUNCTIONS: Final = """\
 def f():
     a = 1
     b = 2
@@ -16,7 +17,7 @@ def g():
     a = 1
     b = 2
 """
-_SHORT_FUNCTION = """\
+_SHORT_FUNCTION: Final = """\
 def h():
     return 1
 """

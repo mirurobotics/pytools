@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -7,13 +8,13 @@ from pytools.services.lint.linter.nestdepth import nestdepth
 
 type Parse = Callable[[str], CheckInput]
 
-_TWO_LEVELS = """\
+_TWO_LEVELS: Final = """\
 def f():
     if a:
         if b:
             pass
 """
-_OVER_LIMIT_SIBLINGS = """\
+_OVER_LIMIT_SIBLINGS: Final = """\
 def f():
     if a:
         for b in c:
@@ -22,7 +23,7 @@ def f():
         while e:
             pass
 """
-_NESTED_FUNCTION = """\
+_NESTED_FUNCTION: Final = """\
 def outer():
     if a:
         def inner():
@@ -30,50 +31,50 @@ def outer():
                 if c:
                     pass
 """
-_THREE_LEVELS = """\
+_THREE_LEVELS: Final = """\
 def f():
     if a:
         if b:
             if c:
                 pass
 """
-_MODULE_LEVEL = """\
+_MODULE_LEVEL: Final = """\
 if a:
     if b:
         if c:
             pass
 """
-_FOR = """\
+_FOR: Final = """\
 def f():
     for a in b:
         if c:
             pass
 """
-_ASYNC_FOR = """\
+_ASYNC_FOR: Final = """\
 async def f():
     async for a in b:
         if c:
             pass
 """
-_WHILE = """\
+_WHILE: Final = """\
 def f():
     while a:
         if b:
             pass
 """
-_WITH = """\
+_WITH: Final = """\
 def f():
     with a:
         if b:
             pass
 """
-_ASYNC_WITH = """\
+_ASYNC_WITH: Final = """\
 async def f():
     async with a:
         if b:
             pass
 """
-_TRY = """\
+_TRY: Final = """\
 def f():
     try:
         if a:
@@ -81,7 +82,7 @@ def f():
     finally:
         pass
 """
-_TRY_STAR = """\
+_TRY_STAR: Final = """\
 def f():
     try:
         if a:
@@ -89,14 +90,14 @@ def f():
     except* E:
         pass
 """
-_MATCH = """\
+_MATCH: Final = """\
 def f():
     match a:
         case _:
             if b:
                 pass
 """
-_IF_ELSE = """\
+_IF_ELSE: Final = """\
 def f():
     if a:
         if b:
@@ -105,7 +106,7 @@ def f():
         if c:
             pass
 """
-_FOR_ELSE = """\
+_FOR_ELSE: Final = """\
 def f():
     for a in b:
         if c:
@@ -114,7 +115,7 @@ def f():
         if d:
             pass
 """
-_WHILE_ELSE = """\
+_WHILE_ELSE: Final = """\
 def f():
     while a:
         if b:
@@ -123,7 +124,7 @@ def f():
         if c:
             pass
 """
-_TRY_CLAUSES = """\
+_TRY_CLAUSES: Final = """\
 def f():
     try:
         if a:
@@ -138,7 +139,7 @@ def f():
         if d:
             pass
 """
-_MATCH_CASES = """\
+_MATCH_CASES: Final = """\
 def f():
     match a:
         case 1:
@@ -148,7 +149,7 @@ def f():
             if c:
                 pass
 """
-_ELIF = """\
+_ELIF: Final = """\
 def f():
     if a:
         pass
@@ -162,7 +163,7 @@ def f():
         if d:
             pass
 """
-_IF_IN_ELSE = """\
+_IF_IN_ELSE: Final = """\
 def f():
     if a:
         pass
@@ -170,7 +171,7 @@ def f():
         if b:
             pass
 """
-_MESSAGE = (
+_MESSAGE: Final = (
     "nesting depth is 2 (limit 1) — consider early returns or extracting a helper"
 )
 

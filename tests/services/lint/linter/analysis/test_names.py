@@ -1,5 +1,6 @@
 import typing
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -8,7 +9,7 @@ from pytools.services.lint.linter.analysis.analysis import CheckInput
 
 type Parse = Callable[[str], CheckInput]
 
-_KINDS = """\
+_KINDS: Final = """\
 first = 1
 class Second[Third]:
     fourth = 1
@@ -17,7 +18,7 @@ def fifth(sixth):
 def test_eighth():
     pass
 """
-_MULTILINE_EXCEPT = """\
+_MULTILINE_EXCEPT: Final = """\
 try:
     pass
 except (
@@ -25,21 +26,21 @@ except (
 ) as name:
     pass
 """
-_SAME_LINE_EXCEPT = """\
+_SAME_LINE_EXCEPT: Final = """\
 try:
     pass
 except (
     E
 ) as name: pass
 """
-_MULTILINE_MATCH_AS = """\
+_MULTILINE_MATCH_AS: Final = """\
 match a:
     case (
         [1]
     ) as name:
         pass
 """
-_MAPPING_REST = """\
+_MAPPING_REST: Final = """\
 match a:
     case {
         "k": 1,

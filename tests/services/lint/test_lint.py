@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Final
 
 import pytest
 
@@ -17,8 +18,8 @@ type Call = tuple[str, list[str], bool | Config | None]
 _PATHS = ["src", "tests"]
 _FILES = ["src/a.py", "tests/test_a.py"]
 _CONFIG = Config()
-_VIOLATIONS = 2
-_SUCCESS_OUTPUT = (
+_VIOLATIONS: Final = 2
+_SUCCESS_OUTPUT: Final = (
     "Running ruff check...\n"
     "Running ruff format...\n"
     "Running custom linter...\n"

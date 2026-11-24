@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -7,13 +8,13 @@ from pytools.services.lint.linter.namelen import namelen
 
 type Parse = Callable[[str], CheckInput]
 
-_LOCAL_AT = "a" * 20
-_LOCAL_OVER = "a" * 21
-_NAME_AT = "a" * 30
-_NAME_OVER = "a" * 31
-_TEST_AT = "test_" + "a" * 45
-_TEST_OVER = "test_" + "a" * 46
-_LONG = "x" * 31
+_LOCAL_AT: Final = "a" * 20
+_LOCAL_OVER: Final = "a" * 21
+_NAME_AT: Final = "a" * 30
+_NAME_OVER: Final = "a" * 31
+_TEST_AT: Final = "test_" + "a" * 45
+_TEST_OVER: Final = "test_" + "a" * 46
+_LONG: Final = "x" * 31
 
 _REBOUND = f"""\
 def f():
@@ -87,7 +88,7 @@ except E as {_LONG}:
     # nolint: namelen
     pass
 """
-_MULTILINE_MATCH_AS = """\
+_MULTILINE_MATCH_AS: Final = """\
 def f():
     match a:
         case (
@@ -95,7 +96,7 @@ def f():
         ) as {}:
             pass
 """
-_MULTILINE_EXCEPT = """\
+_MULTILINE_EXCEPT: Final = """\
 def f():
     try:
         pass

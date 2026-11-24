@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -7,18 +8,18 @@ from pytools.services.lint.linter.funccomment import funccomment
 
 type Parse = Callable[[str], CheckInput]
 
-_COMMENT_LINE = """\
+_COMMENT_LINE: Final = """\
 def helper():
     # explain
     first = 1
     return first
 """
-_TRAILING = """\
+_TRAILING: Final = """\
 def helper():
     first = 1  # trailing
     return first
 """
-_NESTED = """\
+_NESTED: Final = """\
 def outer():
     def inner():
         # in a nested def
@@ -30,35 +31,35 @@ def outer():
 
     return inner, Point
 """
-_TAIL = """\
+_TAIL: Final = """\
 def helper():
     return 1
     # after the last statement
 
 LIMIT = 1
 """
-_BEFORE_DOCSTRING = """\
+_BEFORE_DOCSTRING: Final = """\
 def helper():
     # before the docstring
     '''Do a thing.'''
 """
-_SIGNATURE = """\
+_SIGNATURE: Final = """\
 def helper(
     # first is documented.
     first,
 ):
     return first
 """
-_ONE_LINE_DEF = """\
+_ONE_LINE_DEF: Final = """\
 def helper(): pass  # trailing
 # after the def
 """
-_WRAPPED_ONE_LINE_DEF = """\
+_WRAPPED_ONE_LINE_DEF: Final = """\
 def helper(
     first,
 ): return first  # trailing
 """
-_MODULE_AND_CLASS = """\
+_MODULE_AND_CLASS: Final = """\
 # above a function
 def helper():
     pass
@@ -72,7 +73,7 @@ class Point:
     def method(self):
         pass
 """
-_NEXT_METHOD = """\
+_NEXT_METHOD: Final = """\
 class Point:
     def first(self):
         pass
@@ -81,12 +82,12 @@ class Point:
     def second(self):
         pass
 """
-_HASH_IN_STRING = """\
+_HASH_IN_STRING: Final = """\
 def helper():
     label = "# not a comment"
     return label
 """
-_MESSAGE = "comments are not allowed inside function bodies"
+_MESSAGE: Final = "comments are not allowed inside function bodies"
 
 
 def _diags(*lines: int) -> list[Diagnostic]:

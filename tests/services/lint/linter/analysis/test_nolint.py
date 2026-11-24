@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -12,14 +13,14 @@ from pytools.services.lint.linter.analysis.nolint import (
 
 type Parse = Callable[[str], CheckInput]
 
-_MAPPING_REST = """\
+_MAPPING_REST: Final = """\
 match a:
     case {
         **name  # nolint: varname
     }:
         pass
 """
-_WRAPPED_DEF = """\
+_WRAPPED_DEF: Final = """\
 def name(
     first,
 ): return first  # nolint: varname
