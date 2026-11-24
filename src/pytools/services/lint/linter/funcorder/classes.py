@@ -67,7 +67,7 @@ def find_classes(
     used = {cls: found for cls, found in users.items() if found}
     bindings = scope_bindings(file, scope)
     shadowed = _shadowed_classes(decls, bindings)
-    kept = _runs_code(decls, effects) | shadowed | _writes_globals(decls)
+    kept = _runs_code(decls, effects, bindings) | shadowed | _writes_globals(decls)
     plain = _plain(decls, used)
     blocked = _blocked(decls, effects, binders, kept, bindings)
     uses = _place(decls, plain, blocked, kept)
@@ -118,7 +118,7 @@ def _shadowed_classes(decls: dict[int, Decl], bindings: Counter[str]) -> frozens
 
 
 def _runs_code(
-    decls: dict[int, Decl], effects: list[ImportTimeNames]
+    decls: dict[int, Decl], effects: list[ImportTimeNames], bindings: Counter[str]
 ) -> frozenset[int]:
     """Return the decls whose definition may run code from the scope.
 
@@ -128,7 +128,7 @@ def _runs_code(
     be a def's name, since a function has no `__set_name__` to run.
     """
     local = {name for found in effects for name in found.binds}
-    risky = local - _bare_def_names(decls, effects)
+    risky = local - _bare_def_names(decls, bindings)
     return frozenset(
         idx
         for idx in decls
@@ -136,15 +136,15 @@ def _runs_code(
     )
 
 
-def _bare_def_names(decls: dict[int, Decl], effects: list[ImportTimeNames]) -> set[str]:
-    """Return the names that only undecorated defs bind."""
-    defs = {
-        idx: decl.stmt.name
-        for idx, decl in decls.items()
-        if isinstance(decl.stmt, DEFS) and not decl.stmt.decorator_list
+def _bare_def_names(decls: dict[int, Decl], bindings: Counter[str]) -> set[str]:
+    """Return the names that only an undecorated def binds."""
+    return {
+        decl.stmt.name
+        for decl in decls.values()
+        if isinstance(decl.stmt, DEFS)
+        and not decl.stmt.decorator_list
+        and bindings[decl.stmt.name] == 1
     }
-    others = [found.binds - {defs.get(idx, "")} for idx, found in enumerate(effects)]
-    return set(defs.values()).difference(*others)
 
 
 def _writes_globals(decls: dict[int, Decl]) -> frozenset[int]:

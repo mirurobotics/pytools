@@ -78,14 +78,9 @@ def _roots(file: CheckInput, stmt: ast.stmt) -> list[tuple[_Root, frozenset[str]
     found: list[tuple[_Root, frozenset[str]]] = []
     while pending:
         node, params = pending.pop()
-        parts = list(ast.iter_child_nodes(node))
         if isinstance(node, ROOTS):
             found.append((node, params))
-            parts = outer_parts(node)
-        elif isinstance(node, _COMPS):
-            parts = [node.generators[0].iter, *_inner_parts(node)]
-        outside, hidden = _hidden_in(file, node, params)
-        pending.extend((part, params if part in outside else hidden) for part in parts)
+        pending.extend(_scope_parts(file, node, params))
     return found
 
 
@@ -191,65 +186,47 @@ def _import_time_parts(
     """Return the parts of node that run when it does, with the names they hide.
 
     A name a class body binds hides the module's in later statements of that
-    body, but not in its comprehensions past their first iterable, where the
-    comprehensions' targets hide names instead.
+    body, but not in its comprehensions past their first iterable. In a class
+    scope, only the parts that can see the scope's names count.
     """
-    if isinstance(node, ROOTS):
-        return _outer_parts_hiding(node, hidden)
-    if isinstance(node, _COMPS):
-        first = node.generators[0].iter
-        if is_class:
-            return [(first, hidden)]
-        local = _hidden_in(file, node, hidden[2])[1]
-        rest: list[tuple[ast.AST, _Hidden]] = [
-            (part, ({}, 0, local)) for part in _inner_parts(node)
-        ]
-        return [(first, hidden), *rest]
-    if not isinstance(node, ast.ClassDef):
-        return [(part, hidden) for part in ast.iter_child_nodes(node)]
-    outer = _outer_parts_hiding(node, hidden)
-    if is_class:
-        return outer
-    bound = _class_bindings(file, node)
-    params = hidden[2] | _type_params(node)
-    body = [(part, (bound, idx, params)) for idx, part in enumerate(node.body)]
-    return [*outer, *body]
-
-
-def _outer_parts_hiding(
-    node: _Root | ast.ClassDef, hidden: _Hidden
-) -> list[tuple[ast.AST, _Hidden]]:
-    """Return node's outer parts, with the names each hides."""
     bound, idx, local = hidden
-    typed = (bound, idx, local | _type_params(node))
-    outside = _outside_type_params(node)
-    return [(part, hidden if part in outside else typed) for part in outer_parts(node)]
-
-
-def _hidden_in(
-    file: CheckInput, node: ast.AST, params: frozenset[str]
-) -> tuple[list[ast.AST], frozenset[str]]:
-    """Return node's parts outside its targets and type params, and those names."""
+    parts = _scope_parts(file, node, local)
     if isinstance(node, _COMPS):
-        targets = _bound_names(file, _run_nodes(own_parts(node)))
-        return [node.generators[0].iter], params | targets
-    if isinstance(node, (*ROOTS, ast.ClassDef)):
-        return _outside_type_params(node), params | _type_params(node)
-    return [], params
+        first, *rest = parts
+        inner: list[tuple[ast.AST, _Hidden]] = [
+            (part, ({}, 0, names)) for part, names in rest if not is_class
+        ]
+        return [(first[0], hidden), *inner]
+    if not isinstance(node, ast.ClassDef):
+        return [(part, (bound, idx, names)) for part, names in parts]
+    body: dict[ast.AST, int] = {part: pos for pos, part in enumerate(node.body)}
+    found = _class_bindings(file, node)
+    return [
+        (part, (found, body[part], names) if part in body else (bound, idx, names))
+        for part, names in parts
+        if not (is_class and part in body)
+    ]
 
 
-def _outside_type_params(node: _Root | ast.ClassDef) -> list[ast.AST]:
-    """Return node's decorators and defaults, which run outside its type parameters."""
-    defaults = [] if isinstance(node, ast.ClassDef) else param_defaults(node.args)
-    decorators = [] if isinstance(node, ast.Lambda) else node.decorator_list
-    return [*decorators, *defaults]
+def _scope_parts(
+    file: CheckInput, node: ast.AST, local: frozenset[str]
+) -> list[tuple[ast.AST, frozenset[str]]]:
+    """Return node's parts outside def bodies, with the names hidden in each.
 
-
-def _type_params(node: _Root | ast.ClassDef) -> frozenset[str]:
-    if isinstance(node, ast.Lambda):
-        return frozenset()
-    params = node.type_params
-    return frozenset(param.name for param in params if isinstance(param, _TYPE_PARAMS))
+    A comprehension's targets hide names past its first iterable, and a class's
+    or def's type parameters hide names past its decorators and defaults.
+    """
+    if isinstance(node, _COMPS):
+        targets = local | _bound_names(file, _run_nodes(own_parts(node)))
+        first = node.generators[0].iter
+        return [(first, local), *((part, targets) for part in _inner_parts(node))]
+    if not isinstance(node, (*ROOTS, ast.ClassDef)):
+        return [(part, local) for part in ast.iter_child_nodes(node)]
+    typed = local | _type_params(node)
+    outside = _outside_type_params(node)
+    outer = [(part, local if part in outside else typed) for part in outer_parts(node)]
+    body = node.body if isinstance(node, ast.ClassDef) else []
+    return [*outer, *((part, typed) for part in body)]
 
 
 def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
@@ -262,6 +239,20 @@ def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
     first = scope.generators[0].iter
     inner = [part for part in outer_parts(scope) if part is not first]
     return [*own_parts(scope), *inner]
+
+
+def _type_params(node: _Root | ast.ClassDef) -> frozenset[str]:
+    if isinstance(node, ast.Lambda):
+        return frozenset()
+    params = node.type_params
+    return frozenset(param.name for param in params if isinstance(param, _TYPE_PARAMS))
+
+
+def _outside_type_params(node: _Root | ast.ClassDef) -> list[ast.AST]:
+    """Return node's decorators and defaults, which run outside its type parameters."""
+    defaults = [] if isinstance(node, ast.ClassDef) else param_defaults(node.args)
+    decorators = [] if isinstance(node, ast.Lambda) else node.decorator_list
+    return [*decorators, *defaults]
 
 
 def _class_bindings(file: CheckInput, cls: ast.ClassDef) -> dict[str, int]:

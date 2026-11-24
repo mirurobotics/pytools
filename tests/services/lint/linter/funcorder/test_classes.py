@@ -148,6 +148,13 @@ def helper(): pass
 class Point:
     x = _hook
 """
+_GLOBAL_OWN_NAME: Final = """\
+def install(): global install; install = Hook()
+def make(): return Point()
+def helper(): pass
+class Point:
+    x = install
+"""
 _TYPE_PARAM_IN_METHOD: Final = """\
 class Item: pass
 def run(): pass
@@ -248,6 +255,7 @@ def _kept(parse: Parse, source: str) -> set[int]:
         pytest.param(_GLOBAL_WRITTEN_BELOW, id="move-would-pass-a-global-write"),
         pytest.param(_GLOBAL_CALLED, id="class-calls-a-global-set-in-a-def"),
         pytest.param(_GLOBAL_HOOK, id="class-stores-a-def-made-global"),
+        pytest.param(_GLOBAL_OWN_NAME, id="class-stores-a-def-that-rebinds-it"),
     ],
 )
 def test_find_classes_leaves_class_in_place(parse: Parse, source: str) -> None:
