@@ -95,9 +95,7 @@ def _pick(
     while stack:
         calls = model.calls.get(stack[-1], [])
         found = [
-            key
-            for key in calls
-            if key in left and _is_ready(model, key, done, waits)
+            key for key in calls if key in left and _is_ready(model, key, done, waits)
         ]
         if found:
             return found[0], True
