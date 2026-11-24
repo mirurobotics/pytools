@@ -192,12 +192,12 @@ def _blocked(
 
     Its binders bind a name it reads when defined. If it reads a name the scope
     may bind, so may any statement but a decl that runs no scope code, such as a
-    call that sets a global. In a class scope, that holds for a class whose
-    definition may run code, which may be the module's that `_runs_code` misses.
+    call that sets a global. In a class scope, a class whose definition may run
+    code, perhaps the module's that `_runs_code` misses, is walled and a wall.
     """
-    walls = frozenset(range(len(effects))) - (decls.keys() - kept)
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     active = {cls for cls in classes if is_class and not _is_inert(decls[cls])}
+    walls = frozenset(range(len(effects))) - (decls.keys() - kept - active)
     walled = {cls for cls in classes if effects[cls].reads & bindings.keys()} | active
     return {
         cls: binders[cls] | (walls if cls in walled else frozenset()) for cls in classes

@@ -169,12 +169,11 @@ def outer():
             def ident(self, v=value): return v
     return Box
 """
-_GLOBAL_WRITE_ABOVE: Final = """\
-VALUE = 1
+_WRITE_ABOVE: Final = """\
 class Box:
     def make(self): return self.Obj()
     class Update:
-        global VALUE; VALUE = 2
+        STATE.value = 2
     def other(self): pass
 """
 _STAR_IMPORT: Final = """\
@@ -296,17 +295,18 @@ def test_check_skips_class_left_where_it_is(parse: Parse, source: str) -> None:
         pytest.param("    class Obj(Base):\n", id="base"),
         pytest.param("    class Obj:\n        x = _initialize()\n", id="call"),
         pytest.param("    class Obj:\n        x = SETTINGS['key']\n", id="subscript"),
+        pytest.param("    class Obj:\n        x = STATE.value\n", id="attribute"),
         pytest.param("    class Obj:\n        x = OTHER + 1\n", id="operator"),
         pytest.param("    class Obj:\n        def go(self, v: f()): pass\n", id="hint"),
         pytest.param("    class Obj:\n        def go(self, v: A.b): pass\n", id="dot"),
     ],
 )
 def test_check_skips_nested_class_running_code(parse: Parse, header: str) -> None:
-    source = _GLOBAL_WRITE_ABOVE + header + "        def ident(self): return 1\n"
+    source = _WRITE_ABOVE + header + "        def ident(self): return 1\n"
     assert funcorder.check(parse(source)) == []
 
 
 def test_check_tucks_inert_nested_class(parse: Parse) -> None:
     inert = "    class Obj:\n        x = 1\n        def ident(self): pass\n"
     message = '"Box.Obj" should be directly below "Box.make"'
-    assert funcorder.check(parse(_GLOBAL_WRITE_ABOVE + inert)) == [_diag(7, message)]
+    assert funcorder.check(parse(_WRITE_ABOVE + inert)) == [_diag(6, message)]
