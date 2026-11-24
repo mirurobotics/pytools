@@ -1,5 +1,6 @@
 import ast
 import io
+import re
 import textwrap
 import tokenize
 import warnings
@@ -19,6 +20,7 @@ from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
 _MESSAGE = "commented-out code; delete it instead"
 _CODE_EXPRS = (ast.Call, ast.Await, ast.Yield, ast.YieldFrom)
 _NOT_CODE = (ast.Pass, ast.Break, ast.Continue, ast.Global, ast.Nonlocal)
+_ENCODING = re.compile(r"#.*?coding[:=]\s*[-\w.]+")
 
 
 @dataclass(frozen=True)
@@ -52,15 +54,20 @@ def _find_code(file: CheckInput, group: list[int]) -> int | None:
 
 
 def _runs(file: CheckInput, group: list[int]) -> list[list[_Line]]:
-    """Split group at its directives, which are never code."""
+    """Split group at its directives and encoding declaration, which are never code."""
     runs: list[list[_Line]] = [[]]
     for number in group:
         text = file.comments[number].text
-        if is_directive(text):
+        if is_directive(text) or _is_encoding_declaration(number, text):
             runs.append([])
         else:
             runs[-1].append(_line(number, text))
     return [run for run in runs if run]
+
+
+def _is_encoding_declaration(number: int, comment: str) -> bool:
+    """Report whether comment declares the file's encoding under PEP 263."""
+    return number <= 2 and _ENCODING.match(comment) is not None
 
 
 def _line(number: int, comment: str) -> _Line:

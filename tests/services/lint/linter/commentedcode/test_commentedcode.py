@@ -213,6 +213,7 @@ def test_check_skips_prose(parse: Parse, comment: str) -> None:
         pytest.param("LIMIT = 20  # len(str(LIMIT))\n", id="trailing"),
         pytest.param('LABEL = "# first = 1"\n', id="hash-in-string"),
         pytest.param("# pylint: disable=too-many-lines\n", id="pylint-pragma"),
+        pytest.param("# coding=utf-8\nimport os\n", id="encoding-declaration"),
     ],
 )
 def test_check_skips_groups_that_are_not_code(parse: Parse, source: str) -> None:
