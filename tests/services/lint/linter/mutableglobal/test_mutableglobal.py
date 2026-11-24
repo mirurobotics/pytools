@@ -161,6 +161,10 @@ def test_check_skips_final_constants(parse: Parse, source: str) -> None:
         pytest.param(
             'KEYS: Final = frozenset(a for a in "b")\n', _diags(1), id="frozenset-gen"
         ),
+        pytest.param("FLAG: Final = make() == 1\n", _diags(1), id="comparison-call"),
+        pytest.param(
+            "ITEMS: Final = [] if DEBUG else ()\n", _diags(1), id="conditional-list"
+        ),
         pytest.param("VALUE: Final = make().value\n", _diags(1), id="call-attribute"),
         pytest.param(
             "VALUE: Final = make().a.b\n", _diags(1), id="nested-call-attribute"
