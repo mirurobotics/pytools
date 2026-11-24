@@ -54,7 +54,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         for idx, found in refs.items()
     }
     reach = {idx: graph.reachable(callees, idx) for idx in callees}
-    loads = [import_time_names(stmt) for stmt in stmts]
+    loads = [import_time_names(file, stmt) for stmt in stmts]
     import_time = [graph.import_time_reach(found, names, refs) for found in loads]
     pinned = graph.pinned(import_time, reach)
     calls = {

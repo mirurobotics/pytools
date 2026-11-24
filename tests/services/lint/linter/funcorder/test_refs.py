@@ -263,7 +263,8 @@ def _method_calls(parse: Parse, source: str) -> list[str]:
 def test_import_time_names_skips_function_bodies(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
-    assert refs.import_time_names(parse(source).tree.body[-1]) == expected
+    file = parse(source)
+    assert refs.import_time_names(file, file.tree.body[-1]) == expected
 
 
 @pytest.mark.parametrize(

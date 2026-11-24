@@ -125,7 +125,7 @@ def _position(node: ast.expr) -> tuple[int, int]:
     return node.lineno, node.col_offset
 
 
-def import_time_names(stmt: ast.stmt) -> set[str]:
+def import_time_names(file: CheckInput, stmt: ast.stmt) -> set[str]:
     """Return the names stmt loads outside function and lambda bodies.
 
     A def's outer parts run before its name is bound, so its own name there is
@@ -133,21 +133,42 @@ def import_time_names(stmt: ast.stmt) -> set[str]:
     stack, not recursion, so deep nesting doesn't overflow.
     """
     own = stmt.name if isinstance(stmt, DEFS) else ""
-    pending: list[ast.AST] = [stmt]
+    pending: list[tuple[ast.AST, frozenset[str]]] = [(stmt, frozenset())]
     names: set[str] = set()
     while pending:
-        node = pending.pop()
+        node, hidden = pending.pop()
         if (
             isinstance(node, ast.Name)
             and isinstance(node.ctx, ast.Load)
-            and node.id != own
+            and node.id not in hidden | {own}
         ):
             names.add(node.id)
-        if isinstance(node, _ROOTS):
-            pending.extend(outer_parts(node))
-        else:
-            pending.extend(ast.iter_child_nodes(node))
+        pending.extend(_import_time_parts(file, node, hidden))
     return names
+
+
+def _import_time_parts(
+    file: CheckInput, node: ast.AST, hidden: frozenset[str]
+) -> list[tuple[ast.AST, frozenset[str]]]:
+    """Return the parts of node that run when it does, with the names they hide.
+
+    A name a class body binds hides the module's in later statements of that
+    body, but not in its comprehensions past their first iterable.
+    """
+    if isinstance(node, _ROOTS):
+        return [(part, hidden) for part in outer_parts(node)]
+    if isinstance(node, _COMPS):
+        first = node.generators[0].iter
+        rest = [part for part in ast.iter_child_nodes(node) if part is not first]
+        return [(first, hidden), *((part, frozenset()) for part in rest)]
+    if not isinstance(node, ast.ClassDef):
+        return [(part, hidden) for part in ast.iter_child_nodes(node)]
+    parts = [(part, hidden) for part in outer_parts(node)]
+    bound: frozenset[str] = frozenset()
+    for body_stmt in node.body:
+        parts.append((body_stmt, bound))
+        bound |= bound_names(file, body_stmt)
+    return parts
 
 
 def bound_names(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:
