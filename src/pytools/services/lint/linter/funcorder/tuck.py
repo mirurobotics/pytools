@@ -54,10 +54,8 @@ def _is_tuckable(
     tree, end = trees[start], trees[last][-1]
     if any(idx not in model.decls and idx not in model.stubs for idx in tree):
         return False
-    if not model.classes.kept.isdisjoint(tree):
-        return False
     passed = {idx for between in trees[last + 1 : start] for idx in between}
-    if not model.classes.blocked[tree[0]].isdisjoint(passed):
+    if not model.classes.may_pass(tree, passed):
         return False
     if not max(model.needs[tree[0]], default=-1) < end < tree[0]:
         return False

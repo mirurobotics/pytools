@@ -147,6 +147,13 @@ class Obj:
     x: X
     def ident(self): return 1
 """
+_STAR_IMPORT: Final = """\
+def run(): return Obj()
+from m import *
+def other(): pass
+class Obj:
+    def ident(self): return 1
+"""
 _HELPER_WAITS: Final = """\
 def run(): return Obj()
 def other(): pass
@@ -243,6 +250,7 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_DECORATED_HELPER, id="tree-holds-a-decorated-def"),
         pytest.param(_HELPER_WAITS, id="would-take-a-helper-past-its-default"),
         pytest.param(_GLOBAL_THROUGH_CALL, id="would-rise-past-a-call"),
+        pytest.param(_STAR_IMPORT, id="would-rise-past-a-star-import"),
     ],
 )
 def test_check_skips_class_left_where_it_is(parse: Parse, source: str) -> None:

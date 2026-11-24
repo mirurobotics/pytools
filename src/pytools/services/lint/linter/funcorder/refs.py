@@ -1,4 +1,5 @@
 import ast
+from collections import Counter
 from dataclasses import dataclass
 from typing import Final, TypeGuard
 
@@ -45,7 +46,7 @@ def _receiver_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
     receiver = _receiver(stmt)
     own = [
         node
-        for node, bound in _scoped_nodes(file, stmt)
+        for node, bound in _scoped_nodes(file, stmt, frozenset())
         if isinstance(node, ast.Attribute)
         and isinstance(node.ctx, ast.Load)
         and isinstance(node.value, ast.Name)
@@ -69,68 +70,66 @@ def _free_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
 
     A class's type parameters hide names in the defs in its body.
     """
-    nodes = list(walk_outside([stmt], ROOTS))
-    roots = [node for node in nodes if isinstance(node, ROOTS)]
-    classes = [node for node in nodes if isinstance(node, ast.ClassDef)]
-    hidden = _class_params(classes)
     return [
         name
-        for root in roots
-        for name in _root_free_calls(file, root)
-        if name not in hidden.get(root, frozenset())
+        for root, params in _roots(stmt)
+        for name in _root_free_calls(file, root, params)
     ]
 
 
-def _class_params(classes: list[ast.ClassDef]) -> dict[ast.AST, frozenset[str]]:
-    """Return the type parameters of the classes around each def or lambda."""
-    params: dict[ast.AST, frozenset[str]] = {}
-    for cls in classes:
-        inner = walk_outside(cls.body, ROOTS)
-        roots = [node for node in inner if isinstance(node, ROOTS)]
-        found = _type_params(cls)
-        params.update((root, params.get(root, frozenset()) | found) for root in roots)
-    return params
+def _roots(stmt: ast.stmt) -> list[tuple[_Root, frozenset[str]]]:
+    """Return stmt's outermost defs and lambdas, with the type params around them."""
+    pending: list[tuple[ast.AST, frozenset[str]]] = [(stmt, frozenset())]
+    found: list[tuple[_Root, frozenset[str]]] = []
+    while pending:
+        node, params = pending.pop()
+        if isinstance(node, ROOTS):
+            found.append((node, params))
+            continue
+        if isinstance(node, ast.ClassDef):
+            params = params | _type_params(node)
+        children = list(ast.iter_child_nodes(node))
+        pending.extend((child, params) for child in reversed(children))
+    return found
 
 
-def _root_free_calls(file: CheckInput, root: _Root) -> list[str]:
-    params = _bound_names(file, own_parts(root))
+def _root_free_calls(
+    file: CheckInput, root: _Root, params: frozenset[str]
+) -> list[str]:
+    own = _bound_names(file, own_parts(root))
     loads = [
         node
-        for node, bound in _scoped_nodes(file, root)
+        for node, bound in _scoped_nodes(file, root, params)
         if isinstance(node, ast.Name)
         and isinstance(node.ctx, ast.Load)
         and node.id not in bound
-        and node.id not in params
+        and node.id not in own
     ]
     return [name.id for name in sorted(loads, key=_position)]
 
 
 def _scoped_nodes(
-    file: CheckInput, root: _Root
+    file: CheckInput, root: _Root, params: frozenset[str]
 ) -> list[tuple[ast.AST, frozenset[str]]]:
     """Return the nodes that run when root is called, with the names bound there.
 
     A name bound in a scope hides a def in that scope and the scopes nested in
-    it, but a class body's names don't reach its methods, and a global name
-    hides nothing. Root's own parameters are left out. A stack, not recursion,
-    so deep nesting doesn't overflow.
+    it, but a class body's names don't reach its methods, other than its type
+    parameters, and a global name hides nothing. Root starts with params, and
+    its own parameters are left out. A stack, not recursion, so deep nesting
+    doesn't overflow.
     """
     body: list[ast.AST] = [root.body] if isinstance(root, ast.Lambda) else [*root.body]
-    pending: list[tuple[list[ast.AST], frozenset[str], bool]] = [
-        (body, frozenset(), False)
-    ]
+    todo: list[tuple[list[ast.AST], frozenset[str], ast.AST]] = [(body, params, root)]
     found: list[tuple[ast.AST, frozenset[str]]] = []
-    while pending:
-        parts, outer, is_class = pending.pop()
+    while todo:
+        parts, outer, host = todo.pop()
         nodes = _run_nodes(parts)
         global_names = _declared(nodes, ast.Global)
         bound = (outer - global_names) | _bound_names(file, nodes)
-        inner = outer if is_class else bound
-        scopes = [node for node in nodes if isinstance(node, SCOPES)]
-        pending.extend(
-            (_inner_parts(scope), inner, isinstance(scope, ast.ClassDef))
-            for scope in scopes
-        )
+        inner = outer | _type_params(host) if isinstance(host, ast.ClassDef) else bound
+        nested = [node for node in nodes if isinstance(node, SCOPES)]
+        todo.extend((_inner_parts(part), inner, part) for part in nested)
         found.extend((node, bound) for node in nodes)
     return found
 
@@ -279,6 +278,29 @@ def _is_definite(stmt: ast.stmt) -> bool:
     return not (is_annotation or is_unsure)
 
 
+def _called(nodes: list[ast.AST], loaded: set[ast.AST]) -> set[str]:
+    """Return the names nodes use other than by only loading them, or a lambda reads."""
+    used = [node for node in nodes if node not in loaded]
+    lambdas = [node for node in nodes if isinstance(node, ast.Lambda)]
+    reads = [node for lam in lambdas for node in ast.walk(lam.body)]
+    return {node.id for node in [*used, *reads] if _is_load(node)}
+
+
+def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:
+    return isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+
+
+def scope_bindings(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Counter[str]:
+    """Return how many statements of scope may bind each name.
+
+    A global declaration in it counts once more, and a star import binds `*`.
+    """
+    counts = Counter(name for stmt in scope.body for name in bound_names(file, stmt))
+    nodes = [node for stmt in scope.body for node in ast.walk(stmt)]
+    counts.update(_declared(nodes, ast.Global))
+    return counts
+
+
 def bound_names(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:
     """Return the names stmt binds or deletes in the scope it runs in."""
     return _bound_names(file, _run_nodes([stmt]))
@@ -338,15 +360,3 @@ def _comp_outer_parts(comp: _Comp) -> list[ast.AST]:
     nodes = walk_outside([comp], (*ROOTS, ast.ClassDef))
     targets = [node.target for node in nodes if isinstance(node, ast.NamedExpr)]
     return [comp.generators[0].iter, *targets]
-
-
-def _called(nodes: list[ast.AST], loaded: set[ast.AST]) -> set[str]:
-    """Return the names nodes use other than by only loading them, or a lambda reads."""
-    used = [node for node in nodes if node not in loaded]
-    lambdas = [node for node in nodes if isinstance(node, ast.Lambda)]
-    reads = [node for lam in lambdas for node in ast.walk(lam.body)]
-    return {node.id for node in [*used, *reads] if _is_load(node)}
-
-
-def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:
-    return isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)

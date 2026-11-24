@@ -1,5 +1,6 @@
 import ast
 from collections import Counter
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from pytools.services.lint.linter.analysis.analysis import (
@@ -12,8 +13,8 @@ from pytools.services.lint.linter.funcorder import graph
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.refs import (
     ImportTimeNames,
-    bound_names,
     called_names,
+    scope_bindings,
 )
 
 type _Users = dict[int, list[int]]
@@ -35,8 +36,18 @@ class Classes:
     uses: dict[int, Use]  # where each class without methods that can move goes
     inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
-    kept: frozenset[int]  # decls whose definition may run scope code, shadowed classes
-    blocked: dict[int, frozenset[int]]  # the statements each class must not move past
+    _kept: frozenset[int]  # decls whose definition may run scope code, shadowed classes
+    _blocked: dict[int, frozenset[int]]  # the statements each class must not move past
+
+    def may_pass(self, moved: Collection[int], passed: Collection[int]) -> bool:
+        """Report whether the decls moved may move together past those passed.
+
+        None of them may be kept, nor a class among them blocked by one passed.
+        """
+        if not self._kept.isdisjoint(moved):
+            return False
+        blocked = [self._blocked.get(idx, frozenset()) for idx in moved]
+        return all(found.isdisjoint(passed) for found in blocked)
 
 
 def find_classes(
@@ -54,12 +65,11 @@ def find_classes(
     loads = [found.loads for found in effects]
     users = _users(file, scope, decls, refs, loads)
     used = {cls: found for cls, found in users.items() if found}
-    changes = [bound_names(file, stmt) for stmt in scope.body]
-    rebound = _global_names(scope)
-    kept = _runs_code(decls, effects) | _shadowed_classes(decls, changes, rebound)
+    bindings = scope_bindings(file, scope)
+    shadowed = _shadowed_classes(decls, bindings)
+    kept = _runs_code(decls, effects) | shadowed | _writes_globals(decls)
     plain = _plain(decls, used)
-    bound = frozenset().union(*changes, rebound)
-    blocked = _blocked(decls, effects, binders, kept, bound)
+    blocked = _blocked(decls, effects, binders, kept, bindings)
     uses = _place(decls, plain, blocked, kept)
     inherited = _inherited(plain, uses, graph.above(binders))
     return Classes(uses, inherited, _tucked(decls, used), kept, blocked)
@@ -94,11 +104,17 @@ def _users(
     }
 
 
-def _global_names(scope: ast.Module | ast.ClassDef) -> frozenset[str]:
-    """Return the names declared global anywhere in scope, which it may rebind."""
-    nodes = [node for stmt in scope.body for node in ast.walk(stmt)]
-    found = [node for node in nodes if isinstance(node, ast.Global)]
-    return frozenset(name for node in found for name in node.names)
+def _shadowed_classes(decls: dict[int, Decl], bindings: Counter[str]) -> frozenset[int]:
+    """Return the classes whose name another statement may bind or delete.
+
+    A use of that name may mean another binding, so such a class never moves.
+    A global declaration anywhere in the scope may bind it too, and a star
+    import may bind any name.
+    """
+    classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
+    if bindings["*"]:
+        return frozenset(classes)
+    return frozenset(cls for cls in classes if bindings[decls[cls].stmt.name] > 1)
 
 
 def _runs_code(
@@ -131,17 +147,18 @@ def _bare_def_names(decls: dict[int, Decl], effects: list[ImportTimeNames]) -> s
     return {decls[idx].stmt.name for idx in defs}.difference(*others)
 
 
-def _shadowed_classes(
-    decls: dict[int, Decl], changes: list[frozenset[str]], rebound: frozenset[str]
-) -> frozenset[int]:
-    """Return the classes whose name another statement binds or deletes.
+def _writes_globals(decls: dict[int, Decl]) -> frozenset[int]:
+    """Return the classes whose body, outside its defs, declares a name global.
 
-    A use of that name may mean another binding, so such a class never moves.
+    Such a body may rebind a name another class reads, as running scope code may.
     """
-    counts = Counter(name for found in changes for name in found)
-    counts.update(rebound)
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    return frozenset(cls for cls in classes if counts[decls[cls].stmt.name] > 1)
+    return frozenset(idx for idx in classes if _has_global(decls[idx]))
+
+
+def _has_global(decl: Decl) -> bool:
+    nodes = walk_outside(decl.stmt.body, DEFS)
+    return any(isinstance(node, ast.Global) for node in nodes)
 
 
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
@@ -166,7 +183,7 @@ def _blocked(
     effects: list[ImportTimeNames],
     binders: dict[int, frozenset[int]],
     kept: frozenset[int],
-    bound: frozenset[str],
+    bindings: Counter[str],
 ) -> dict[int, frozenset[int]]:
     """Return the statements each class must not move past.
 
@@ -176,15 +193,10 @@ def _blocked(
     """
     walls = frozenset(range(len(effects))) - (decls.keys() - kept)
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    walled = {cls for cls in classes if _reads_bound(effects[cls].loads, bound)}
+    walled = {cls for cls in classes if effects[cls].loads & bindings.keys()}
     return {
         cls: binders[cls] | (walls if cls in walled else frozenset()) for cls in classes
     }
-
-
-def _reads_bound(loads: set[str], bound: frozenset[str]) -> bool:
-    """Report whether loads name what the scope binds; after a star import, any."""
-    return bool(loads & bound) or ("*" in bound and bool(loads))
 
 
 def _place(
