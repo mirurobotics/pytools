@@ -17,6 +17,7 @@ from pytools.services.lint.linter.analysis.names import (
 
 _ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 _COMPS: Final = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+_CHAINS: Final = (ast.Attribute, ast.Subscript, ast.Starred)
 _COMPOUND: Final = (
     ast.If,
     ast.For,
@@ -125,25 +126,8 @@ def _position(node: ast.expr) -> tuple[int, int]:
     return node.lineno, node.col_offset
 
 
-def import_time_names(file: CheckInput, stmt: ast.stmt) -> set[str]:
-    """Return the names stmt loads outside function and lambda bodies."""
-    return {node.id for node in _import_time_loads(file, stmt)}
-
-
-def import_time_calls(file: CheckInput, stmt: ast.stmt) -> set[str]:
-    """Return the names stmt calls outside function and lambda bodies.
-
-    A decorator counts as a call.
-    """
-    nodes = list(ast.walk(stmt))
-    scopes = [node for node in nodes if isinstance(node, (*DEFS, ast.ClassDef))]
-    funcs = [node.func for node in nodes if isinstance(node, ast.Call)]
-    called = {*funcs, *(dec for scope in scopes for dec in scope.decorator_list)}
-    return {node.id for node in _import_time_loads(file, stmt) if node in called}
-
-
-def _import_time_loads(file: CheckInput, stmt: ast.stmt) -> list[ast.Name]:
-    """Return the names nodes stmt loads outside function and lambda bodies.
+def import_time_names(file: CheckInput, stmt: ast.stmt) -> tuple[set[str], set[str]]:
+    """Return the names stmt loads and calls outside function and lambda bodies.
 
     A def's outer parts run before its name is bound, so its own name there is
     the def it replaces, such as the getter in a property's setter decorator. A
@@ -152,8 +136,10 @@ def _import_time_loads(file: CheckInput, stmt: ast.stmt) -> list[ast.Name]:
     own = stmt.name if isinstance(stmt, DEFS) else ""
     pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0, frozenset()))]
     loads: list[ast.Name] = []
+    callees: set[ast.AST] = set()
     while pending:
         node, hidden = pending.pop()
+        callees.update(_callees(node, callees))
         if (
             isinstance(node, ast.Name)
             and isinstance(node.ctx, ast.Load)
@@ -162,7 +148,23 @@ def _import_time_loads(file: CheckInput, stmt: ast.stmt) -> list[ast.Name]:
         ):
             loads.append(node)
         pending.extend(_import_time_parts(file, node, hidden))
-    return loads
+    called = {node.id for node in loads if node in callees}
+    return {node.id for node in loads}, called
+
+
+def _callees(node: ast.AST, callees: set[ast.AST]) -> list[ast.AST]:
+    """Return the parts of node that may be called, given those of its parents.
+
+    A call may call what it's passed too, a decorator is called, and calling an
+    attribute or item may run the object it's on.
+    """
+    if isinstance(node, ast.Call):
+        return [node.func, *node.args, *(keyword.value for keyword in node.keywords)]
+    if isinstance(node, (*DEFS, ast.ClassDef)):
+        return list(node.decorator_list)
+    if node in callees and isinstance(node, _CHAINS):
+        return [node.value]
+    return []
 
 
 def _is_hidden(hidden: _Hidden, name: str) -> bool:
@@ -177,10 +179,11 @@ def _import_time_parts(
 
     A name a class body binds hides the module's in later statements of that
     body, but not in its comprehensions past their first iterable. There, the
-    targets of that comprehension and those around it hide names instead.
+    targets of that comprehension and those around it hide names instead. A
+    class's or def's type parameters hide names in its body and annotations.
     """
     if isinstance(node, _ROOTS):
-        return [(part, hidden) for part in outer_parts(node)]
+        return _outer_parts_hiding(node, hidden)
     if isinstance(node, _COMPS):
         first = node.generators[0].iter
         local = hidden[2] | _bound_names(file, _run_nodes(own_parts(node)))
@@ -191,9 +194,32 @@ def _import_time_parts(
     if not isinstance(node, ast.ClassDef):
         return [(part, hidden) for part in ast.iter_child_nodes(node)]
     bound = _class_bindings(file, node)
-    outer = [(part, hidden) for part in outer_parts(node)]
-    body = enumerate(node.body)
-    return [*outer, *((part, (bound, idx, frozenset())) for idx, part in body)]
+    params = _type_params(node)
+    outer = _outer_parts_hiding(node, hidden)
+    body = [(part, (bound, idx, params)) for idx, part in enumerate(node.body)]
+    return [*outer, *body]
+
+
+def _outer_parts_hiding(
+    node: _Root | ast.ClassDef, hidden: _Hidden
+) -> list[tuple[ast.AST, _Hidden]]:
+    """Return node's outer parts, with the names each hides.
+
+    Its decorators and defaults run outside its type parameters' scope.
+    """
+    bound, idx, local = hidden
+    typed = (bound, idx, local | _type_params(node))
+    args = None if isinstance(node, ast.ClassDef) else node.args
+    defaults = [*args.defaults, *args.kw_defaults] if args else []
+    decorators = [] if isinstance(node, ast.Lambda) else node.decorator_list
+    outside = [*decorators, *defaults]
+    return [(part, hidden if part in outside else typed) for part in outer_parts(node)]
+
+
+def _type_params(node: _Root | ast.ClassDef) -> frozenset[str]:
+    if isinstance(node, ast.Lambda):
+        return frozenset()
+    return frozenset(param.name for param in node.type_params)
 
 
 def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
@@ -223,10 +249,12 @@ def _is_definite(stmt: ast.stmt) -> bool:
     """Report whether stmt surely binds the names it binds once it runs.
 
     An annotation without a value binds nothing, and a compound statement may
-    skip the statements under it.
+    skip the statements under it. A walrus may sit where it doesn't run, so a
+    statement with one counts as unsure.
     """
     is_annotation = isinstance(stmt, ast.AnnAssign) and stmt.value is None
-    return not is_annotation and not isinstance(stmt, _COMPOUND)
+    has_walrus = any(isinstance(node, ast.NamedExpr) for node in _run_nodes([stmt]))
+    return not (is_annotation or has_walrus or isinstance(stmt, _COMPOUND))
 
 
 def bound_names(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:

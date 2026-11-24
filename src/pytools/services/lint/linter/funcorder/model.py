@@ -16,7 +16,6 @@ from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.refs import (
     bound_names,
     called_names,
-    import_time_calls,
     import_time_names,
 )
 
@@ -56,7 +55,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         for idx, found in refs.items()
     }
     reach = {idx: graph.reachable(callees, idx) for idx in callees}
-    loads = [import_time_names(file, stmt) for stmt in scope.body]
+    loads, runs = _import_time(file, scope.body)
     import_time = [graph.import_time_reach(found, names, refs) for found in loads]
     pinned = graph.pinned(import_time, reach)
     calls = {
@@ -70,7 +69,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    reads = _def_time_reads(file, scope.body, names, refs, called)
+    reads = _def_time_reads(runs, names, refs, called)
     needs = _needs(file, scope.body, decls, loads, import_time, reads)
     classes = find_classes(file, scope, decls, refs, loads, needs)
     return Model(
@@ -153,6 +152,14 @@ def _refs(idx: int, called: list[str], names: dict[str, int]) -> list[int]:
     return [ref for ref in dict.fromkeys(found) if ref != idx]
 
 
+def _import_time(
+    file: CheckInput, stmts: list[ast.stmt]
+) -> tuple[list[set[str]], list[set[str]]]:
+    """Return the names each statement loads, and those it calls, when it runs."""
+    found = [import_time_names(file, stmt) for stmt in stmts]
+    return [loads for loads, _ in found], [calls for _, calls in found]
+
+
 def _is_enforced(
     decls: dict[int, Decl], caller: int, callee: int, pinned: set[int]
 ) -> bool:
@@ -193,8 +200,7 @@ def _openers(
 
 
 def _def_time_reads(
-    file: CheckInput,
-    stmts: list[ast.stmt],
+    runs: list[set[str]],
     names: dict[str, int],
     refs: dict[int, list[int]],
     called: dict[int, list[str]],
@@ -203,10 +209,7 @@ def _def_time_reads(
 
     A decl called when the statement runs may run all it refers to too.
     """
-    ran = [
-        graph.import_time_reach(import_time_calls(file, stmt), names, refs)
-        for stmt in stmts
-    ]
+    ran = [graph.import_time_reach(found, names, refs) for found in runs]
     return [{name for idx in found for name in called[idx]} for found in ran]
 
 

@@ -104,8 +104,9 @@ class T:
         def run(self): self.help()
 """
 _CLASS_BODY: Final = """\
+@deco
 class T(Base):
-    X = make()
+    X = make(x, A.get())
     def run(self): body()
 """
 _METHOD_NAMED_LIKE_DECORATOR: Final = """\
@@ -127,7 +128,6 @@ class Other:
     value = Point(), Size()
     Size = int
 """
-_CALLS_AT_IMPORT: Final = "@deco\nclass T(Base):\n    x = make(helper)\n"
 _CLASS_LOCAL_COMPREHENSION: Final = """\
 class Other:
     Point = int
@@ -265,7 +265,7 @@ def _method_calls(parse: Parse, source: str) -> list[str]:
             "def run(x: Arg) -> Ret: body()\n", {"Arg", "Ret"}, id="annotations"
         ),
         pytest.param("f = lambda x=make(): body()\n", {"make"}, id="lambda-default"),
-        pytest.param(_CLASS_BODY, {"Base", "make"}, id="class-body"),
+        pytest.param(_CLASS_BODY, {"A", "Base", "deco", "make", "x"}, id="class-body"),
         pytest.param(
             "@value.setter\ndef value(new): pass\n", set(), id="own-name-in-decorator"
         ),
@@ -277,7 +277,7 @@ def test_import_time_names_skips_function_bodies(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
     file = parse(source)
-    assert refs.import_time_names(file, file.tree.body[-1]) == expected
+    assert refs.import_time_names(file, file.tree.body[-1])[0] == expected
 
 
 @pytest.mark.parametrize(
@@ -293,12 +293,13 @@ def test_import_time_names_skips_class_local_names(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
     file = parse(source)
-    assert refs.import_time_names(file, file.tree.body[-1]) == expected
+    assert refs.import_time_names(file, file.tree.body[-1])[0] == expected
 
 
-def test_import_time_calls_returns_called_names(parse: Parse) -> None:
-    file = parse(_CALLS_AT_IMPORT)
-    assert refs.import_time_calls(file, file.tree.body[-1]) == {"deco", "make"}
+def test_import_time_names_returns_called_names(parse: Parse) -> None:
+    file = parse(_CLASS_BODY)
+    _, called = refs.import_time_names(file, file.tree.body[-1])
+    assert called == {"A", "deco", "make", "x"}
 
 
 @pytest.mark.parametrize(

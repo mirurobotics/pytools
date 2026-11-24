@@ -103,6 +103,31 @@ class Other:
         Point = int
     value = Point()
 """
+_WALRUS_BINDING: Final = """\
+class Point:
+    x: int
+def run(): pass
+class Other:
+    value = False and (Point := int)
+    point = Point()
+"""
+_TYPE_PARAM: Final = """\
+class Point:
+    x: int
+def run(): pass
+class Box[Point]:
+    value: Point
+def make(): return Point()
+"""
+_CALL_ON_A_CLASS: Final = """\
+class Config:
+    @classmethod
+    def load(cls): return cls(VALUE)
+def make(): return Point()
+VALUE = 1
+class Point:
+    current = Config.load()
+"""
 _NOLINT: Final = """\
 class Point:  # nolint: funcorder
     x: int
@@ -133,6 +158,7 @@ def run():
         pytest.param(_USER_STAYS, id="class-user-that-stays"),
         pytest.param("def make(p: 'Point'): pass\n" + _POINT, id="string-annotation"),
         pytest.param(_CYCLE, id="classes-using-each-other"),
+        pytest.param(_CALL_ON_A_CLASS, id="move-would-pass-what-its-calls-read"),
     ],
 )
 def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
@@ -188,6 +214,10 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
         pytest.param(
             _BRANCH_BINDING, {0: f'{_REPORT} "Other"'}, id="class-binding-in-a-branch"
         ),
+        pytest.param(
+            _WALRUS_BINDING, {0: f'{_REPORT} "Other"'}, id="class-binding-by-walrus"
+        ),
+        pytest.param(_TYPE_PARAM, {0: f'{_REPORT} "make"'}, id="class-type-param"),
         pytest.param(_NOLINT + _RUN + _MAKE, {0: f'{_REPORT} "make"'}, id="nolint"),
     ],
 )
@@ -205,6 +235,10 @@ def test_plain_violations_reports_misplaced_class(
         pytest.param("class Point(NamedTuple):\n    x: int\n", id="named-tuple"),
         pytest.param("class Point(TypedDict):\n    x: int\n", id="typed-dict"),
         pytest.param(_PROTOCOL, id="protocol-of-stubs"),
+        pytest.param(
+            "class Point:\n    class Meta:\n        def x(self): return 0\n",
+            id="method-of-nested-class",
+        ),
     ],
 )
 def test_plain_violations_places_methodless_class(parse: Parse, source: str) -> None:
