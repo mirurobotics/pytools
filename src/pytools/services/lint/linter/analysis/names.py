@@ -9,7 +9,6 @@ from pytools.services.lint.linter.analysis.analysis import (
     walk_outside,
 )
 
-_TYPE_PARAMS = (ast.TypeVar, ast.ParamSpec, ast.TypeVarTuple)
 _SCOPES = (
     ast.FunctionDef,
     ast.AsyncFunctionDef,
@@ -98,7 +97,7 @@ def _scope_key(name: DeclaredName, declared: set[str]) -> ast.AST | str | None:
     Each type parameter has an annotation scope of its own, which the body's
     global and nonlocal statements don't reach.
     """
-    if isinstance(name.node, _TYPE_PARAMS):
+    if isinstance(name.node, ast.TypeVar | ast.ParamSpec | ast.TypeVarTuple):
         return name.node
     return None if name.text in declared else name.text
 
@@ -169,7 +168,7 @@ def _binding(
         return DeclaredName(node.name, node.lineno, node.lineno, func_kind, node)
     if isinstance(node, ast.ClassDef):
         return DeclaredName(node.name, node.lineno, node.lineno, NameKind.CLASS, node)
-    if isinstance(node, _TYPE_PARAMS):
+    if isinstance(node, ast.TypeVar | ast.ParamSpec | ast.TypeVarTuple):
         return DeclaredName(
             node.name, node.lineno, node.lineno, NameKind.TYPE_PARAM, node
         )
