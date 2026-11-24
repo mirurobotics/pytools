@@ -11,7 +11,11 @@ from pytools.services.lint.linter.analysis.analysis import (
     Rule,
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
-from pytools.services.lint.linter.funcorder.refs import called_names, import_time_names
+from pytools.services.lint.linter.funcorder.refs import (
+    bound_names,
+    called_names,
+    import_time_names,
+)
 
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
@@ -40,8 +44,8 @@ class Model:
     """The calls between the defs and classes directly in a scope.
 
     A class counts as one caller, through its methods' calls. Calls out of or
-    into an exempt def, and into a def an import-time use runs and a caller
-    below that use reaches, are not enforced.
+    into an exempt def, and into a def an import-time use reaches and a caller
+    below that use reaches too, are not enforced.
     """
 
     stmts: list[ast.stmt]
@@ -52,6 +56,7 @@ class Model:
     cycle_callers: dict[int, list[int]]
     used: frozenset[int]  # defs referenced anywhere in the scope
     waiting: frozenset[int]  # cycle members placed only after a cycle caller
+    needs: dict[int, frozenset[int]]  # statements a decl uses when defined
 
 
 def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
@@ -59,20 +64,13 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     stubs = _stubs(scope.body)
     decls = _decls(file, scope, stubs)
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
-    by_name = {
-        name: idx
-        for name, idx in names.items()
-        if decls[idx].kind is not DeclKind.CLASS
-    }
+    refs = {idx: _refs(file, scope, decl, stubs, names) for idx, decl in decls.items()}
     callees = {
-        idx: _callees(file, scope, decl, stubs, by_name) for idx, decl in decls.items()
-    }
-    runs = {
-        idx: _callees(file, scope, decl, stubs, names, calls_only=True)
-        for idx, decl in decls.items()
+        idx: [ref for ref in found if decls[ref].kind is not DeclKind.CLASS]
+        for idx, found in refs.items()
     }
     reach = {idx: _reachable(callees, idx) for idx in callees}
-    import_time = [_import_time_reach(stmt, names, runs) for stmt in scope.body]
+    import_time = [_import_time_reach(stmt, names, refs) for stmt in scope.body]
     pinned = _pinned(import_time, reach)
     calls = {
         idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
@@ -83,7 +81,8 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: _callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    return Model(scope.body, decls, stubs, calls, callers, cycles, used, waiting)
+    needs = _needs(file, scope.body, decls)
+    return Model(scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs)
 
 
 def _stubs(stmts: list[ast.stmt]) -> frozenset[int]:
@@ -141,16 +140,14 @@ def _kind(
     return DeclKind.PRIVATE
 
 
-def _callees(
+def _refs(
     file: CheckInput,
     scope: ast.Module | ast.ClassDef,
     decl: Decl,
     stubs: frozenset[int],
     names: dict[str, int],
-    *,
-    calls_only: bool = False,
 ) -> list[int]:
-    """Return the decls in names that decl calls, in the order it first calls them.
+    """Return the decls decl calls or refers to, in the order it first does.
 
     The stubs decl replaces, such as a property getter, call for it too.
     """
@@ -158,7 +155,7 @@ def _callees(
     found = [
         names[name]
         for stmt in stmts
-        for name in called_names(file, scope, stmt, calls_only=calls_only)
+        for name in called_names(file, scope, stmt)
         if name in names
     ]
     return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
@@ -172,17 +169,15 @@ def _first_merged(stubs: frozenset[int], idx: int) -> int:
 
 
 def _import_time_reach(
-    stmt: ast.stmt, names: dict[str, int], runs: dict[int, list[int]]
+    stmt: ast.stmt, names: dict[str, int], refs: dict[int, list[int]]
 ) -> set[int]:
-    """Return the decls stmt uses at import time, and the defs those calls run.
+    """Return the decls stmt uses at import time, and every decl they refer to.
 
-    A call runs its callee and what that calls in turn, but a plain reference
-    runs nothing, and constructing a class may run any of its methods.
+    Following every reference, not only the calls that run, may pin more than
+    needed, but never too little.
     """
     used = {names[name] for name in import_time_names(stmt) if name in names}
-    called = import_time_names(stmt, calls_only=True)
-    reached = [_reachable(runs, names[name]) for name in called if name in names]
-    return used.union(*reached)
+    return used.union(*(_reachable(refs, idx) for idx in used))
 
 
 def _reachable(callees: dict[int, list[int]], start: int) -> set[int]:
@@ -266,6 +261,24 @@ def _openers(
         else:
             openers.setdefault(comps[idx], idx)
     return openers
+
+
+def _needs(
+    file: CheckInput, stmts: list[ast.stmt], decls: dict[int, Decl]
+) -> dict[int, frozenset[int]]:
+    """Return the statements above each decl that it uses when defined."""
+    binds = {
+        idx: bound_names(file, stmt)
+        for idx, stmt in enumerate(stmts)
+        if idx not in decls
+    }
+    loads = {idx: import_time_names(decl.stmt) for idx, decl in decls.items()}
+    return {
+        idx: frozenset(
+            stmt for stmt, bound in binds.items() if stmt < idx and bound & loads[idx]
+        )
+        for idx in decls
+    }
 
 
 def must_precede(model: Model, decl: Decl, other: Decl) -> bool:

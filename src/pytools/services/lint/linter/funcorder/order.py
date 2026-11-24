@@ -6,7 +6,8 @@ def arrange(model: Model) -> tuple[list[int], set[int]]:
 
     The second holds each def placed directly under a caller, with the
     statements it carries. A statement directly above a def or class moves with
-    it, unless that would reorder statements, which run in order at import time.
+    it, unless that would reorder statements, which run in order at import time,
+    or a later def or class uses it when defined.
     """
     decls = model.decls
     blockers = {
@@ -23,13 +24,16 @@ def _arrange(
     model: Model, blockers: dict[int, set[int]], *, settled: bool
 ) -> tuple[list[int], set[int]]:
     units = {unit[-1]: unit for unit in _units(model, settled=settled)}
+    waits = {
+        idx: (blockers[idx] | model.needs[idx]) - set(units[idx]) for idx in model.decls
+    }
     left = dict.fromkeys(units)
     stack: list[int] = []
     done: set[int] = set()
     order: list[int] = []
     below: set[int] = set()
     while left:
-        key, is_below = _pick(model, left, stack, done, blockers)
+        key, is_below = _pick(model, left, stack, done, waits)
         del left[key]
         stack.append(key)
         done.update(units[key])
@@ -46,13 +50,15 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
     statement above the first def or class: the header never moves.
     """
     first = min(model.decls, default=0)
+    anchored = _anchored(model)
     units: list[list[int]] = []
     pending: list[int] = []
     for idx in range(len(model.stmts)):
+        is_carried = idx > first and not settled and idx not in anchored
         if idx in model.decls:
             units.append([*pending, idx])
             pending = []
-        elif idx in model.stubs or (idx > first and not settled):
+        elif idx in model.stubs or is_carried:
             pending.append(idx)
         else:
             units.extend([held] for held in [*pending, idx])
@@ -61,12 +67,25 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
     return units
 
 
+def _anchored(model: Model) -> set[int]:
+    """Return the statements a decl below the one that would carry them uses.
+
+    Carrying such a statement could move it past that use, so it stays put.
+    """
+    return {
+        stmt
+        for idx, needed in model.needs.items()
+        for stmt in needed
+        if any(stmt < other < idx for other in model.decls)
+    }
+
+
 def _pick(
     model: Model,
     left: dict[int, None],
     stack: list[int],
     done: set[int],
-    blockers: dict[int, set[int]],
+    waits: dict[int, set[int]],
 ) -> tuple[int, bool]:
     """Return the next unit, and whether it goes directly under a caller.
 
@@ -78,22 +97,23 @@ def _pick(
         found = [
             key
             for key in calls
-            if key in left and _is_ready(model, key, done, blockers)
+            if key in left and _is_ready(model, key, done, waits)
         ]
         if found:
             return found[0], True
         stack.pop()
-    ready = (key for key in left if _is_ready(model, key, done, blockers))
+    ready = (key for key in left if _is_ready(model, key, done, waits))
     return next(ready, next(iter(left))), False
 
 
 def _is_ready(
-    model: Model, idx: int, done: set[int], blockers: dict[int, set[int]]
+    model: Model, idx: int, done: set[int], waits: dict[int, set[int]]
 ) -> bool:
     """Report whether the unit ending at idx can be placed next.
 
     A def waits for its callers, a waiting cycle member for one cycle caller,
-    and a private def nothing calls for the public ones nothing calls.
+    a private def nothing calls for the public ones nothing calls, and a decl
+    for the statements it uses when defined.
     """
     decl = model.decls.get(idx)
     if decl is None or decl.kind is DeclKind.EXEMPT:
@@ -102,7 +122,7 @@ def _is_ready(
         return False
     if idx in model.waiting and done.isdisjoint(model.cycle_callers[idx]):
         return False
-    return done.issuperset(blockers[idx])
+    return done.issuperset(waits[idx])
 
 
 def _keeps_statement_order(model: Model, order: list[int]) -> bool:

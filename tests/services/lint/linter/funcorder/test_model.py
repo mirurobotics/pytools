@@ -72,6 +72,27 @@ def initialize(): return Runner()
 VALUE = initialize()
 def other(): _helper()
 """
+_BARE_DECORATOR_PIN: Final = """\
+def _setup(): pass
+def _deco(f): _setup(); return f
+@_deco
+def run(): pass
+def other(): _setup()
+"""
+_CALL_ARGUMENT_PIN: Final = """\
+def _normalize(x): return x
+def _key(x): return _normalize(x)
+ORDERED = sorted(ITEMS, key=_key)
+def run(x): return _normalize(x)
+"""
+_NESTED_DEF_PIN: Final = """\
+def _helper(): pass
+def initialize():
+    def inner(): return _helper()
+    return inner()
+VALUE = initialize()
+def other(): _helper()
+"""
 _METHOD_NAMED_LIKE_DECORATOR: Final = """\
 def retry(f): return f
 class Client:
@@ -84,21 +105,6 @@ def _helper(): pass
 def main(): _helper()
 if __name__ == "__main__":
     main()
-"""
-_REFERENCED_HANDLER: Final = """\
-def _parse(): pass
-def _handle_a(): _parse()
-HANDLERS = {"a": _handle_a}
-def other(): _parse()
-"""
-_DECORATOR_WRAPPER: Final = """\
-def _log(): pass
-def _deco(f):
-    def wrapper(): _log(); return f()
-    return wrapper
-@_deco
-def run(): pass
-def other(): _log()
 """
 _NOLINT_METHOD: Final = """\
 def _helper(): pass
@@ -193,6 +199,11 @@ def test_build_merges_a_def_with_its_stubs(
             _FACTORY_PIN, {0: [], 1: [], 2: [], 4: []}, id="class-built-by-factory"
         ),
         pytest.param(
+            _BARE_DECORATOR_PIN, {0: [], 1: [], 2: [], 3: []}, id="bare-decorator"
+        ),
+        pytest.param(_CALL_ARGUMENT_PIN, {0: [], 1: [], 3: []}, id="call-argument"),
+        pytest.param(_NESTED_DEF_PIN, {0: [], 1: [], 3: []}, id="nested-def-called"),
+        pytest.param(
             _METHOD_NAMED_LIKE_DECORATOR,
             {0: [], 1: [], 2: []},
             id="method-named-like-its-decorator",
@@ -209,11 +220,10 @@ def test_build_skips_calls_into_import_time_defs(
     ("source", "calls"),
     [
         pytest.param(_MAIN_GUARD, {0: [], 1: [0]}, id="main-guard"),
-        pytest.param(_REFERENCED_HANDLER, {0: [], 1: [0], 3: [0]}, id="referenced-def"),
         pytest.param(
-            _DECORATOR_WRAPPER,
-            {0: [], 1: [0], 2: [], 3: [0]},
-            id="decorator-wrapper",
+            "def _h(): pass\ndef run(): _h()\nVALUE = run()\n",
+            {0: [], 1: [0]},
+            id="use-below-every-caller",
         ),
     ],
 )

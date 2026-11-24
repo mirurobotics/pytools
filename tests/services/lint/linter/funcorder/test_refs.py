@@ -186,29 +186,9 @@ def test_called_names_skips_shadowed_names(
     assert _module_calls(parse, source) == expected
 
 
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
-        pytest.param("def run(): return helper\n", [], id="reference"),
-        pytest.param(_NESTED_DEF, [], id="nested-def"),
-        pytest.param(
-            "def run(items): return [helper(x) for x in items]\n",
-            ["helper"],
-            id="comprehension",
-        ),
-        pytest.param(_CLASS, ["helper"], id="class-methods"),
-    ],
-)
-def test_called_names_calls_only_skips_references(
-    parse: Parse, source: str, expected: list[str]
-) -> None:
-    assert _module_calls(parse, source, calls_only=True) == expected
-
-
-def _module_calls(parse: Parse, source: str, *, calls_only: bool = False) -> list[str]:
+def _module_calls(parse: Parse, source: str) -> list[str]:
     file = parse(source)
-    stmt = file.tree.body[-1]
-    return refs.called_names(file, file.tree, stmt, calls_only=calls_only)
+    return refs.called_names(file, file.tree, file.tree.body[-1])
 
 
 @pytest.mark.parametrize(
@@ -252,16 +232,11 @@ def test_called_names_returns_receiver_calls_in_class(
     assert _method_calls(parse, source) == expected
 
 
-def test_called_names_calls_only_keeps_receiver_calls(parse: Parse) -> None:
-    source = "class T:\n    def run(self): self.b(); return self.a\n"
-    assert _method_calls(parse, source, calls_only=True) == ["b"]
-
-
-def _method_calls(parse: Parse, source: str, *, calls_only: bool = False) -> list[str]:
+def _method_calls(parse: Parse, source: str) -> list[str]:
     file = parse(source)
     scope = file.tree.body[0]
     assert isinstance(scope, ast.ClassDef)
-    return refs.called_names(file, scope, scope.body[-1], calls_only=calls_only)
+    return refs.called_names(file, scope, scope.body[-1])
 
 
 @pytest.mark.parametrize(
@@ -283,17 +258,3 @@ def test_import_time_names_skips_function_bodies(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
     assert refs.import_time_names(parse(source).tree.body[-1]) == expected
-
-
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
-        pytest.param("VALUE = run(helper)\n", {"run"}, id="argument"),
-        pytest.param("@deco(make)\ndef run(): pass\n", {"deco"}, id="decorator"),
-    ],
-)
-def test_import_time_names_calls_only_skips_references(
-    parse: Parse, source: str, expected: set[str]
-) -> None:
-    stmt = parse(source).tree.body[-1]
-    assert refs.import_time_names(stmt, calls_only=True) == expected

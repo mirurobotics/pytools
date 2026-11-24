@@ -22,6 +22,18 @@ def _g(): pass
 C: Final = 1
 def _f(): pass
 """
+_DEFAULT_FROM_STATEMENT: Final = """\
+def root(): _helper()
+C = 1
+def _helper(): pass
+def other(x=C): _helper()
+"""
+_DEFAULT_BELOW_CALLER: Final = """\
+def run(): other()
+C = 1
+def _x(): pass
+def other(x=C): pass
+"""
 _EXEMPT_CYCLE_MEMBER: Final = """\
 def _e(): _a()  # nolint: funcorder
 def run(): pass
@@ -102,6 +114,14 @@ def test_check_skips_def_directly_below(parse: Parse, source: str) -> None:
             _STATEMENT_ORDER,
             ([1, 3, 5, 4, 2, 0], {2, 4}),
             id="statements-keep-their-order",
+        ),
+        pytest.param(
+            _DEFAULT_FROM_STATEMENT,
+            ([0, 1, 3, 2], {2}),
+            id="statement-a-later-def-uses-stays",
+        ),
+        pytest.param(
+            _DEFAULT_BELOW_CALLER, ([0, 1, 2, 3], set()), id="def-waits-for-its-default"
         ),
     ],
 )
