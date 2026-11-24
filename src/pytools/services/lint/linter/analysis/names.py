@@ -75,7 +75,7 @@ def _first_bindings(file: CheckInput, scope: _Scope) -> list[DeclaredName]:
         if isinstance(node, ast.Global | ast.Nonlocal)
         for name in node.names
     }
-    found = [_binding(file, node, var_kind) for node in nodes]
+    found = [binding(file, node, var_kind) for node in nodes]
     bindings = [name for name in found if name is not None]
     firsts: dict[ast.AST | str, DeclaredName] = {}
     for name in sorted(bindings, key=lambda name: name.line):
@@ -103,10 +103,11 @@ def _scope_nodes(nodes: list[ast.AST]) -> Iterator[ast.AST]:
     for node in walk_outside(nodes, (*_SCOPES, ast.arg)):
         yield node
         if isinstance(node, _SCOPES):
-            yield from _scope_nodes(_outer_parts(node))
+            yield from _scope_nodes(outer_parts(node))
 
 
-def _outer_parts(scope: _Nested) -> list[ast.AST]:
+def outer_parts(scope: _Nested) -> list[ast.AST]:
+    """Return the parts of scope that run in the scope around it."""
     if isinstance(scope, ast.ClassDef):
         return [*scope.decorator_list, *scope.bases, *scope.keywords]
     if isinstance(scope, ast.Lambda):
@@ -150,9 +151,8 @@ def _params(args: ast.arguments) -> list[ast.arg]:
     return [param for param in params if param is not None]
 
 
-def _binding(
-    file: CheckInput, node: ast.AST, var_kind: NameKind
-) -> DeclaredName | None:
+def binding(file: CheckInput, node: ast.AST, var_kind: NameKind) -> DeclaredName | None:
+    """Return the name node binds, if any, as a var_kind when it is a variable."""
     if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
         is_test = node.name.startswith("test_")
         func_kind = NameKind.TEST_FUNC if is_test else NameKind.FUNC
