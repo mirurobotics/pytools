@@ -8,10 +8,10 @@ def arrange(model: Model) -> tuple[list[int], set[int]]:
 
     The second holds each def placed directly under a caller, with the
     statements it carries, and each class tucked under its users. A statement
-    directly above a def or a class with methods moves with it, unless that
-    would reorder statements, which run in order at import time, or a later def
-    or class uses it when defined. A class without methods is left out, since it
-    goes directly above its first user.
+    directly above a def or class moves with it, unless that would reorder
+    statements, which run in order at import time, or a later def or class uses
+    it when defined. Each class without methods that has a first user is left
+    out, since it goes directly above that user.
     """
     decls = model.decls
     blockers = {
@@ -57,7 +57,7 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
 
     A statement no def or class carries is a unit of its own, and so is each
     statement above the first def or class: the header never moves. A class
-    without methods carries none: it moves to its first user alone.
+    without methods that has a first user carries none: it moves there alone.
     """
     first = min(model.decls, default=0)
     anchored = _anchored(model)

@@ -121,6 +121,21 @@ except ValueError as err:
     pass
 """
 _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
+_CLASS_LOCAL: Final = """\
+class Other:
+    Point = int
+    value = Point()
+"""
+_CLASS_LOCAL_LATER: Final = """\
+class Other:
+    value = Point()
+    Point = int
+"""
+_CLASS_LOCAL_COMPREHENSION: Final = """\
+class Other:
+    Point = int
+    values = [Point() for _ in range(2)]
+"""
 
 
 @pytest.mark.parametrize(
@@ -261,6 +276,23 @@ def _method_calls(parse: Parse, source: str) -> list[str]:
     ],
 )
 def test_import_time_names_skips_function_bodies(
+    parse: Parse, source: str, expected: set[str]
+) -> None:
+    file = parse(source)
+    assert refs.import_time_names(file, file.tree.body[-1]) == expected
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(_CLASS_LOCAL, {"int"}, id="bound-above"),
+        pytest.param(_CLASS_LOCAL_LATER, {"Point", "int"}, id="bound-below"),
+        pytest.param(
+            _CLASS_LOCAL_COMPREHENSION, {"Point", "int", "range"}, id="comprehension"
+        ),
+    ],
+)
+def test_import_time_names_skips_class_local_names(
     parse: Parse, source: str, expected: set[str]
 ) -> None:
     file = parse(source)

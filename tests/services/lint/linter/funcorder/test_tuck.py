@@ -91,6 +91,23 @@ class Base:
 class Obj(Base):
     def ident(self): return 1
 """
+_NEED_THROUGH_CALL: Final = """\
+def _initialize(): return _helper()
+def run(): return Obj()
+def other(): return _helper()
+def _helper(): return 1
+class Obj:
+    value = _initialize()
+    def ident(self): return 1
+"""
+_HELPER_WAITS: Final = """\
+def run(): return Obj()
+def other(): pass
+C = 1
+class Obj:
+    def ident(self): return _g()
+def _g(x=C): pass
+"""
 _STATEMENT_NEED: Final = """\
 def run(): return Obj()
 KEY = "k"
@@ -168,6 +185,8 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_CLASS_USER, id="used-only-by-a-class"),
         pytest.param(_BASE_NEED, id="would-rise-past-its-base"),
         pytest.param(_STATEMENT_NEED, id="would-rise-past-a-statement-it-uses"),
+        pytest.param(_NEED_THROUGH_CALL, id="would-rise-past-what-its-body-calls"),
+        pytest.param(_HELPER_WAITS, id="would-take-a-helper-past-its-default"),
     ],
 )
 def test_check_skips_class_left_where_it_is(parse: Parse, source: str) -> None:

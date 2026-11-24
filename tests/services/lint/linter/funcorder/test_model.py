@@ -128,6 +128,12 @@ Json = dict
 def parse(x: Json) -> Json: ...
 def parse(x): return x
 """
+_NEED_THROUGH_CALL: Final = """\
+def _h(): pass
+def _init(): return _h()
+class T:
+    x = _init()
+"""
 _EXEMPT_CYCLE_MEMBER: Final = """\
 def _e(): _a()  # nolint: funcorder
 def run(): pass
@@ -284,6 +290,11 @@ def test_build_waits_cycle_members_for_a_cycle_caller(
         pytest.param("C = 1\ndef run(): return C\n", {1: frozenset()}, id="body"),
         pytest.param(_DECORATOR_PIN, {0: frozenset(), 1: frozenset({0})}, id="decl"),
         pytest.param(_STUB_ANNOTATION, {2: frozenset({0})}, id="stub-annotation"),
+        pytest.param(
+            _NEED_THROUGH_CALL,
+            {0: frozenset(), 1: frozenset(), 2: frozenset({0, 1})},
+            id="through-a-call",
+        ),
     ],
 )
 def test_build_finds_what_each_decl_uses_when_defined(

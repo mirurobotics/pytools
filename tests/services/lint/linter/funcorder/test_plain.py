@@ -12,6 +12,7 @@ _POINT: Final = "class Point:\n    x: int\n"
 _RUN: Final = "def run(): pass\n"
 _MAKE: Final = "def make(): return Point()\n"
 _REPORT: Final = 'class "Point" should be directly above its first user'
+_LINE_REPORT: Final = 'class "Line" should be directly above its first user "make"'
 _STATEMENT_BETWEEN: Final = """\
 class Point:
     x: int
@@ -31,6 +32,29 @@ class Point:
 class Line:
     start: Point
 def make(line: Line): pass
+"""
+_DEEPER_BETWEEN: Final = """\
+class Point:
+    x: int
+class Size:
+    width: int
+class Line(Size): pass
+def make(p: Point, line: Line): pass
+"""
+_DEEPER_RISES: Final = """\
+def make(): return Line()
+class Point:
+    x: int
+class Line(Point): pass
+"""
+_USER_STAYS: Final = """\
+def make(): return Line()
+X = 1
+class Point:
+    x: int
+class Line:
+    start: Point
+    y = X
 """
 _RISES_PAST_NEED: Final = """\
 def make(): return Point()
@@ -57,10 +81,14 @@ class Point:
     @property
     def x(self): return 0
 """
-_ABSTRACT: Final = """\
+_PASS_BODY: Final = """\
 class Point(ABC):
     @abstractmethod
     def x(self): pass
+"""
+_NOLINT: Final = """\
+class Point:  # nolint: funcorder
+    x: int
 """
 _CLASS_BODY: Final = """\
 class Box:
@@ -85,6 +113,7 @@ def run():
         pytest.param(_SAME_USER, id="another-class-above-the-same-user"),
         pytest.param(_DEEPER_ABOVE, id="class-it-uses-above"),
         pytest.param(_RISES_PAST_NEED, id="move-would-pass-what-it-uses"),
+        pytest.param(_USER_STAYS, id="class-user-that-stays"),
         pytest.param("def make(p: 'Point'): pass\n" + _POINT, id="string-annotation"),
         pytest.param(_CYCLE, id="classes-using-each-other"),
     ],
@@ -128,6 +157,15 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
             {0: f'{_REPORT} "make"'},
             id="default",
         ),
+        pytest.param(
+            _DEEPER_BETWEEN, {0: f'{_REPORT} "make"'}, id="deeper-class-between"
+        ),
+        pytest.param(
+            _DEEPER_RISES,
+            {1: f'{_REPORT} "Line"', 2: _LINE_REPORT},
+            id="deeper-class-rises-with-it",
+        ),
+        pytest.param(_NOLINT + _RUN + _MAKE, {0: f'{_REPORT} "make"'}, id="nolint"),
     ],
 )
 def test_plain_violations_reports_misplaced_class(
@@ -156,7 +194,7 @@ def test_plain_violations_places_methodless_class(parse: Parse, source: str) -> 
     [
         pytest.param("class Point:\n    def __init__(self): pass\n", id="dunder"),
         pytest.param(_PROPERTY, id="property"),
-        pytest.param(_ABSTRACT, id="abstract-method"),
+        pytest.param(_PASS_BODY, id="pass-body"),
     ],
 )
 def test_plain_violations_skips_class_with_methods(parse: Parse, source: str) -> None:
