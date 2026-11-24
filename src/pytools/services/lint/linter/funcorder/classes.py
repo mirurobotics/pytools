@@ -122,11 +122,11 @@ def _runs_code(
     """
     local = {name for found in effects for name in found.binds}
     risky = local - _bare_def_names(decls, bindings)
-    merged = {idx: [effects[part] for part in decl.span] for idx, decl in decls.items()}
     return frozenset(
         idx
-        for idx, parts in merged.items()
-        if any(part.called & local or part.stored & risky for part in parts)
+        for idx, decl in decls.items()
+        for part in decl.span
+        if effects[part].called & local or effects[part].stored & risky
     )
 
 
