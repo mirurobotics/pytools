@@ -10,6 +10,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     Rule,
     walk_outside,
 )
+from pytools.services.lint.linter.analysis.names import NameKind, binding, outer_parts
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 
 _DEFS: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
@@ -57,7 +58,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         for idx, node in nodes.items()
         if not isinstance(node.stmt, ast.ClassDef)
     }
-    callees = {idx: _callees(scope, node, by_name) for idx, node in nodes.items()}
+    callees = {idx: _callees(file, scope, node, by_name) for idx, node in nodes.items()}
     pinned = _pinned(scope.body, by_name)
     calls = {
         idx: [callee for callee in found if _is_enforced(nodes, idx, callee, pinned)]
@@ -112,26 +113,29 @@ def _is_public(name: str) -> bool:
 
 
 def _callees(
-    scope: ast.Module | ast.ClassDef, node: Node, by_name: dict[str, int]
+    file: CheckInput,
+    scope: ast.Module | ast.ClassDef,
+    node: Node,
+    by_name: dict[str, int],
 ) -> list[int]:
     """Return the defs node calls, in the order it first calls them.
 
     A method calls its class's methods only through its receiver.
     """
     if isinstance(scope, ast.ClassDef):
-        names = _receiver_calls(node.stmt)
+        names = _receiver_calls(file, node.stmt)
     else:
-        names = _free_calls(node.stmt)
+        names = _free_calls(file, node.stmt)
     found = [by_name[name] for name in names if name in by_name]
     return [idx for idx in dict.fromkeys(found) if idx != node.idx]
 
 
-def _receiver_calls(stmt: Function | ast.ClassDef) -> list[str]:
+def _receiver_calls(file: CheckInput, stmt: Function | ast.ClassDef) -> list[str]:
     if isinstance(stmt, ast.ClassDef):
         return []
     receiver = _receiver(stmt)
     nodes = _body_nodes(stmt)
-    if receiver is None or receiver in _bound_names(nodes):
+    if receiver is None or receiver in _bound_names(file, nodes):
         return []
     attrs = [node for node in nodes if isinstance(node, ast.Attribute)]
     own = [
@@ -151,16 +155,16 @@ def _receiver(func: Function) -> str | None:
     return None if is_static or not params else params[0].arg
 
 
-def _free_calls(stmt: Function | ast.ClassDef) -> list[str]:
+def _free_calls(file: CheckInput, stmt: Function | ast.ClassDef) -> list[str]:
     """Return the names stmt refers to in code that runs only when called."""
     nodes = walk_outside([stmt], _ROOTS)
     roots = [node for node in nodes if isinstance(node, _ROOTS)]
-    return [name for root in roots for name in _root_free_calls(root)]
+    return [name for root in roots for name in _root_free_calls(file, root)]
 
 
-def _root_free_calls(root: _Root) -> list[str]:
+def _root_free_calls(file: CheckInput, root: _Root) -> list[str]:
     nodes = _body_nodes(root)
-    bound = _bound_names([*nodes, *ast.walk(root.args)])
+    bound = _bound_names(file, [*nodes, *ast.walk(root.args)])
     names = [node for node in nodes if isinstance(node, ast.Name)]
     loads = [
         name
@@ -175,22 +179,10 @@ def _body_nodes(root: _Root) -> list[ast.AST]:
     return [node for part in parts for node in ast.walk(part)]
 
 
-def _bound_names(nodes: Iterable[ast.AST]) -> set[str]:
+def _bound_names(file: CheckInput, nodes: Iterable[ast.AST]) -> set[str]:
     """Return the names nodes bind, which hide a def of the same name."""
-    names = (_bound_name(node) for node in nodes)
-    return {name for name in names if name is not None}
-
-
-def _bound_name(node: ast.AST) -> str | None:
-    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-        return node.id
-    if isinstance(node, ast.arg):
-        return node.arg
-    if isinstance(node, _NODES):
-        return node.name
-    if isinstance(node, ast.ExceptHandler):
-        return node.name
-    return None
+    found = (binding(file, node, NameKind.LOCAL_VAR) for node in nodes)
+    return {name.text for name in found if name is not None}
 
 
 def _position(node: ast.expr) -> tuple[int, int]:
@@ -213,21 +205,11 @@ def _import_time_names(stmts: list[ast.stmt]) -> set[str]:
         node = pending.pop()
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             names.add(node.id)
-        pending.extend(_import_time_parts(node))
+        if isinstance(node, _ROOTS):
+            pending.extend(outer_parts(node))
+        else:
+            pending.extend(ast.iter_child_nodes(node))
     return names
-
-
-def _import_time_parts(node: ast.AST) -> list[ast.AST]:
-    """Return the children of node that run when node runs.
-
-    A def runs its decorators, defaults and annotations, a lambda its defaults.
-    """
-    if isinstance(node, _DEFS):
-        returns = [node.returns] if node.returns else []
-        return [*node.decorator_list, node.args, *returns]
-    if isinstance(node, ast.Lambda):
-        return [node.args]
-    return list(ast.iter_child_nodes(node))
 
 
 def _is_enforced(
