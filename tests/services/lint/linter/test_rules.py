@@ -11,7 +11,7 @@ _SOURCE = """\
 def f(parameter_name_too_long, n):
     if a:
         if b:
-            pass
+            pass  # in body
 
 # stray note
 """
@@ -33,6 +33,7 @@ _STRAYCOMMENT = Diagnostic(
     6,
     "comment is not attached to a statement; remove it or move it directly above one",
 )
+_FUNCCOMMENT = Diagnostic("a.py", 4, "comments are not allowed inside function bodies")
 
 
 @pytest.mark.parametrize(
@@ -40,38 +41,51 @@ _STRAYCOMMENT = Diagnostic(
     [
         pytest.param(
             frozenset(),
-            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT],
+            [
+                _FUNCLEN,
+                _FILELEN,
+                _NESTDEPTH,
+                _NAMELEN,
+                _VARNAME,
+                _STRAYCOMMENT,
+                _FUNCCOMMENT,
+            ],
             id="none",
         ),
         pytest.param(
             frozenset({Rule.FUNCLEN}),
-            [_FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT],
+            [_FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT, _FUNCCOMMENT],
             id="funclen",
         ),
         pytest.param(
             frozenset({Rule.FILELEN}),
-            [_FUNCLEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT],
+            [_FUNCLEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT, _FUNCCOMMENT],
             id="filelen",
         ),
         pytest.param(
             frozenset({Rule.NESTDEPTH}),
-            [_FUNCLEN, _FILELEN, _NAMELEN, _VARNAME, _STRAYCOMMENT],
+            [_FUNCLEN, _FILELEN, _NAMELEN, _VARNAME, _STRAYCOMMENT, _FUNCCOMMENT],
             id="nestdepth",
         ),
         pytest.param(
             frozenset({Rule.NAMELEN}),
-            [_FUNCLEN, _FILELEN, _NESTDEPTH, _VARNAME, _STRAYCOMMENT],
+            [_FUNCLEN, _FILELEN, _NESTDEPTH, _VARNAME, _STRAYCOMMENT, _FUNCCOMMENT],
             id="namelen",
         ),
         pytest.param(
             frozenset({Rule.VARNAME}),
-            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _STRAYCOMMENT],
+            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _STRAYCOMMENT, _FUNCCOMMENT],
             id="varname",
         ),
         pytest.param(
             frozenset({Rule.STRAYCOMMENT}),
-            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME],
+            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME, _FUNCCOMMENT],
             id="straycomment",
+        ),
+        pytest.param(
+            frozenset({Rule.FUNCCOMMENT}),
+            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT],
+            id="funccomment",
         ),
     ],
 )

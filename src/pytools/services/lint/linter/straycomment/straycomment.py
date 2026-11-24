@@ -1,21 +1,18 @@
 import ast
-import re
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
-    Function,
     elif_branch,
-    functions,
-    header_end,
+    function_body_lines,
     is_code_line,
     module_header_end,
 )
+from pytools.services.lint.linter.analysis.comments import is_directive
 
 _MESSAGE = (
     "comment is not attached to a statement; remove it or move it directly above one"
 )
-_DIRECTIVE = re.compile(r"#\s*(?:noqa\b|(?:type|nolint|pragma|fmt|isort|mypy|ruff):)")
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
@@ -42,27 +39,10 @@ def _statement_starts(tree: ast.Module) -> set[int]:
 
 
 def _candidate_lines(file: CheckInput) -> list[int]:
-    skipped = set(range(1, module_header_end(file) + 1))
-    for func in functions(file.tree):
-        skipped.update(_body_lines(file, func))
+    header = set(range(1, module_header_end(file) + 1))
+    skipped = header | function_body_lines(file)
     outside = [number for number in sorted(file.comments) if number not in skipped]
     return [number for number in outside if not is_code_line(file, number)]
-
-
-def _body_lines(file: CheckInput, func: Function) -> range:
-    # A comment indented under the def after its last statement is still in
-    # its body.
-    end = func.end_lineno or func.lineno
-    while end < len(file.lines) and _is_body_tail(file, end + 1, func.col_offset):
-        end += 1
-    return range(header_end(file, func) + 1, end + 1)
-
-
-def _is_body_tail(file: CheckInput, number: int, indent: int) -> bool:
-    if is_code_line(file, number):
-        return False
-    comment = file.comments.get(number)
-    return comment is None or comment.column > indent
 
 
 def _groups(lines: list[int]) -> list[list[int]]:
@@ -76,7 +56,5 @@ def _groups(lines: list[int]) -> list[list[int]]:
 
 
 def _first_prose(file: CheckInput, group: list[int]) -> int | None:
-    prose = (
-        number for number in group if not _DIRECTIVE.match(file.comments[number].text)
-    )
+    prose = (number for number in group if not is_directive(file.comments[number].text))
     return next(prose, None)

@@ -17,6 +17,7 @@ class Rule(StrEnum):
     NAMELEN = "namelen"
     VARNAME = "varname"
     STRAYCOMMENT = "straycomment"
+    FUNCCOMMENT = "funccomment"
 
 
 @dataclass(frozen=True)
@@ -82,11 +83,46 @@ def start_line(node: ast.stmt) -> int:
 def header_end(
     file: CheckInput, node: Function | ast.ClassDef | ast.ExceptHandler
 ) -> int:
-    """Return the last code line of node's header, the line before its body."""
-    line = start_line(node.body[0]) - 1
+    """Return the last code line of node's header.
+
+    A body that starts after the colon shares the header's last line.
+    """
+    first = node.body[0]
+    if _follows_code(file, first):
+        return first.lineno
+    line = start_line(first) - 1
     while line > node.lineno and not is_code_line(file, line):
         line -= 1
-    return max(line, node.lineno)
+    return line
+
+
+def _follows_code(file: CheckInput, stmt: ast.stmt) -> bool:
+    prefix = file.lines[stmt.lineno - 1].encode()[: stmt.col_offset]
+    return bool(prefix.strip())
+
+
+def function_body_lines(file: CheckInput) -> set[int]:
+    """Return the lines inside any function's body, after its header.
+
+    A comment indented under a def after its last statement is still in its
+    body.
+    """
+    bodies = [_body_lines(file, func) for func in functions(file.tree)]
+    return {number for body in bodies for number in body}
+
+
+def _body_lines(file: CheckInput, func: Function) -> range:
+    end = func.end_lineno or func.lineno
+    while end < len(file.lines) and _is_body_tail(file, end + 1, func.col_offset):
+        end += 1
+    return range(header_end(file, func) + 1, end + 1)
+
+
+def _is_body_tail(file: CheckInput, number: int, indent: int) -> bool:
+    if is_code_line(file, number):
+        return False
+    comment = file.comments.get(number)
+    return comment is None or comment.column > indent
 
 
 def module_header_end(file: CheckInput) -> int:
@@ -100,8 +136,10 @@ def module_header_end(file: CheckInput) -> int:
 
 
 def elif_branch(stmt: ast.If) -> ast.If | None:
-    """Return the if an elif after stmt parses to, or None if stmt has none."""
-    # An elif sits at its if's column; a block under else is indented.
+    """Return the if an elif after stmt parses to, or None if stmt has none.
+
+    An elif sits at its if's column; a block under else is indented.
+    """
     branch = stmt.orelse[0] if stmt.orelse else None
     if isinstance(branch, ast.If) and branch.col_offset == stmt.col_offset:
         return branch

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
 from pytools.services.lint.linter.filelen import filelen
+from pytools.services.lint.linter.funccomment import funccomment
 from pytools.services.lint.linter.funclen import funclen
 from pytools.services.lint.linter.namelen import namelen
 from pytools.services.lint.linter.nestdepth import nestdepth
@@ -39,4 +40,5 @@ def _rule_checkers(
         Rule.NAMELEN: namelen.check,
         Rule.VARNAME: varname.check,
         Rule.STRAYCOMMENT: straycomment.check,
+        Rule.FUNCCOMMENT: funccomment.check,
     }
