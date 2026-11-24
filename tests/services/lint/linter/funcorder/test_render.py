@@ -64,7 +64,10 @@ def test_render_lays_out_module(parse: Parse, source: str, expected: str) -> Non
 
 def test_render_lays_out_nested_scope_in_moved_chunk(parse: Parse) -> None:
     file = parse("a = 1\nclass T:\n    x = 1\n    y = 2\nb = 2\n")
-    orders = {file.tree: [1, 0, 2], _class_at(file, 1): [1, 0]}
+    orders: dict[ast.Module | ast.ClassDef, list[int]] = {
+        file.tree: [1, 0, 2],
+        _class_at(file, 1): [1, 0],
+    }
     expected = "class T:\n    y = 2\n    x = 1\na = 1\nb = 2\n"
     assert render.render(file, orders) == expected
 
