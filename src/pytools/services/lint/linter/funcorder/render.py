@@ -23,7 +23,7 @@ def render(file: CheckInput, orders: dict[ast.Module | ast.ClassDef, list[int]])
     sets the spacing afterwards.
     """
     found = (_region(file, scope, order) for scope, order in orders.items())
-    regions = sorted(found, key=lambda region: region.lines.start)
+    regions = sorted(found, key=lambda region: region.chunks[0].start)
     return "\n".join(_render_lines(file, regions, range(1, len(file.lines) + 1)))
 
 
@@ -31,9 +31,7 @@ def render(file: CheckInput, orders: dict[ast.Module | ast.ClassDef, list[int]])
 class _Region:
     """A scope's statements as line ranges, and the order to lay them out in."""
 
-    lines: range
     chunks: list[range]  # each statement, with the comments directly above it
-    gaps: list[range]  # the lines between each chunk and the one before it
     order: list[int]
 
 
@@ -46,10 +44,7 @@ def _region(
     chunks = [
         range(start, end + 1) for start, end in zip(starts, ends[1:], strict=True)
     ]
-    gaps = [range(end + 1, start) for end, start in zip(ends[:-1], starts, strict=True)]
-    gaps[0] = range(starts[0], starts[0])
-    lines = range(starts[0], ends[-1] + 1)
-    return _Region(lines, chunks, gaps, order)
+    return _Region(chunks, order)
 
 
 def _ends(file: CheckInput, scope: ast.Module | ast.ClassDef) -> list[int]:
@@ -75,11 +70,12 @@ def _render_lines(file: CheckInput, regions: list[_Region], lines: range) -> lis
     out: list[str] = []
     line = lines.start
     for region in regions:
-        if region.lines.start < line or region.lines.stop > lines.stop:
+        start, stop = region.chunks[0].start, region.chunks[-1].stop
+        if start < line or stop > lines.stop:
             continue
-        out.extend(file.lines[line - 1 : region.lines.start - 1])
+        out.extend(file.lines[line - 1 : start - 1])
         out.extend(_render_region(file, regions, region))
-        line = region.lines.stop
+        line = stop
     out.extend(file.lines[line - 1 : lines.stop - 1])
     return out
 
@@ -87,9 +83,14 @@ def _render_lines(file: CheckInput, regions: list[_Region], lines: range) -> lis
 def _render_region(
     file: CheckInput, regions: list[_Region], region: _Region
 ) -> list[str]:
+    """Return the region's chunks in its order, each with the lines above it.
+
+    The first chunk has none: what sits above it stays above the region.
+    """
+    chunks = region.chunks
     out: list[str] = []
     for idx in region.order:
-        gap = region.gaps[idx]
-        out.extend(file.lines[gap.start - 1 : gap.stop - 1])
-        out.extend(_render_lines(file, regions, region.chunks[idx]))
+        gap_start = chunks[idx - 1].stop if idx else chunks[0].start
+        out.extend(file.lines[gap_start - 1 : chunks[idx].start - 1])
+        out.extend(_render_lines(file, regions, chunks[idx]))
     return out
