@@ -37,11 +37,11 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
     A statement no def or class carries is a unit of its own, and so is each
     statement above the first def or class: the header never moves.
     """
-    first = min(model.nodes, default=0)
+    first = min(model.decls, default=0)
     units: list[list[int]] = []
     pending: list[int] = []
     for idx in range(len(model.stmts)):
-        if idx in model.nodes:
+        if idx in model.decls:
             units.append([*pending, idx])
             pending = []
         elif idx in model.stubs or (idx > first and not settled):
@@ -77,8 +77,8 @@ def _is_ready(model: Model, idx: int, done: set[int]) -> bool:
     A def waits for its callers, a waiting cycle member for one cycle caller,
     and a private def nothing calls for the public ones nothing calls.
     """
-    node = model.nodes.get(idx)
-    if node is None or node.exempt:
+    decl = model.decls.get(idx)
+    if decl is None or decl.exempt:
         return True
     if not done.issuperset(model.callers[idx]):
         return False
@@ -86,11 +86,11 @@ def _is_ready(model: Model, idx: int, done: set[int]) -> bool:
         return False
     return all(
         other.idx in done
-        for other in model.nodes.values()
-        if must_precede(model, other, node)
+        for other in model.decls.values()
+        if must_precede(model, other, decl)
     )
 
 
 def _keeps_statement_order(model: Model, order: list[int]) -> bool:
-    held = [idx for idx in order if idx not in model.nodes and idx not in model.stubs]
+    held = [idx for idx in order if idx not in model.decls and idx not in model.stubs]
     return held == sorted(held)

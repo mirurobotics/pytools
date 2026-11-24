@@ -8,11 +8,11 @@ from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 from pytools.services.lint.linter.funcorder.refs import called_names, import_time_names
 
 _DEFS: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
-_NODES: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+_DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
 @dataclass(frozen=True)
-class Node:
+class Decl:
     """A def or class in a scope, one of the units the scope is ordered by."""
 
     idx: int
@@ -31,7 +31,7 @@ class Model:
     """
 
     stmts: list[ast.stmt]
-    nodes: dict[int, Node]
+    decls: dict[int, Decl]
     stubs: frozenset[int]  # defs the next def of the same name replaces
     calls: dict[int, list[int]]  # enforced callees, in the order first called
     callers: dict[int, list[int]]  # enforced callers outside the callee's cycle
@@ -43,24 +43,24 @@ class Model:
 def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     """Return the calls between the defs and classes directly in scope."""
     stubs = _stubs(scope.body)
-    nodes = _nodes(file, scope, stubs)
+    decls = _decls(file, scope, stubs)
     by_name = {
-        node.stmt.name: idx
-        for idx, node in nodes.items()
-        if not isinstance(node.stmt, ast.ClassDef)
+        decl.stmt.name: idx
+        for idx, decl in decls.items()
+        if not isinstance(decl.stmt, ast.ClassDef)
     }
-    callees = {idx: _callees(file, scope, node, by_name) for idx, node in nodes.items()}
+    callees = {idx: _callees(file, scope, decl, by_name) for idx, decl in decls.items()}
     pinned = _pinned(scope.body, by_name)
     calls = {
-        idx: [callee for callee in found if _is_enforced(nodes, idx, callee, pinned)]
+        idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
         for idx, found in callees.items()
     }
     comps = _components(callees)
-    callers = {idx: _callers_of(calls, comps, idx, in_cycle=False) for idx in nodes}
-    cycles = {idx: _callers_of(calls, comps, idx, in_cycle=True) for idx in nodes}
+    callers = {idx: _callers_of(calls, comps, idx, in_cycle=False) for idx in decls}
+    cycles = {idx: _callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(pinned.union(*callees.values()))
-    waiting = _waiting(nodes, callers, cycles, comps)
-    return Model(scope.body, nodes, stubs, calls, callers, cycles, used, waiting)
+    waiting = _waiting(decls, callers, cycles, comps)
+    return Model(scope.body, decls, stubs, calls, callers, cycles, used, waiting)
 
 
 def _stubs(stmts: list[ast.stmt]) -> frozenset[int]:
@@ -78,23 +78,23 @@ def _is_redefined(stmt: ast.stmt, after: ast.stmt) -> bool:
     return stmt.name == after.name
 
 
-def _nodes(
+def _decls(
     file: CheckInput, scope: ast.Module | ast.ClassDef, stubs: frozenset[int]
-) -> dict[int, Node]:
+) -> dict[int, Decl]:
     prefix = f"{scope.name}." if isinstance(scope, ast.ClassDef) else ""
     return {
-        idx: _node(file, idx, stmt, prefix)
+        idx: _decl(file, idx, stmt, prefix)
         for idx, stmt in enumerate(scope.body)
-        if isinstance(stmt, _NODES) and idx not in stubs
+        if isinstance(stmt, _DECLS) and idx not in stubs
     }
 
 
-def _node(
+def _decl(
     file: CheckInput, idx: int, stmt: Function | ast.ClassDef, prefix: str
-) -> Node:
+) -> Decl:
     is_def = not isinstance(stmt, ast.ClassDef)
     exempt = is_def and has_def_nolint(file, stmt, Rule.FUNCORDER)
-    return Node(idx, stmt, prefix + stmt.name, _is_public(stmt.name), exempt)
+    return Decl(idx, stmt, prefix + stmt.name, _is_public(stmt.name), exempt)
 
 
 def _is_public(name: str) -> bool:
@@ -106,13 +106,13 @@ def _is_public(name: str) -> bool:
 def _callees(
     file: CheckInput,
     scope: ast.Module | ast.ClassDef,
-    node: Node,
+    decl: Decl,
     by_name: dict[str, int],
 ) -> list[int]:
-    """Return the defs node calls, in the order it first calls them."""
-    names = called_names(file, scope, node.stmt)
+    """Return the defs decl calls, in the order it first calls them."""
+    names = called_names(file, scope, decl.stmt)
     found = [by_name[name] for name in names if name in by_name]
-    return [idx for idx in dict.fromkeys(found) if idx != node.idx]
+    return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
 
 
 def _pinned(stmts: list[ast.stmt], by_name: dict[str, int]) -> set[int]:
@@ -121,9 +121,9 @@ def _pinned(stmts: list[ast.stmt], by_name: dict[str, int]) -> set[int]:
 
 
 def _is_enforced(
-    nodes: dict[int, Node], caller: int, callee: int, pinned: set[int]
+    decls: dict[int, Decl], caller: int, callee: int, pinned: set[int]
 ) -> bool:
-    is_exempt = nodes[caller].exempt or nodes[callee].exempt
+    is_exempt = decls[caller].exempt or decls[callee].exempt
     return not is_exempt and callee not in pinned
 
 
@@ -158,7 +158,7 @@ def _callers_of(
 
 
 def _waiting(
-    nodes: dict[int, Node],
+    decls: dict[int, Decl],
     callers: dict[int, list[int]],
     cycle_callers: dict[int, list[int]],
     comps: dict[int, int],
@@ -167,20 +167,20 @@ def _waiting(
 
     A cycle's opener is its first member when nothing outside calls into it.
     """
-    openers = _openers(nodes, callers, comps)
+    openers = _openers(decls, callers, comps)
     return frozenset(
         idx
-        for idx in nodes
+        for idx in decls
         if not callers[idx] and cycle_callers[idx] and openers[comps[idx]] != idx
     )
 
 
 def _openers(
-    nodes: dict[int, Node], callers: dict[int, list[int]], comps: dict[int, int]
+    decls: dict[int, Decl], callers: dict[int, list[int]], comps: dict[int, int]
 ) -> dict[int, int | None]:
     openers: dict[int, int | None] = {}
-    for idx, node in nodes.items():
-        if node.exempt:
+    for idx, decl in decls.items():
+        if decl.exempt:
             continue
         if callers[idx]:
             openers[comps[idx]] = None
@@ -189,14 +189,14 @@ def _openers(
     return openers
 
 
-def must_precede(model: Model, node: Node, other: Node) -> bool:
-    """Report whether node, a public def nothing calls, must sit above other.
+def must_precede(model: Model, decl: Decl, other: Decl) -> bool:
+    """Report whether decl, a public def nothing calls, must sit above other.
 
     It must when other is a private def nothing calls; exempt defs are free.
     """
-    defs = (node.stmt, other.stmt)
+    defs = (decl.stmt, other.stmt)
     if any(isinstance(stmt, ast.ClassDef) for stmt in defs):
         return False
-    if node.exempt or other.exempt or not node.is_public or other.is_public:
+    if decl.exempt or other.exempt or not decl.is_public or other.is_public:
         return False
-    return node.idx not in model.used and other.idx not in model.used
+    return decl.idx not in model.used and other.idx not in model.used

@@ -2,8 +2,8 @@ import ast
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.funcorder.model import (
+    Decl,
     Model,
-    Node,
     build,
     must_precede,
 )
@@ -27,49 +27,49 @@ def _check_scope(
     model = build(file, scope)
     order, below = arrange(model)
     return [
-        Diagnostic(file.path, node.stmt.lineno, message)
-        for node in model.nodes.values()
-        for message in _violations(model, node, order, below)
+        Diagnostic(file.path, decl.stmt.lineno, message)
+        for decl in model.decls.values()
+        for message in _violations(model, decl, order, below)
     ]
 
 
 def _violations(
-    model: Model, node: Node, order: list[int], below: set[int]
+    model: Model, decl: Decl, order: list[int], below: set[int]
 ) -> list[str]:
-    if node.exempt:
+    if decl.exempt:
         return []
-    found = [_stepdown(model, node), _rank_order(model, node)]
+    found = [_stepdown(model, decl), _rank_order(model, decl)]
     messages = [message for message in found if message is not None]
-    if messages or node.idx not in below:
+    if messages or decl.idx not in below:
         return messages
-    return _directly_below(model, node, order)
+    return _directly_below(model, decl, order)
 
 
-def _stepdown(model: Model, node: Node) -> str | None:
-    callers = model.callers[node.idx]
-    if not callers or max(callers) < node.idx:
+def _stepdown(model: Model, decl: Decl) -> str | None:
+    callers = model.callers[decl.idx]
+    if not callers or max(callers) < decl.idx:
         return None
-    last = model.nodes[max(callers)].name
-    return f'"{node.name}" should be below its last caller "{last}"'
+    last = model.decls[max(callers)].name
+    return f'"{decl.name}" should be below its last caller "{last}"'
 
 
-def _rank_order(model: Model, node: Node) -> str | None:
-    above = [other for other in model.nodes.values() if other.idx < node.idx]
-    private = [other for other in above if must_precede(model, node, other)]
+def _rank_order(model: Model, decl: Decl) -> str | None:
+    above = [other for other in model.decls.values() if other.idx < decl.idx]
+    private = [other for other in above if must_precede(model, decl, other)]
     if not private:
         return None
-    return f'"{node.name}" should be above private "{private[0].name}"'
+    return f'"{decl.name}" should be above private "{private[0].name}"'
 
 
-def _directly_below(model: Model, node: Node, order: list[int]) -> list[str]:
-    """Report node unless it sits right under the def placed above it.
+def _directly_below(model: Model, decl: Decl, order: list[int]) -> list[str]:
+    """Report decl unless it sits right under the def placed above it.
 
     The statements it carries sit between them in both orders.
     """
-    pos = order.index(node.idx)
-    while pos > 0 and order[pos - 1] not in model.nodes:
+    pos = order.index(decl.idx)
+    while pos > 0 and order[pos - 1] not in model.decls:
         pos -= 1
     if pos == 0 or order[pos - 1] == order[pos] - 1:
         return []
-    above = model.nodes[order[pos - 1]].name
-    return [f'"{node.name}" should be directly below "{above}"']
+    above = model.decls[order[pos - 1]].name
+    return [f'"{decl.name}" should be directly below "{above}"']
