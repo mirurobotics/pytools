@@ -78,10 +78,10 @@ def _roots(file: CheckInput, stmt: ast.stmt) -> list[tuple[_Root, frozenset[str]
     found: list[tuple[_Root, frozenset[str]]] = []
     while pending:
         node, params = pending.pop()
-        is_root = isinstance(node, ROOTS)
-        if is_root:
+        parts = list(ast.iter_child_nodes(node))
+        if isinstance(node, ROOTS):
             found.append((node, params))
-        parts = outer_parts(node) if is_root else list(ast.iter_child_nodes(node))
+            parts = outer_parts(node)
         outside, hidden = _hidden_in(file, node, params)
         pending.extend((part, params if part in outside else hidden) for part in parts)
     return found
@@ -118,15 +118,15 @@ def _scoped_nodes(
         inner = outer | _type_params(host) if isinstance(host, ast.ClassDef) else bound
         nested = [node for node in nodes if isinstance(node, SCOPES)]
         todo.extend((_inner_parts(part), inner, part) for part in nested)
-        typed = _typed_outer_nodes(nested)
+        typed = _typed_outer_nodes(nodes)
         found.extend((node, bound | typed.get(node, frozenset())) for node in nodes)
     return found
 
 
-def _typed_outer_nodes(scopes: list[ast.AST]) -> dict[ast.AST, frozenset[str]]:
-    """Return the nodes of scopes' outer parts that see their type parameters."""
+def _typed_outer_nodes(nodes: list[ast.AST]) -> dict[ast.AST, frozenset[str]]:
+    """Return the nodes of the scopes' outer parts that see their type parameters."""
     typed: dict[ast.AST, frozenset[str]] = {}
-    for scope in scopes:
+    for scope in nodes:
         if isinstance(scope, (*DEFS, ast.ClassDef)):
             inside = set(outer_parts(scope)) - set(_outside_type_params(scope))
             typed.update(dict.fromkeys(_run_nodes(list(inside)), _type_params(scope)))
