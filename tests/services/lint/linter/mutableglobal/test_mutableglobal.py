@@ -125,6 +125,7 @@ def test_check_skips_names_that_are_not_variables(parse: Parse, source: str) -> 
         pytest.param("MAX: Final = LIMIT + 1\n", id="name"),
         pytest.param("from re import I\nFLAGS: Final = I\n", id="imported-name"),
         pytest.param("FLAGS: Final = re.I | re.M\n", id="dotted-reference"),
+        pytest.param("SEP: Final = os.path.sep\n", id="nested-dotted-reference"),
         pytest.param("KINDS: Final = (ast.Name, (1, ast.Call))\n", id="tuple"),
         pytest.param("NONE: Final = frozenset()\n", id="empty-frozenset"),
         pytest.param('KEYS: Final = frozenset({"a", ast.Name})\n', id="frozenset-set"),
@@ -160,6 +161,9 @@ def test_check_skips_final_constants(parse: Parse, source: str) -> None:
             'KEYS: Final = frozenset(a for a in "b")\n', _diags(1), id="frozenset-gen"
         ),
         pytest.param("VALUE: Final = make().value\n", _diags(1), id="call-attribute"),
+        pytest.param(
+            "VALUE: Final = make().a.b\n", _diags(1), id="nested-call-attribute"
+        ),
         pytest.param("FIRST: Final = ITEMS[0]\n", _diags(1), id="subscript"),
         pytest.param('LABEL: Final = f"{make()}"\n', _diags(1), id="f-string-call"),
         pytest.param("LIMIT: Final\n", _diags(1), id="no-value"),
