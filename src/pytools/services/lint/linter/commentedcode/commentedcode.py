@@ -5,6 +5,7 @@ import textwrap
 import tokenize
 import warnings
 from dataclasses import dataclass
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
@@ -17,7 +18,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 from pytools.services.lint.linter.analysis.comments import is_directive
 from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
 
-_MESSAGE = "commented-out code; delete it instead"
+_MESSAGE: Final = "commented-out code; delete it instead"
 _CODE_EXPRS = (ast.Call, ast.Await, ast.Yield, ast.YieldFrom)
 _NOT_CODE = (ast.Pass, ast.Break, ast.Continue, ast.Global, ast.Nonlocal)
 _ENCODING = re.compile(r"#.*?coding[:=]\s*[-\w.]+")

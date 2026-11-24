@@ -1,3 +1,5 @@
+from typing import Final
+
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
@@ -5,7 +7,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.analysis.comments import is_directive
 
-_MESSAGE = "comments are not allowed inside function bodies"
+_MESSAGE: Final = "comments are not allowed inside function bodies"
 
 
 def check(file: CheckInput) -> list[Diagnostic]:

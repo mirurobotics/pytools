@@ -1,3 +1,5 @@
+from typing import Final
+
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
 from pytools.services.lint.linter.analysis.names import (
     DeclaredName,
@@ -6,9 +8,9 @@ from pytools.services.lint.linter.analysis.names import (
 )
 from pytools.services.lint.linter.analysis.nolint import has_name_nolint
 
-_MAX_NAME_LEN = 30
-_MAX_LOCAL_NAME_LEN = 20
-_MAX_TEST_NAME_LEN = 50
+_MAX_NAME_LEN: Final = 30
+_MAX_LOCAL_NAME_LEN: Final = 20
+_MAX_TEST_NAME_LEN: Final = 50
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
