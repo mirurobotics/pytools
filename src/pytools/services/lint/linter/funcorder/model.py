@@ -62,7 +62,7 @@ class Model:
     waiting: frozenset[int]  # cycle members placed only after a cycle caller
     needs: dict[int, frozenset[int]]  # statements a decl uses when defined
     plain: _Users  # the users of each used class without methods
-    tucked: _Users  # the users of each used class with methods
+    tucked: _Users  # the defs above each class with methods that use it
 
 
 def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
@@ -247,7 +247,8 @@ def _class_users(
     """Return the users of each class without methods, then of each with them.
 
     A class's users are the statements that refer to it, when run or when
-    called. The stubs merged into a decl refer for it.
+    called. The stubs merged into a decl refer for it. A class with methods
+    keeps only the defs above it.
     """
     merged = {
         stub: idx for idx, decl in decls.items() for stub in range(decl.first, idx)
@@ -265,8 +266,7 @@ def _class_users(
         if decl.kind is DeclKind.CLASS
     }
     used = {cls: found for cls, found in users.items() if found}
-    tucked = {cls: found for cls, found in used.items() if _has_methods(decls[cls])}
-    return _plain(decls, used), tucked
+    return _plain(decls, used), _tucked(decls, used)
 
 
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
@@ -284,6 +284,17 @@ def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
         for cls, found in plain.items()
         if cls not in graph.reachable(within, cls)
     }
+
+
+def _tucked(decls: dict[int, Decl], users: _Users) -> _Users:
+    """Return the defs above each class with methods that use it."""
+    defs = {idx for idx, decl in decls.items() if decl.kind is not DeclKind.CLASS}
+    above = {
+        cls: [user for user in found if user < cls and user in defs]
+        for cls, found in users.items()
+        if _has_methods(decls[cls])
+    }
+    return {cls: found for cls, found in above.items() if found}
 
 
 def _has_methods(decl: Decl) -> bool:

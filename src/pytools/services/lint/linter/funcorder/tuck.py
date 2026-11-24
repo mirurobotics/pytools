@@ -1,4 +1,4 @@
-from pytools.services.lint.linter.funcorder.model import DeclKind, Model
+from pytools.services.lint.linter.funcorder.model import Model
 
 
 def tuck(model: Model, trees: list[list[int]], waits: dict[int, set[int]]) -> set[int]:
@@ -31,13 +31,7 @@ def _next_tuck(
 
 def _last_user_tree(model: Model, trees: list[list[int]], cls: int) -> int | None:
     """Return the last of trees that holds a def above cls that uses it."""
-    users = {
-        user
-        for user in model.tucked[cls]
-        if user < cls
-        and user in model.decls
-        and model.decls[user].kind is not DeclKind.CLASS
-    }
+    users = set(model.tucked[cls])
     found = [pos for pos, tree in enumerate(trees) if not users.isdisjoint(tree)]
     return max(found, default=None)
 
