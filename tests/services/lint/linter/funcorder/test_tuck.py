@@ -71,13 +71,9 @@ class Obj:
     def ident(self): _g()
 def _g(): pass
 """
-_CLASS_USER: Final = """\
-class Other:
-    def use(self): return Obj()
-def run(): pass
-class Obj:
-    def ident(self): return 1
-"""
+_CLASS_USER: Final = (
+    "class Other:\n    def use(self): return Obj()\ndef run(): pass\n" + _OBJ
+)
 _BASE_NEED: Final = """\
 def run(): return Obj()
 def other(): pass
@@ -133,7 +129,7 @@ class Obj:
     x: X
     def ident(self): return 1
 """
-_NONLOCAL_WRITE: Final = """\
+_NONLOCAL: Final = """\
 def outer():
     value = 1
     class Box:
@@ -143,25 +139,24 @@ def outer():
             value = 2
         def other(self): pass
         class Obj:
-            captured = value
-            def ident(self): return 1
-    return Box
 """
-_NONLOCAL_DEFAULT: Final = """\
-def outer():
-    value = 1
-    class Box:
-        def make(self): return self.Obj()
-        class Update:
-            nonlocal value
-            value = 2
-        def other(self): pass
-        class Obj:
-            def ident(self, v=value): return v
-    return Box
-"""
+_NONLOCAL_WRITE: Final = (
+    _NONLOCAL + "            captured = value\n            def ident(self): return 1\n"
+)
+_NONLOCAL_DEFAULT: Final = (
+    _NONLOCAL + "            def ident(self, v=value): return v\n"
+)
 _BOX: Final = "class Box:\n    def make(self): return self.Obj()\n"
 _UPDATE: Final = "    class Update:\n        STATE.value = 2\n"
+_CARRIED_DEFAULT: Final = """\
+import sys
+def make(): return Obj()
+sys.state = 2
+def other(): pass
+class Obj:
+    def ident(self): return helper()
+def helper(value=sys.state): return value
+"""
 _STAR_IMPORT: Final = (
     "def run(): return Obj()\nfrom m import *\ndef other(): pass\n" + _OBJ
 )
@@ -260,6 +255,7 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_OWN_DEF_CALLED, id="definition-calls-its-own-def"),
         pytest.param(_DECORATED_HELPER, id="tree-holds-a-decorated-def"),
         pytest.param(_HELPER_WAITS, id="would-take-a-helper-past-its-default"),
+        pytest.param(_CARRIED_DEFAULT, id="would-take-a-helper-past-a-write"),
         pytest.param(_GLOBAL_THROUGH_CALL, id="would-rise-past-a-call"),
         pytest.param(_STAR_IMPORT, id="would-rise-past-a-star-import"),
         pytest.param(_NONLOCAL_WRITE, id="would-rise-past-a-nonlocal-write"),

@@ -38,7 +38,7 @@ class Classes:
     inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
     _kept: frozenset[int]  # the decls that never move
-    _blocked: dict[int, frozenset[int]]  # the statements each class must not move past
+    _blocked: dict[int, frozenset[int]]  # the statements each decl must not move past
 
     def may_pass(self, moved: Collection[int], passed: Collection[int]) -> bool:
         """Report whether the decls moved may move together past those passed."""
@@ -144,14 +144,19 @@ def _bare_def_names(decls: dict[int, Decl], bindings: Counter[str]) -> set[str]:
 
 
 def _writes_outer(decls: dict[int, Decl]) -> frozenset[int]:
-    """Return the classes whose body, outside defs, declares a global or nonlocal."""
+    """Return the classes whose header has a walrus, or body a global or nonlocal."""
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    return frozenset(idx for idx in classes if _has_outer_write(decls[idx]))
+    return frozenset(idx for idx in classes if _has_outer_write(decls[idx].stmt))
 
 
-def _has_outer_write(decl: Decl) -> bool:
-    nodes = walk_outside(decl.stmt.body, DEFS)
-    return any(isinstance(node, (ast.Global, ast.Nonlocal)) for node in nodes)
+def _has_outer_write(stmt: Function | ast.ClassDef) -> bool:
+    if not isinstance(stmt, ast.ClassDef):
+        return False
+    header = [*stmt.decorator_list, *stmt.bases, *stmt.keywords]
+    in_header = [node for part in header for node in ast.walk(part)]
+    nodes = [*walk_outside(stmt.body, DEFS), *in_header]
+    writes = (ast.Global, ast.Nonlocal, ast.NamedExpr)
+    return any(isinstance(node, writes) for node in nodes)
 
 
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
@@ -180,23 +185,21 @@ def _blocked(
     *,
     is_class: bool,
 ) -> dict[int, frozenset[int]]:
-    """Return the statements each class must not move past.
+    """Return the statements each decl must not move past.
 
-    Its binders bind a name it reads when defined. If it reads a name the scope
-    may bind, so may any statement but an inert decl that runs no scope code. In
-    a class scope, a class is also walled when its definition may run code,
-    perhaps the module's that `_runs_code` misses, or reads a name its body
-    doesn't bind.
+    Its binders bind a name it reads when defined. Any statement but an inert
+    decl that runs no scope code may run code or bind a name, so a decl whose
+    definition may run code must not pass one, nor may a class that reads a name
+    the scope may bind or, in a class scope, a name its body doesn't bind.
     """
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     active = {idx for idx, decl in decls.items() if not is_inert(decl.stmt)}
     walls = frozenset(range(len(effects))) - (decls.keys() - kept - active)
-    walled = {cls for cls in classes if effects[cls].reads & bindings.keys()}
-    loose = {cls for cls in classes if effects[cls].reads - effects[cls].binds}
+    walled = active | {cls for cls in classes if effects[cls].reads & bindings.keys()}
     if is_class:
-        walled |= (active | loose) & set(classes)
+        walled |= {cls for cls in classes if effects[cls].reads - effects[cls].binds}
     return {
-        cls: binders[cls] | (walls if cls in walled else frozenset()) for cls in classes
+        idx: binders[idx] | (walls if idx in walled else frozenset()) for idx in decls
     }
 
 

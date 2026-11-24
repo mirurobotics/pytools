@@ -190,6 +190,10 @@ def _diag(line: int, message: str) -> Diagnostic:
         pytest.param(_DECORATED_ABOVE, id="class-would-pass-a-decorator"),
         pytest.param(_EXEMPT_CLASS, id="helper-above-an-exempt-class"),
         pytest.param(
+            "class P(B := object): pass\ndef f(v: B): pass\ndef make(): return P()\n",
+            id="class-header-walrus",
+        ),
+        pytest.param(
             "def helper(): pass\ndef run(v=(lambda: helper())()): pass\n",
             id="lambda-called-in-a-default",
         ),

@@ -175,6 +175,10 @@ def run():
         pytest.param("def make(p: 'Point'): pass\n" + _POINT, id="string-annotation"),
         pytest.param(_CYCLE, id="classes-using-each-other"),
         pytest.param(_ITEM_OF_LOCAL, id="definition-indexes-a-local"),
+        pytest.param(
+            'class Point:\n    print("a")\n' + _RUN + 'print("b")\n' + _MAKE,
+            id="class-that-calls-code-past-a-statement",
+        ),
         pytest.param(_NOLINT + _RUN + _MAKE, id="nolint"),
     ],
 )
@@ -198,7 +202,7 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
             id="augmented-assignment",
         ),
         pytest.param(
-            _MAKE + "X = 1\nclass Point:\n    x = dict()\n",
+            _MAKE + _RUN + "class Point:\n    x = dict()\n",
             {2: f'{_REPORT} "make"'},
             id="module-class-that-calls-code",
         ),
