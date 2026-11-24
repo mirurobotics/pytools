@@ -300,7 +300,18 @@ def _tucked(decls: dict[int, Decl], users: _Users) -> _Users:
 
 
 def _has_methods(decl: Decl) -> bool:
-    return any(isinstance(stmt, DEFS) for stmt in decl.stmt.body)
+    """Report whether decl has a def with more than a docstring or `...`."""
+    return any(isinstance(stmt, DEFS) and _has_body(stmt) for stmt in decl.stmt.body)
+
+
+def _has_body(func: Function) -> bool:
+    body = func.body[1:] if ast.get_docstring(func) is not None else func.body
+    return not all(
+        isinstance(stmt, ast.Expr)
+        and isinstance(stmt.value, ast.Constant)
+        and stmt.value.value is Ellipsis
+        for stmt in body
+    )
 
 
 def _plain_needs(
