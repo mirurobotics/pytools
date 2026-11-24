@@ -63,7 +63,7 @@ _RISES_PAST_NEED: Final = """\
 def make(): return Point()
 ORIGIN = 0
 class Point:
-    x = ORIGIN
+    x: ORIGIN
 """
 _CYCLE: Final = """\
 def run(): return A, B

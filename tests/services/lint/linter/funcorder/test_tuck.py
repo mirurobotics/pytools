@@ -137,6 +137,16 @@ class Obj:
 @_register
 def _g(): pass
 """
+_GLOBAL_THROUGH_CALL: Final = """\
+X = 1
+def configure(): global X; X = 2
+def run(): return Obj()
+configure()
+def other(): pass
+class Obj:
+    x: X
+    def ident(self): return 1
+"""
 _HELPER_WAITS: Final = """\
 def run(): return Obj()
 def other(): pass
@@ -232,6 +242,7 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_OWN_DEF_CALLED, id="definition-calls-its-own-def"),
         pytest.param(_DECORATED_HELPER, id="tree-holds-a-decorated-def"),
         pytest.param(_HELPER_WAITS, id="would-take-a-helper-past-its-default"),
+        pytest.param(_GLOBAL_THROUGH_CALL, id="would-rise-past-a-call"),
     ],
 )
 def test_check_skips_class_left_where_it_is(parse: Parse, source: str) -> None:

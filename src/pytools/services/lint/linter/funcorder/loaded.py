@@ -1,22 +1,23 @@
 import ast
-from typing import Final, TypeGuard
+from typing import TypeGuard
 
-from pytools.services.lint.linter.analysis.analysis import Function
+from pytools.services.lint.linter.analysis.analysis import ROOTS, Function
 from pytools.services.lint.linter.analysis.names import outer_parts, param_defaults
-
-_ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 
 
 def loaded_nodes(nodes: list[ast.AST], body: set[ast.AST]) -> set[ast.AST]:
     """Return the nodes only loaded, running none of their code.
 
     In a class body, only the parts of an annotation can be, since the body may
-    run code on any value it binds or iterates. Nodes come parents first.
+    run code on any value it binds or iterates. Anywhere, a list or tuple's
+    elements are only if it is, since a callee can run them. Nodes come
+    parents first.
     """
     loaded: set[ast.AST] = set()
     for node in nodes:
-        is_root = isinstance(node, (ast.AnnAssign, *_ROOTS))
-        if node not in body or node in loaded or is_root:
+        is_root = isinstance(node, (ast.AnnAssign, *ROOTS))
+        is_gated = node in body or isinstance(node, (ast.List, ast.Tuple))
+        if not is_gated or node in loaded or is_root:
             loaded.update(_loaded_parts(node, in_body=node in body))
     return loaded
 
@@ -32,7 +33,7 @@ def _loaded_parts(node: ast.AST, *, in_body: bool) -> list[ast.AST]:
         return [node.annotation]
     if isinstance(node, (ast.List, ast.Tuple)):
         return list(node.elts)
-    if isinstance(node, _ROOTS):
+    if isinstance(node, ROOTS):
         return _loaded_def_parts(node, in_body=in_body)
     if isinstance(node, ast.Subscript) and _is_named(node.value):
         return [node.slice]
@@ -42,7 +43,8 @@ def _loaded_parts(node: ast.AST, *, in_body: bool) -> list[ast.AST]:
 def _loaded_def_parts(node: Function | ast.Lambda, *, in_body: bool) -> list[ast.AST]:
     """Return a def's or lambda's annotations, setter's def and defaults.
 
-    A class body may run code on a default, as on any value it binds.
+    In a class body, a default pins the class too, which is deliberately
+    conservative.
     """
     defaults = param_defaults(node.args)
     if isinstance(node, ast.Lambda):
@@ -63,5 +65,3 @@ def _is_named(node: ast.expr) -> bool:
     while isinstance(node, ast.Attribute):
         node = node.value
     return isinstance(node, ast.Name)
-
-

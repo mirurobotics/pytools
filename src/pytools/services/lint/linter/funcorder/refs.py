@@ -4,6 +4,7 @@ from typing import Final, TypeGuard
 
 from pytools.services.lint.linter.analysis.analysis import (
     DEFS,
+    ROOTS,
     CheckInput,
     Function,
     walk_outside,
@@ -18,7 +19,6 @@ from pytools.services.lint.linter.analysis.names import (
 )
 from pytools.services.lint.linter.funcorder.loaded import loaded_nodes
 
-_ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 _COMPS: Final = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 _TYPE_PARAMS: Final = (ast.TypeVar, ast.ParamSpec, ast.TypeVarTuple)
 
@@ -65,10 +65,31 @@ def _receiver(func: Function) -> str | None:
 
 
 def _free_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
-    """Return the names stmt refers to in code that runs only when called."""
-    nodes = walk_outside([stmt], _ROOTS)
-    roots = [node for node in nodes if isinstance(node, _ROOTS)]
-    return [name for root in roots for name in _root_free_calls(file, root)]
+    """Return the names stmt refers to in code that runs only when called.
+
+    A class's type parameters hide names in the defs in its body.
+    """
+    nodes = list(walk_outside([stmt], ROOTS))
+    roots = [node for node in nodes if isinstance(node, ROOTS)]
+    classes = [node for node in nodes if isinstance(node, ast.ClassDef)]
+    hidden = _class_params(classes)
+    return [
+        name
+        for root in roots
+        for name in _root_free_calls(file, root)
+        if name not in hidden.get(root, frozenset())
+    ]
+
+
+def _class_params(classes: list[ast.ClassDef]) -> dict[ast.AST, frozenset[str]]:
+    """Return the type parameters of the classes around each def or lambda."""
+    params: dict[ast.AST, frozenset[str]] = {}
+    for cls in classes:
+        inner = walk_outside(cls.body, ROOTS)
+        roots = [node for node in inner if isinstance(node, ROOTS)]
+        found = _type_params(cls)
+        params.update((root, params.get(root, frozenset()) | found) for root in roots)
+    return params
 
 
 def _root_free_calls(file: CheckInput, root: _Root) -> list[str]:
@@ -177,7 +198,7 @@ def _import_time_parts(
     class's or def's type parameters hide names in its body and annotations.
     In a class scope, only the parts that can see the scope's names count.
     """
-    if isinstance(node, _ROOTS):
+    if isinstance(node, ROOTS):
         return _outer_parts_hiding(node, hidden)
     if isinstance(node, _COMPS):
         first = node.generators[0].iter
@@ -314,7 +335,7 @@ def _run_nodes(parts: list[ast.AST]) -> list[ast.AST]:
 
 
 def _comp_outer_parts(comp: _Comp) -> list[ast.AST]:
-    nodes = walk_outside([comp], (*_ROOTS, ast.ClassDef))
+    nodes = walk_outside([comp], (*ROOTS, ast.ClassDef))
     targets = [node.target for node in nodes if isinstance(node, ast.NamedExpr)]
     return [comp.generators[0].iter, *targets]
 
@@ -329,5 +350,3 @@ def _called(nodes: list[ast.AST], loaded: set[ast.AST]) -> set[str]:
 
 def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:
     return isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
-
-

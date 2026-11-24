@@ -9,6 +9,7 @@ from pytools.services.lint.linter.analysis.comments import Comment
 type Function = ast.FunctionDef | ast.AsyncFunctionDef
 
 DEFS: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
+ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 
 
 class Rule(StrEnum):

@@ -48,17 +48,19 @@ def _is_tuckable(
     It can't hold a statement, which runs in order at import time, a decl
     whose definition may run scope code, or a class whose name is bound again,
     and in the file the class must rise below that tree's end without passing
-    what it uses when defined. Nor can a tree it passes hold what it waits for
-    or a caller.
+    what it uses when defined. Nor can a tree it passes hold what it waits for,
+    a caller, or a statement the class must not move past.
     """
     tree, end = trees[start], trees[last][-1]
     if any(idx not in model.decls and idx not in model.stubs for idx in tree):
         return False
     if not model.classes.kept.isdisjoint(tree):
         return False
+    passed = {idx for between in trees[last + 1 : start] for idx in between}
+    if not model.classes.blocked[tree[0]].isdisjoint(passed):
+        return False
     if not max(model.needs[tree[0]], default=-1) < end < tree[0]:
         return False
-    passed = {idx for between in trees[last + 1 : start] for idx in between}
     waited = {need for idx in tree for need in waits.get(idx, set())}
     callers = {caller for idx in tree for caller in model.callers.get(idx, [])}
     return passed.isdisjoint(waited | callers)

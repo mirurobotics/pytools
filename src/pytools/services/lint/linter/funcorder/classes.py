@@ -36,6 +36,7 @@ class Classes:
     inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
     kept: frozenset[int]  # decls whose definition may run scope code, shadowed classes
+    blocked: dict[int, frozenset[int]]  # the statements each class must not move past
 
 
 def find_classes(
@@ -54,13 +55,14 @@ def find_classes(
     users = _users(file, scope, decls, refs, loads)
     used = {cls: found for cls, found in users.items() if found}
     changes = [bound_names(file, stmt) for stmt in scope.body]
-    kept = _runs_code(decls, effects) | _shadowed_classes(decls, changes)
+    rebound = _global_names(scope)
+    kept = _runs_code(decls, effects) | _shadowed_classes(decls, changes, rebound)
     plain = _plain(decls, used)
-    blocked = _blocked(decls, effects, binders, kept, changes, plain)
+    bound = frozenset().union(*changes, rebound)
+    blocked = _blocked(decls, effects, binders, kept, bound)
     uses = _place(decls, plain, blocked, kept)
-    needs = graph.above(binders)
-    inherited = _inherited(plain, uses, needs)
-    return Classes(uses, inherited, _tucked(decls, used), kept)
+    inherited = _inherited(plain, uses, graph.above(binders))
+    return Classes(uses, inherited, _tucked(decls, used), kept, blocked)
 
 
 def _users(
@@ -90,6 +92,13 @@ def _users(
         for cls, decl in decls.items()
         if decl.kind is DeclKind.CLASS
     }
+
+
+def _global_names(scope: ast.Module | ast.ClassDef) -> frozenset[str]:
+    """Return the names declared global anywhere in scope, which it may rebind."""
+    nodes = [node for stmt in scope.body for node in ast.walk(stmt)]
+    found = [node for node in nodes if isinstance(node, ast.Global)]
+    return frozenset(name for node in found for name in node.names)
 
 
 def _runs_code(
@@ -123,13 +132,14 @@ def _bare_def_names(decls: dict[int, Decl], effects: list[ImportTimeNames]) -> s
 
 
 def _shadowed_classes(
-    decls: dict[int, Decl], changes: list[frozenset[str]]
+    decls: dict[int, Decl], changes: list[frozenset[str]], rebound: frozenset[str]
 ) -> frozenset[int]:
     """Return the classes whose name another statement binds or deletes.
 
     A use of that name may mean another binding, so such a class never moves.
     """
     counts = Counter(name for found in changes for name in found)
+    counts.update(rebound)
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     return frozenset(cls for cls in classes if counts[decls[cls].stmt.name] > 1)
 
@@ -156,21 +166,25 @@ def _blocked(
     effects: list[ImportTimeNames],
     binders: dict[int, frozenset[int]],
     kept: frozenset[int],
-    changes: list[frozenset[str]],
-    plain: _Users,
+    bound: frozenset[str],
 ) -> dict[int, frozenset[int]]:
-    """Return the statements each class without methods must not move past.
+    """Return the statements each class must not move past.
 
     A move past a statement that binds a name it reads when defined changes
-    that name. If it reads a name bound in the scope, so may any statement but
+    that name. If it reads a name the scope may bind, so may any statement but
     a decl that runs no scope code, such as a call that sets it as a global.
     """
-    local = frozenset().union(*changes)
-    walls = frozenset(range(len(changes))) - (decls.keys() - kept)
+    walls = frozenset(range(len(effects))) - (decls.keys() - kept)
+    classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
+    walled = {cls for cls in classes if _reads_bound(effects[cls].loads, bound)}
     return {
-        cls: binders[cls] | (walls if effects[cls].loads & local else frozenset())
-        for cls in plain
+        cls: binders[cls] | (walls if cls in walled else frozenset()) for cls in classes
     }
+
+
+def _reads_bound(loads: set[str], bound: frozenset[str]) -> bool:
+    """Report whether loads name what the scope binds; after a star import, any."""
+    return bool(loads & bound) or ("*" in bound and bool(loads))
 
 
 def _place(
