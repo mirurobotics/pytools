@@ -1,7 +1,10 @@
 import ast
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import DEFS
 from pytools.services.lint.linter.analysis.names import outer_parts, param_defaults
+
+_PLAIN: Final = (ast.Name, ast.Constant)
 
 
 def is_inert(cls: ast.ClassDef) -> bool:
@@ -9,7 +12,7 @@ def is_inert(cls: ast.ClassDef) -> bool:
 
     It has no decorators, bases or keywords, and its body holds only docstrings,
     `pass`, undecorated defs with literal defaults, and literals bound to names.
-    Any annotation is a literal or a name, perhaps dotted.
+    Any annotation is a literal or a name.
     """
     if cls.decorator_list or cls.bases or cls.keywords:
         return False
@@ -25,17 +28,12 @@ def _is_inert_stmt(stmt: ast.stmt) -> bool:
     if isinstance(stmt, ast.AnnAssign):
         is_named = isinstance(stmt.target, ast.Name)
         is_literal = stmt.value is None or isinstance(stmt.value, ast.Constant)
-        return is_named and is_literal and _is_plain(stmt.annotation)
+        is_plain = isinstance(stmt.annotation, _PLAIN)
+        return is_named and is_literal and is_plain
     if isinstance(stmt, DEFS):
         defaults = param_defaults(stmt.args)
         annotations = [part for part in outer_parts(stmt) if part not in defaults]
         is_literal = all(isinstance(default, ast.Constant) for default in defaults)
-        is_plain = all(_is_plain(part) for part in annotations)
+        is_plain = all(isinstance(part, _PLAIN) for part in annotations)
         return not stmt.decorator_list and is_literal and is_plain
     return isinstance(stmt, ast.Pass)
-
-
-def _is_plain(node: ast.AST) -> bool:
-    while isinstance(node, ast.Attribute):
-        node = node.value
-    return isinstance(node, (ast.Name, ast.Constant))

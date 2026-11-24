@@ -161,14 +161,16 @@ def import_time_names(
     called = _called(nodes, loaded_nodes(nodes, body) | set(stored))
     bound = [node for node in nodes if not isinstance(node, ast.alias)]
     binds = _bound_names(file, bound) | _declared(list(ast.walk(stmt)), ast.Global)
-    loads |= _invoked_lambda_loads(file, nodes)
     return ImportTimeNames(loads, called, {name.id for name in stored}, binds, reads)
 
 
 def _import_time_walk(
     file: CheckInput, stmt: ast.stmt, own: str, *, is_class: bool
 ) -> tuple[list[ast.AST], set[str]]:
-    """Return the nodes of stmt that run when it does, and the names they load."""
+    """Return the nodes of stmt that run when it does, and the names they load.
+
+    A lambda called right away loads its free names there too.
+    """
     pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0, frozenset()))]
     nodes: list[ast.AST] = []
     loads: set[str] = set()
@@ -177,6 +179,9 @@ def _import_time_walk(
         nodes.append(node)
         reads = [name for name in _reads(node) if name != own]
         loads.update(name for name in reads if not _is_hidden(hidden, name))
+        func = node.func if isinstance(node, ast.Call) else None
+        if isinstance(func, ast.Lambda):
+            loads.update(_lambda_loads(file, func) - hidden[2])
         pending.extend(_import_time_parts(file, node, hidden, is_class=is_class))
     return nodes, loads
 
@@ -184,6 +189,11 @@ def _import_time_walk(
 def _is_hidden(hidden: _Hidden, name: str) -> bool:
     bound, idx, local = hidden
     return name in local or bound.get(name, idx) < idx
+
+
+def _lambda_loads(file: CheckInput, lam: ast.Lambda) -> set[str]:
+    loads = {node.id for node in ast.walk(lam.body) if _is_load(node)}
+    return loads - _bound_names(file, own_parts(lam))
 
 
 def _import_time_parts(
@@ -293,17 +303,6 @@ def _reads(node: ast.AST) -> list[str]:
     if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
         return [node.target.id]
     return [node.id] if _is_load(node) else []
-
-
-def _invoked_lambda_loads(file: CheckInput, nodes: list[ast.AST]) -> set[str]:
-    funcs = {node.func for node in nodes if isinstance(node, ast.Call)}
-    lambdas = [node for node in nodes if node in funcs and isinstance(node, ast.Lambda)]
-    return {name for lam in lambdas for name in _lambda_loads(file, lam)}
-
-
-def _lambda_loads(file: CheckInput, lam: ast.Lambda) -> set[str]:
-    loads = {node.id for node in ast.walk(lam.body) if _is_load(node)}
-    return loads - _bound_names(file, own_parts(lam))
 
 
 def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:

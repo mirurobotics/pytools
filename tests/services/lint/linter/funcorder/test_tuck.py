@@ -298,6 +298,7 @@ def test_check_skips_class_left_where_it_is(parse: Parse, source: str) -> None:
         pytest.param("    class Obj:\n        x = SETTINGS['key']\n", id="subscript"),
         pytest.param("    class Obj:\n        x = OTHER + 1\n", id="operator"),
         pytest.param("    class Obj:\n        def go(self, v: f()): pass\n", id="hint"),
+        pytest.param("    class Obj:\n        def go(self, v: A.b): pass\n", id="dot"),
     ],
 )
 def test_check_skips_nested_class_running_code(parse: Parse, header: str) -> None:

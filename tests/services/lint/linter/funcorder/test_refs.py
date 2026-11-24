@@ -271,6 +271,7 @@ def _method_calls(parse: Parse, source: str) -> list[str]:
         ),
         pytest.param(_METHOD_NAMED_LIKE_DECORATOR, {"retry"}, id="method-decorator"),
         pytest.param(_DEEP_STATEMENT, {"make"}, id="deep-expression"),
+        pytest.param("x = [(lambda: P)() for P in t]\n", {"t"}, id="lambda-call"),
     ],
 )
 def test_import_time_names_skips_function_bodies(
