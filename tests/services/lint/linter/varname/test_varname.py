@@ -5,7 +5,7 @@ import pytest
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.varname import varname
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
 _REBOUND = """\
 def f():

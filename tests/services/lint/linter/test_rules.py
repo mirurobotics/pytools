@@ -5,7 +5,7 @@ import pytest
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
 from pytools.services.lint.linter.rules import Config, run_checks
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
 _SOURCE = """\
 def f(parameter_name_too_long, n):

@@ -5,7 +5,7 @@ import pytest
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.namelen import namelen
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
 _LOCAL_AT = "a" * 20
 _LOCAL_OVER = "a" * 21

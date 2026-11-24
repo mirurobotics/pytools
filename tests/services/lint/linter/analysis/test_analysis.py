@@ -14,7 +14,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     walk_outside,
 )
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
 _FUNCTIONS = """\
 class A:

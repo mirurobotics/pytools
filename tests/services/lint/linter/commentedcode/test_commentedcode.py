@@ -5,7 +5,7 @@ import pytest
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.commentedcode import commentedcode
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
 _FUNCTION_BODY = """\
 def helper():

@@ -5,7 +5,7 @@ import pytest
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.straycomment import straycomment
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
 _BANNER = """\
 import os

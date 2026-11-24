@@ -9,7 +9,7 @@ import pytest
 
 from pytools.services.lint import external
 
-Call = tuple[list[str], dict[str, object]]
+type Call = tuple[list[str], dict[str, object]]
 
 _CONFIG_DIR = files("pytools.services.lint")
 _RUFF = ["--config", str(_CONFIG_DIR / "ruff.toml")]

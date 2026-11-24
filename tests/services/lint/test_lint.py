@@ -12,7 +12,7 @@ from pytools.services.lint.lint import (
 )
 from pytools.services.lint.linter.rules import Config
 
-Call = tuple[str, list[str], bool | Config | None]
+type Call = tuple[str, list[str], bool | Config | None]
 
 _PATHS = ["src", "tests"]
 _FILES = ["src/a.py", "tests/test_a.py"]

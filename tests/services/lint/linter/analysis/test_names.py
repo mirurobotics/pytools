@@ -6,7 +6,7 @@ import pytest
 from pytools.services.lint.linter.analysis import names
 from pytools.services.lint.linter.analysis.analysis import CheckInput
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
 _KINDS = """\
 first = 1

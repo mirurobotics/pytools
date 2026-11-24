@@ -10,7 +10,7 @@ from pytools.services.lint.linter.analysis.nolint import (
     has_nolint_on_lines,
 )
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
 _MAPPING_REST = """\
 match a:
