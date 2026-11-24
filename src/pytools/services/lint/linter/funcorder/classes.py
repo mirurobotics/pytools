@@ -193,10 +193,18 @@ def _blocked(
     """
     walls = frozenset(range(len(effects))) - (decls.keys() - kept)
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    walled = {cls for cls in classes if effects[cls].loads & bindings.keys()}
+    reads = {cls: _reads(decls[cls], effects[cls]) for cls in classes}
+    walled = {cls for cls in classes if reads[cls] & bindings.keys()}
     return {
         cls: binders[cls] | (walls if cls in walled else frozenset()) for cls in classes
     }
+
+
+def _reads(decl: Decl, found: ImportTimeNames) -> set[str]:
+    """Return the names decl may read when defined, wherever they resolve."""
+    nodes = walk_outside(decl.stmt.body, DEFS)
+    names = [node for node in nodes if isinstance(node, ast.Name)]
+    return found.loads | {name.id for name in names if isinstance(name.ctx, ast.Load)}
 
 
 def _place(

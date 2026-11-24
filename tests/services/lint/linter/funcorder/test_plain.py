@@ -200,6 +200,11 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
             id="module-statement",
         ),
         pytest.param(
+            _POINT + _RUN + "class Options:\n    Point |= None\n",
+            {0: f'{_REPORT} "Options"'},
+            id="augmented-assignment",
+        ),
+        pytest.param(
             _POINT + _RUN + "class Line(Point):\n    def length(self): return 0\n",
             {0: f'{_REPORT} "Line"'},
             id="base",

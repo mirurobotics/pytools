@@ -147,6 +147,20 @@ class Obj:
     x: X
     def ident(self): return 1
 """
+_NONLOCAL_WRITE: Final = """\
+def outer():
+    value = 1
+    class Box:
+        def make(self): return self.Obj()
+        class Update:
+            nonlocal value
+            value = 2
+        def other(self): pass
+        class Obj:
+            captured = value
+            def ident(self): return 1
+    return Box
+"""
 _STAR_IMPORT: Final = """\
 def run(): return Obj()
 from m import *
@@ -251,6 +265,7 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_HELPER_WAITS, id="would-take-a-helper-past-its-default"),
         pytest.param(_GLOBAL_THROUGH_CALL, id="would-rise-past-a-call"),
         pytest.param(_STAR_IMPORT, id="would-rise-past-a-star-import"),
+        pytest.param(_NONLOCAL_WRITE, id="would-rise-past-a-nonlocal-write"),
     ],
 )
 def test_check_skips_class_left_where_it_is(parse: Parse, source: str) -> None:

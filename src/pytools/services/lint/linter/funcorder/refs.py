@@ -161,8 +161,8 @@ def import_time_names(
     while pending:
         node, hidden = pending.pop()
         nodes.append(node)
-        if _is_load(node) and node.id != own and not _is_hidden(hidden, node.id):
-            loads.add(node.id)
+        reads = [name for name in _reads(node) if name != own]
+        loads.update(name for name in reads if not _is_hidden(hidden, name))
         pending.extend(_import_time_parts(file, node, hidden, is_class=is_class))
     assigns = [node for node in nodes if isinstance(node, (ast.Assign, ast.AnnAssign))]
     stored = [node.value for node in assigns if isinstance(node.value, ast.Name)]
@@ -173,6 +173,13 @@ def import_time_names(
     names = {name.id for name in stored}
     binds = _bound_names(file, bound) | _declared(list(ast.walk(stmt)), ast.Global)
     return ImportTimeNames(loads, called, names, binds)
+
+
+def _reads(node: ast.AST) -> list[str]:
+    """Return the names node reads, such as an augmented assignment's target."""
+    if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+        return [node.target.id]
+    return [node.id] if _is_load(node) else []
 
 
 def _is_hidden(hidden: _Hidden, name: str) -> bool:
@@ -292,10 +299,10 @@ def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:
 
 
 def scope_bindings(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Counter[str]:
-    """Return how many times scope may bind each name, globals and `*` included."""
+    """Return how many times scope may bind each name, outer and `*` names included."""
     counts = Counter(name for stmt in scope.body for name in bound_names(file, stmt))
     nodes = [node for stmt in scope.body for node in ast.walk(stmt)]
-    counts.update(_declared(nodes, ast.Global))
+    counts.update(_declared(nodes, ast.Global) | _declared(nodes, ast.Nonlocal))
     return counts
 
 
