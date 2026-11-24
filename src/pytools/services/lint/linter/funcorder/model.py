@@ -1,6 +1,5 @@
 import ast
 from dataclasses import dataclass
-from enum import Enum, auto
 from itertools import chain, pairwise
 from typing import Final
 
@@ -12,6 +11,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 from pytools.services.lint.linter.funcorder import graph
+from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.refs import (
     bound_names,
     called_names,
@@ -21,26 +21,6 @@ from pytools.services.lint.linter.funcorder.refs import (
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 type _Users = dict[int, list[int]]
-
-
-class DeclKind(Enum):
-    """How a decl takes part in its scope's order."""
-
-    PUBLIC = auto()
-    PRIVATE = auto()  # named with a leading underscore, and not a dunder
-    EXEMPT = auto()  # a def with a nolint, which keeps its place
-    CLASS = auto()  # one caller, through its methods' calls
-
-
-@dataclass(frozen=True)
-class Decl:
-    """A def or class in a scope, one of the units the scope is ordered by."""
-
-    idx: int
-    stmt: Function | ast.ClassDef
-    name: str
-    kind: DeclKind
-    first: int  # its first stub, such as a property getter, or idx without one
 
 
 @dataclass(frozen=True)

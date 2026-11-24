@@ -1,4 +1,5 @@
-from pytools.services.lint.linter.funcorder.model import DeclKind, Model, must_precede
+from pytools.services.lint.linter.funcorder.decl import DeclKind
+from pytools.services.lint.linter.funcorder.model import Model, must_precede
 from pytools.services.lint.linter.funcorder.tuck import tuck
 
 

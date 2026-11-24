@@ -1,13 +1,8 @@
 import ast
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
-from pytools.services.lint.linter.funcorder.model import (
-    Decl,
-    DeclKind,
-    Model,
-    build,
-    must_precede,
-)
+from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
+from pytools.services.lint.linter.funcorder.model import Model, build, must_precede
 from pytools.services.lint.linter.funcorder.order import arrange
 from pytools.services.lint.linter.funcorder.plain import plain_violations
 

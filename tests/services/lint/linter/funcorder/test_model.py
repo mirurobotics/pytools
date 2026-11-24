@@ -5,7 +5,7 @@ import pytest
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput
 from pytools.services.lint.linter.funcorder import model
-from pytools.services.lint.linter.funcorder.model import DeclKind
+from pytools.services.lint.linter.funcorder.decl import DeclKind
 
 type Parse = Callable[[str], CheckInput]
 
