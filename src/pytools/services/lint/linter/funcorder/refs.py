@@ -58,59 +58,44 @@ def _receiver_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
 
 def _receiver(func: Function) -> str | None:
     params = [*func.args.posonlyargs, *func.args.args]
-    is_static = any(
-        isinstance(dec, ast.Name) and dec.id == "staticmethod"
-        for dec in func.decorator_list
-    )
-    return None if is_static or not params else params[0].arg
+    names = [dec.id for dec in func.decorator_list if isinstance(dec, ast.Name)]
+    return None if "staticmethod" in names or not params else params[0].arg
 
 
 def _free_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
-    """Return the names stmt refers to in code that runs only when called.
-
-    A class's type parameters hide names in the defs in its body.
-    """
-    return [
+    """Return the names stmt refers to in code that runs only when called."""
+    loads = [
         name
-        for root, params in _roots(stmt)
-        for name in _root_free_calls(file, root, params)
+        for root, params in _roots(file, stmt)
+        for name in _root_free_loads(file, root, params)
     ]
+    return [name.id for name in sorted(loads, key=_position)]
 
 
-def _roots(stmt: ast.stmt) -> list[tuple[_Root, frozenset[str]]]:
-    """Return stmt's outermost defs and lambdas, with the type params around them.
-
-    A class's decorators run outside its type parameters' scope.
-    """
+def _roots(file: CheckInput, stmt: ast.stmt) -> list[tuple[_Root, frozenset[str]]]:
+    """Return stmt's defs and lambdas outside def bodies, and the names hidden there."""
     pending: list[tuple[ast.AST, frozenset[str]]] = [(stmt, frozenset())]
     found: list[tuple[_Root, frozenset[str]]] = []
     while pending:
         node, params = pending.pop()
-        if isinstance(node, ROOTS):
+        is_root = isinstance(node, ROOTS)
+        if is_root:
             found.append((node, params))
-            continue
-        if isinstance(node, ast.ClassDef):
-            outside, typed = node.decorator_list, params | _type_params(node)
-        else:
-            outside, typed = [], params
-        parts = reversed(list(ast.iter_child_nodes(node)))
-        pending.extend((part, params if part in outside else typed) for part in parts)
+        parts = outer_parts(node) if is_root else list(ast.iter_child_nodes(node))
+        outside, hidden = _hidden_in(file, node, params)
+        pending.extend((part, params if part in outside else hidden) for part in parts)
     return found
 
 
-def _root_free_calls(
+def _root_free_loads(
     file: CheckInput, root: _Root, params: frozenset[str]
-) -> list[str]:
+) -> list[ast.Name]:
     own = _bound_names(file, own_parts(root))
-    loads = [
+    return [
         node
         for node, bound in _scoped_nodes(file, root, params)
-        if isinstance(node, ast.Name)
-        and isinstance(node.ctx, ast.Load)
-        and node.id not in bound
-        and node.id not in own
+        if _is_load(node) and node.id not in bound and node.id not in own
     ]
-    return [name.id for name in sorted(loads, key=_position)]
 
 
 def _scoped_nodes(
@@ -118,11 +103,9 @@ def _scoped_nodes(
 ) -> list[tuple[ast.AST, frozenset[str]]]:
     """Return the nodes that run when root is called, with the names bound there.
 
-    A name bound in a scope hides a def in that scope and the scopes nested in
-    it, but a class body's names don't reach its methods, other than its type
-    parameters, and a global name hides nothing. Root starts with params, and
-    its own parameters are left out. A stack, not recursion, so deep nesting
-    doesn't overflow.
+    A scope's names hide those in its nested scopes, but a class body passes on
+    only its type parameters, and a global name hides nothing. A stack, not
+    recursion, so deep nesting doesn't overflow.
     """
     body: list[ast.AST] = [root.body] if isinstance(root, ast.Lambda) else [*root.body]
     todo: list[tuple[list[ast.AST], frozenset[str], ast.AST]] = [(body, params, root)]
@@ -135,8 +118,19 @@ def _scoped_nodes(
         inner = outer | _type_params(host) if isinstance(host, ast.ClassDef) else bound
         nested = [node for node in nodes if isinstance(node, SCOPES)]
         todo.extend((_inner_parts(part), inner, part) for part in nested)
-        found.extend((node, bound) for node in nodes)
+        typed = _typed_outer_nodes(nested)
+        found.extend((node, bound | typed.get(node, frozenset())) for node in nodes)
     return found
+
+
+def _typed_outer_nodes(scopes: list[ast.AST]) -> dict[ast.AST, frozenset[str]]:
+    """Return the nodes of scopes' outer parts that see their type parameters."""
+    typed: dict[ast.AST, frozenset[str]] = {}
+    for scope in scopes:
+        if isinstance(scope, (*DEFS, ast.ClassDef)):
+            inside = set(outer_parts(scope)) - set(_outside_type_params(scope))
+            typed.update(dict.fromkeys(_run_nodes(list(inside)), _type_params(scope)))
+    return typed
 
 
 def _position(node: ast.expr) -> tuple[int, int]:
@@ -150,7 +144,7 @@ class ImportTimeNames:
     loads: set[str]  # loaded from the scope it's in, outside lambda bodies
     called: set[str]  # used other than by only loading them, or read in a lambda
     stored: set[str]  # a class body's values, which only `__set_name__` may run
-    binds: frozenset[str]  # bound anywhere it runs, but by an import
+    binds: frozenset[str]  # bound anywhere it runs, but by an import, or made global
 
 
 def import_time_names(
@@ -158,12 +152,9 @@ def import_time_names(
 ) -> ImportTimeNames:
     """Return the names stmt uses outside function and lambda bodies.
 
-    A def's outer parts run before its name is bound, so its own name there is
-    the def it replaces, such as the getter in a property's setter decorator.
-    In a class scope, a nested class body or a comprehension past its first
-    iterable can't see the scope's names, so it's left out. A name used other
-    than by only loading it may run that object's code, and so may one a lambda
-    reads. A stack, not recursion, so deep nesting doesn't overflow.
+    A def's own name in its outer parts is the def it replaces. In a class scope,
+    parts that can't see the scope's names are left out. A stack, not recursion,
+    so deep nesting doesn't overflow.
     """
     own = stmt.name if isinstance(stmt, DEFS) else ""
     is_class = isinstance(scope, ast.ClassDef)
@@ -183,7 +174,8 @@ def import_time_names(
     called = _called(nodes, loaded_nodes(nodes, body) | set(stored))
     bound = [node for node in nodes if not isinstance(node, ast.alias)]
     names = {name.id for name in stored}
-    return ImportTimeNames(loads, called, names, _bound_names(file, bound))
+    binds = _bound_names(file, bound) | _declared(list(ast.walk(stmt)), ast.Global)
+    return ImportTimeNames(loads, called, names, binds)
 
 
 def _is_hidden(hidden: _Hidden, name: str) -> bool:
@@ -197,10 +189,8 @@ def _import_time_parts(
     """Return the parts of node that run when it does, with the names they hide.
 
     A name a class body binds hides the module's in later statements of that
-    body, but not in its comprehensions past their first iterable. There, the
-    targets of that comprehension and those around it hide names instead. A
-    class's or def's type parameters hide names in its body and annotations.
-    In a class scope, only the parts that can see the scope's names count.
+    body, but not in its comprehensions past their first iterable, where the
+    comprehensions' targets hide names instead.
     """
     if isinstance(node, ROOTS):
         return _outer_parts_hiding(node, hidden)
@@ -208,7 +198,7 @@ def _import_time_parts(
         first = node.generators[0].iter
         if is_class:
             return [(first, hidden)]
-        local = hidden[2] | _bound_names(file, _run_nodes(own_parts(node)))
+        local = _hidden_in(file, node, hidden[2])[1]
         rest: list[tuple[ast.AST, _Hidden]] = [
             (part, ({}, 0, local)) for part in _inner_parts(node)
         ]
@@ -227,16 +217,33 @@ def _import_time_parts(
 def _outer_parts_hiding(
     node: _Root | ast.ClassDef, hidden: _Hidden
 ) -> list[tuple[ast.AST, _Hidden]]:
-    """Return node's outer parts, with the names each hides.
-
-    Its decorators and defaults run outside its type parameters' scope.
-    """
+    """Return node's outer parts, with the names each hides."""
     bound, idx, local = hidden
     typed = (bound, idx, local | _type_params(node))
+    outside = _outside_type_params(node)
+    return [(part, hidden if part in outside else typed) for part in outer_parts(node)]
+
+
+def _hidden_in(
+    file: CheckInput, node: ast.AST, params: frozenset[str]
+) -> tuple[list[ast.AST], frozenset[str]]:
+    """Return node's parts that don't see the names it hides, and those names.
+
+    A comprehension's targets and a class's or def's type parameters hide names.
+    """
+    if isinstance(node, _COMPS):
+        targets = _bound_names(file, _run_nodes(own_parts(node)))
+        return [node.generators[0].iter], params | targets
+    if isinstance(node, (*ROOTS, ast.ClassDef)):
+        return _outside_type_params(node), params | _type_params(node)
+    return [], params
+
+
+def _outside_type_params(node: _Root | ast.ClassDef) -> list[ast.AST]:
+    """Return node's decorators and defaults, which run outside its type parameters."""
     defaults = [] if isinstance(node, ast.ClassDef) else param_defaults(node.args)
     decorators = [] if isinstance(node, ast.Lambda) else node.decorator_list
-    outside = [*decorators, *defaults]
-    return [(part, hidden if part in outside else typed) for part in outer_parts(node)]
+    return [*decorators, *defaults]
 
 
 def _type_params(node: _Root | ast.ClassDef) -> frozenset[str]:
@@ -274,8 +281,7 @@ def _is_definite(stmt: ast.stmt) -> bool:
     """Report whether stmt surely binds the names it binds once it runs.
 
     An annotation without a value binds nothing, and a statement holding others
-    in the same scope may skip them. A walrus may sit where it doesn't run, so a
-    statement with one counts as unsure.
+    or a walrus may skip them.
     """
     is_annotation = isinstance(stmt, ast.AnnAssign) and stmt.value is None
     nested = _run_nodes([stmt])[1:]
@@ -296,10 +302,7 @@ def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:
 
 
 def scope_bindings(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Counter[str]:
-    """Return how many statements of scope may bind each name.
-
-    A global declaration in it counts once more, and a star import binds `*`.
-    """
+    """Return how many times scope may bind each name, globals and `*` included."""
     counts = Counter(name for stmt in scope.body for name in bound_names(file, stmt))
     nodes = [node for stmt in scope.body for node in ast.walk(stmt)]
     counts.update(_declared(nodes, ast.Global))
@@ -312,10 +315,7 @@ def bound_names(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:
 
 
 def _bound_names(file: CheckInput, nodes: list[ast.AST]) -> frozenset[str]:
-    """Return the names nodes bind, which hide a def of the same name.
-
-    An import or deletion binds a name too; a global or nonlocal name binds elsewhere.
-    """
+    """Return the names nodes bind or delete; global or nonlocal ones bind elsewhere."""
     found = [binding(file, node, NameKind.LOCAL_VAR) for node in nodes]
     aliases = [node for node in nodes if isinstance(node, ast.alias)]
     imported = [alias.asname or alias.name.partition(".")[0] for alias in aliases]
