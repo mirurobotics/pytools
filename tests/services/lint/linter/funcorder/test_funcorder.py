@@ -167,6 +167,10 @@ def _diag(line: int, message: str) -> Diagnostic:
             "def helper(): pass\ndef run(v=(lambda: helper())()): pass\n",
             id="lambda-called-in-a-default",
         ),
+        pytest.param(
+            "def h(): pass\ndef run(a=(lambda h: h)(0), b=(lambda: h())()): pass\n",
+            id="lambdas-called-in-defaults",
+        ),
     ],
 )
 def test_check_skips_ordered_source(parse: Parse, source: str) -> None:

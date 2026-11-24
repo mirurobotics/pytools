@@ -161,7 +161,7 @@ def import_time_names(
     called = _called(nodes, loaded_nodes(nodes, body) | set(stored))
     bound = [node for node in nodes if not isinstance(node, ast.alias)]
     binds = _bound_names(file, bound) | _declared(list(ast.walk(stmt)), ast.Global)
-    loads |= _invoked_loads(file, nodes)
+    loads |= _invoked_lambda_loads(file, nodes)
     return ImportTimeNames(loads, called, {name.id for name in stored}, binds, reads)
 
 
@@ -295,13 +295,15 @@ def _reads(node: ast.AST) -> list[str]:
     return [node.id] if _is_load(node) else []
 
 
-def _invoked_loads(file: CheckInput, nodes: list[ast.AST]) -> set[str]:
-    """Return the names the lambdas among nodes that are called right away load."""
+def _invoked_lambda_loads(file: CheckInput, nodes: list[ast.AST]) -> set[str]:
     funcs = {node.func for node in nodes if isinstance(node, ast.Call)}
     lambdas = [node for node in nodes if node in funcs and isinstance(node, ast.Lambda)]
-    params = {name for lam in lambdas for name in _bound_names(file, own_parts(lam))}
-    loads = [node for lam in lambdas for node in ast.walk(lam.body) if _is_load(node)]
-    return {name.id for name in loads} - params
+    return {name for lam in lambdas for name in _lambda_loads(file, lam)}
+
+
+def _lambda_loads(file: CheckInput, lam: ast.Lambda) -> set[str]:
+    loads = {node.id for node in ast.walk(lam.body) if _is_load(node)}
+    return loads - _bound_names(file, own_parts(lam))
 
 
 def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:
