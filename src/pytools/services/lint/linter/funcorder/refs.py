@@ -101,8 +101,7 @@ def _scoped_nodes(
     """Return the nodes that run when root is called, with the names bound there.
 
     A scope's names hide those in its nested scopes, but a class body passes on
-    only its type parameters, and a global name hides nothing. A stack, not
-    recursion, so deep nesting doesn't overflow.
+    only its type parameters, and a global name hides nothing.
     """
     body: list[ast.AST] = [root.body] if isinstance(root, ast.Lambda) else [*root.body]
     todo: list[tuple[list[ast.AST], frozenset[str], ast.AST]] = [(body, params, root)]
@@ -142,6 +141,8 @@ class ImportTimeNames:
     called: set[str]  # used other than by only loading them, or read in a lambda
     stored: set[str]  # a class body's values, which only `__set_name__` may run
     binds: frozenset[str]  # bound, except by import, plus every name it declares global
+    reads: set[str]  # read where it runs or in its lambdas, wherever they resolve
+    has_call: bool  # calls code where it runs, wherever the callee resolves
 
 
 def import_time_names(
@@ -150,11 +151,29 @@ def import_time_names(
     """Return the names stmt uses outside function and lambda bodies.
 
     A def's own name in its outer parts is the def it replaces. In a class scope,
-    parts that can't see the scope's names are left out. A stack, not recursion,
-    so deep nesting doesn't overflow.
+    parts that can't see the scope's names are left out, but for reads and calls.
     """
     own = stmt.name if isinstance(stmt, DEFS) else ""
     is_class = isinstance(scope, ast.ClassDef)
+    nodes, loads = _import_time_walk(file, stmt, own, is_class=is_class)
+    seen = _import_time_walk(file, stmt, own, is_class=False)[0] if is_class else nodes
+    reads = {name for node in [*seen, *_in_lambdas(seen)] for name in _reads(node)}
+    has_call = any(isinstance(node, ast.Call) for node in seen)
+    assigns = [node for node in nodes if isinstance(node, (ast.Assign, ast.AnnAssign))]
+    stored = [node.value for node in assigns if isinstance(node.value, ast.Name)]
+    classes = [node for node in nodes if isinstance(node, ast.ClassDef)]
+    body = {part for cls in classes for part in _run_nodes(list(cls.body))}
+    called = _called(nodes, loaded_nodes(nodes, body) | set(stored))
+    bound = [node for node in nodes if not isinstance(node, ast.alias)]
+    names = {name.id for name in stored}
+    binds = _bound_names(file, bound) | _declared(list(ast.walk(stmt)), ast.Global)
+    return ImportTimeNames(loads, called, names, binds, reads, has_call)
+
+
+def _import_time_walk(
+    file: CheckInput, stmt: ast.stmt, own: str, *, is_class: bool
+) -> tuple[list[ast.AST], set[str]]:
+    """Return the nodes of stmt that run when it does, and the names they load."""
     pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0, frozenset()))]
     nodes: list[ast.AST] = []
     loads: set[str] = set()
@@ -164,22 +183,7 @@ def import_time_names(
         reads = [name for name in _reads(node) if name != own]
         loads.update(name for name in reads if not _is_hidden(hidden, name))
         pending.extend(_import_time_parts(file, node, hidden, is_class=is_class))
-    assigns = [node for node in nodes if isinstance(node, (ast.Assign, ast.AnnAssign))]
-    stored = [node.value for node in assigns if isinstance(node.value, ast.Name)]
-    classes = [node for node in nodes if isinstance(node, ast.ClassDef)]
-    body = {part for cls in classes for part in _run_nodes(list(cls.body))}
-    called = _called(nodes, loaded_nodes(nodes, body) | set(stored))
-    bound = [node for node in nodes if not isinstance(node, ast.alias)]
-    names = {name.id for name in stored}
-    binds = _bound_names(file, bound) | _declared(list(ast.walk(stmt)), ast.Global)
-    return ImportTimeNames(loads, called, names, binds)
-
-
-def _reads(node: ast.AST) -> list[str]:
-    """Return the names node reads, such as an augmented assignment's target."""
-    if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
-        return [node.target.id]
-    return [node.id] if _is_load(node) else []
+    return nodes, loads
 
 
 def _is_hidden(hidden: _Hidden, name: str) -> bool:
@@ -192,9 +196,8 @@ def _import_time_parts(
 ) -> list[tuple[ast.AST, _Hidden]]:
     """Return the parts of node that run when it does, with the names they hide.
 
-    A name a class body binds hides the module's in later statements of that
-    body, but not in its comprehensions past their first iterable. In a class
-    scope, only the parts that can see the scope's names count.
+    A name a class body binds hides the module's in its later statements, but not
+    past a comprehension's first iterable there.
     """
     bound, idx, local = hidden
     parts = _scope_parts(file, node, local)
@@ -237,10 +240,7 @@ def _scope_parts(
 
 
 def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
-    """Return the parts of scope that run in it.
-
-    A comprehension's first iterable runs in the scope around it instead.
-    """
+    """Return scope's parts that run in it, but a comprehension's first iterable."""
     if not isinstance(scope, _COMPS):
         return own_parts(scope)
     first = scope.generators[0].iter
@@ -289,9 +289,19 @@ def _is_definite(stmt: ast.stmt) -> bool:
 def _called(nodes: list[ast.AST], loaded: set[ast.AST]) -> set[str]:
     """Return the names nodes use other than by only loading them, or a lambda reads."""
     used = [node for node in nodes if node not in loaded]
+    return {name for node in [*used, *_in_lambdas(nodes)] for name in _reads(node)}
+
+
+def _in_lambdas(nodes: list[ast.AST]) -> list[ast.AST]:
     lambdas = [node for node in nodes if isinstance(node, ast.Lambda)]
-    reads = [node for lam in lambdas for node in ast.walk(lam.body)]
-    return {node.id for node in [*used, *reads] if _is_load(node)}
+    return [node for lam in lambdas for node in ast.walk(lam.body)]
+
+
+def _reads(node: ast.AST) -> list[str]:
+    """Return the names node reads, such as an augmented assignment's target."""
+    if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+        return [node.target.id]
+    return [node.id] if _is_load(node) else []
 
 
 def _is_load(node: ast.AST) -> TypeGuard[ast.Name]:
@@ -338,9 +348,8 @@ def _declared(nodes: list[ast.AST], kind: type[ast.Global | ast.Nonlocal]) -> se
 def _run_nodes(parts: list[ast.AST]) -> list[ast.AST]:
     """Return parts and the nodes under them that run in the same scope.
 
-    A nested scope adds only its outer parts, such as decorators and defaults.
-    A comprehension adds its first iterable and its walrus targets, which bind
-    in the scope around it.
+    A nested scope adds only its outer parts, and a comprehension its first
+    iterable and its walrus targets, which bind in the scope around it.
     """
     pending = list(parts)
     nodes: list[ast.AST] = []

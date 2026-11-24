@@ -133,6 +133,12 @@ class Other:
     X = 2
 def make(): return Point()
 """
+_AUGMENTED_CALL: Final = """\
+registry = Registry()
+def make(): return Point()
+class Point:
+    registry += 1
+"""
 _GLOBAL_CALLED: Final = """\
 def setup(): global make; make = int
 setup()
@@ -267,6 +273,7 @@ def _kept(parse: Parse, source: str) -> set[int]:
         pytest.param(_GLOBAL_IN_CLASS, id="class-body-rebinds-its-name"),
         pytest.param(_GLOBAL_WRITTEN_BELOW, id="move-would-pass-a-global-write"),
         pytest.param(_GLOBAL_CALLED, id="class-calls-a-global-set-in-a-def"),
+        pytest.param(_AUGMENTED_CALL, id="class-adds-to-a-scope-object"),
         pytest.param(_GLOBAL_HOOK, id="class-stores-a-def-made-global"),
         pytest.param(_GLOBAL_OWN_NAME, id="class-stores-a-def-that-rebinds-it"),
     ],
@@ -298,9 +305,7 @@ def test_find_classes_scopes_type_params(parse: Parse, source: str, user: int) -
         pytest.param(_LAMBDA_IN_FIRST_ITERABLE, 2, id="lambda-in-a-first-iterable"),
     ],
 )
-def test_find_classes_finds_users_in_lambdas(
-    parse: Parse, source: str, user: int
-) -> None:
+def test_find_classes_finds_lambda_users(parse: Parse, source: str, user: int) -> None:
     assert _find(parse, source).uses[0].user == user
 
 

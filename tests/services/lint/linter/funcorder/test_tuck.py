@@ -161,6 +161,32 @@ def outer():
             def ident(self): return 1
     return Box
 """
+_NONLOCAL_DEFAULT: Final = """\
+def outer():
+    value = 1
+    class Box:
+        def make(self): return self.Obj()
+        class Update:
+            nonlocal value
+            value = 2
+        def other(self): pass
+        class Obj:
+            def ident(self, v=value): return v
+    return Box
+"""
+_GLOBAL_READ_THROUGH_CALL: Final = """\
+VALUE = 1
+def _initialize(): return VALUE
+class Box:
+    def make(self): return self.Obj()
+    class Update:
+        global VALUE
+        VALUE = 2
+    def other(self): pass
+    class Obj:
+        captured = _initialize()
+        def ident(self): return 1
+"""
 _STAR_IMPORT: Final = """\
 def run(): return Obj()
 from m import *
@@ -266,6 +292,8 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_GLOBAL_THROUGH_CALL, id="would-rise-past-a-call"),
         pytest.param(_STAR_IMPORT, id="would-rise-past-a-star-import"),
         pytest.param(_NONLOCAL_WRITE, id="would-rise-past-a-nonlocal-write"),
+        pytest.param(_NONLOCAL_DEFAULT, id="default-would-pass-a-nonlocal-write"),
+        pytest.param(_GLOBAL_READ_THROUGH_CALL, id="would-call-past-a-global-write"),
     ],
 )
 def test_check_skips_class_left_where_it_is(parse: Parse, source: str) -> None:

@@ -69,7 +69,8 @@ def find_classes(
     shadowed = _shadowed_classes(decls, bindings)
     kept = _runs_code(decls, effects, bindings) | shadowed | _writes_outer(decls)
     plain = _plain(decls, used)
-    blocked = _blocked(decls, effects, binders, kept, bindings)
+    is_class = isinstance(scope, ast.ClassDef)
+    blocked = _blocked(decls, effects, binders, kept, bindings, is_class=is_class)
     uses = _place(decls, plain, blocked, kept)
     inherited = _inherited(plain, uses, graph.above(binders))
     return Classes(uses, inherited, _tucked(decls, used), kept, blocked)
@@ -107,9 +108,8 @@ def _users(
 def _shadowed_classes(decls: dict[int, Decl], bindings: Counter[str]) -> frozenset[int]:
     """Return the classes whose name another statement may bind or delete.
 
-    A use of that name may mean another binding, so such a class never moves.
-    A global declaration anywhere in the scope may bind it too, and a star
-    import may bind any name.
+    A use of that name may mean another binding, so such a class never moves. A
+    global declaration may bind it too, and a star import may bind any name.
     """
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     if bindings["*"]:
@@ -123,9 +123,8 @@ def _runs_code(
     """Return the decls whose definition may run code from the scope.
 
     That code may read a statement a move would pass, so such a decl never
-    moves. Its definition may run it when it uses a name bound in the scope, or
-    in that definition, other than by only loading it. A class body's value may
-    be a def's name, since a function has no `__set_name__` to run.
+    moves. It may run when a name bound in the scope is used other than by only
+    loading it, but a class body's value may name a bare def.
     """
     local = {name for found in effects for name in found.binds}
     risky = local - _bare_def_names(decls, bindings)
@@ -148,10 +147,7 @@ def _bare_def_names(decls: dict[int, Decl], bindings: Counter[str]) -> set[str]:
 
 
 def _writes_outer(decls: dict[int, Decl]) -> frozenset[int]:
-    """Return the classes whose body, outside its defs, declares a global or nonlocal.
-
-    Such a body may rebind a name another class reads, as running scope code may.
-    """
+    """Return the classes whose body, outside defs, declares a global or nonlocal."""
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     return frozenset(idx for idx in classes if _has_outer_write(decls[idx]))
 
@@ -184,27 +180,22 @@ def _blocked(
     binders: dict[int, frozenset[int]],
     kept: frozenset[int],
     bindings: Counter[str],
+    *,
+    is_class: bool,
 ) -> dict[int, frozenset[int]]:
     """Return the statements each class must not move past.
 
-    A move past a statement that binds a name it reads when defined changes
-    that name. If it reads a name the scope may bind, so may any statement but
-    a decl that runs no scope code, such as a call that sets it as a global.
+    Those bind a name it reads when defined. If it reads a name the scope may
+    bind, or calls code in a class scope, so may any statement but a decl that
+    runs no scope code, such as a call that sets a global.
     """
     walls = frozenset(range(len(effects))) - (decls.keys() - kept)
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    reads = {cls: _reads(decls[cls], effects[cls]) for cls in classes}
-    walled = {cls for cls in classes if reads[cls] & bindings.keys()}
+    calls = {cls for cls in classes if is_class and effects[cls].has_call}
+    walled = {cls for cls in classes if effects[cls].reads & bindings.keys()} | calls
     return {
         cls: binders[cls] | (walls if cls in walled else frozenset()) for cls in classes
     }
-
-
-def _reads(decl: Decl, found: ImportTimeNames) -> set[str]:
-    """Return the names decl may read when defined, wherever they resolve."""
-    nodes = walk_outside(decl.stmt.body, DEFS)
-    names = [node for node in nodes if isinstance(node, ast.Name)]
-    return found.loads | {name.id for name in names if isinstance(name.ctx, ast.Load)}
 
 
 def _place(
