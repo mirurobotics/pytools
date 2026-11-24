@@ -100,6 +100,15 @@ class Obj:
     value = _initialize()
     def ident(self): return 1
 """
+_VALUE_THROUGH_CALL: Final = """\
+def _initialize(): return VALUE
+def run(): return Obj()
+VALUE = 1
+def other(): pass
+class Obj:
+    value = _initialize()
+    def ident(self): return 1
+"""
 _HELPER_WAITS: Final = """\
 def run(): return Obj()
 def other(): pass
@@ -186,6 +195,7 @@ def test_check_reports_class_not_below_its_user(
         pytest.param(_BASE_NEED, id="would-rise-past-its-base"),
         pytest.param(_STATEMENT_NEED, id="would-rise-past-a-statement-it-uses"),
         pytest.param(_NEED_THROUGH_CALL, id="would-rise-past-what-its-body-calls"),
+        pytest.param(_VALUE_THROUGH_CALL, id="would-rise-past-what-its-calls-read"),
         pytest.param(_HELPER_WAITS, id="would-take-a-helper-past-its-default"),
     ],
 )

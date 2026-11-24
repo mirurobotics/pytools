@@ -134,6 +134,12 @@ def _init(): return _h()
 class T:
     x = _init()
 """
+_VALUE_THROUGH_CALL: Final = """\
+def _init(): return VALUE
+VALUE = 1
+class T:
+    x = _init()
+"""
 _EXEMPT_CYCLE_MEMBER: Final = """\
 def _e(): _a()  # nolint: funcorder
 def run(): pass
@@ -294,6 +300,11 @@ def test_build_waits_cycle_members_for_a_cycle_caller(
             _NEED_THROUGH_CALL,
             {0: frozenset(), 1: frozenset(), 2: frozenset({0, 1})},
             id="through-a-call",
+        ),
+        pytest.param(
+            _VALUE_THROUGH_CALL,
+            {0: frozenset(), 2: frozenset({0, 1})},
+            id="value-through-a-call",
         ),
     ],
 )

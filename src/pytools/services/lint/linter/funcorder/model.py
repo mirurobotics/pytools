@@ -21,6 +21,7 @@ from pytools.services.lint.linter.funcorder.refs import (
 
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
+
 @dataclass(frozen=True)
 class Model:
     """The calls between the defs and classes directly in a scope.
@@ -68,7 +69,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    needs = _needs(file, stmts, decls, loads, import_time)
+    needs = _needs(file, scope, decls, loads, import_time)
     classes = find_classes(file, scope, decls, refs, loads, needs)
     return Model(
         stmts, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
@@ -194,29 +195,37 @@ def _openers(
 
 def _needs(
     file: CheckInput,
-    stmts: list[ast.stmt],
+    scope: ast.Module | ast.ClassDef,
     decls: dict[int, Decl],
     loads: list[set[str]],
     import_time: list[set[int]],
 ) -> dict[int, frozenset[int]]:
     """Return the statements above each decl that it uses when defined.
 
-    The stubs merged into a decl are defined with it, and a decl it uses then
-    brings all that decl refers to, which may run then too.
+    The stubs merged into a decl are defined with it. A decl it uses then brings
+    all that decl refers to, which may run then too, and the names they read.
     """
-    binds = [bound_names(file, stmt) for stmt in stmts]
+    binds = [bound_names(file, stmt) for stmt in scope.body]
+    reached = {
+        idx: {other for found in import_time[decl.first : idx + 1] for other in found}
+        for idx, decl in decls.items()
+    }
+    run = {other for found in reached.values() for other in found}
+    read = {other: called_names(file, scope, scope.body[other]) for other in run}
     defined = {
-        idx: {name for found in loads[decl.first : idx + 1] for name in found}
+        idx: {
+            *(name for found in loads[decl.first : idx + 1] for name in found),
+            *(name for other in reached[idx] for name in read[other]),
+        }
         for idx, decl in decls.items()
     }
     return {
         idx: frozenset(
             other
             for other in range(idx)
-            if binds[other] & defined[idx]
-            or any(other in reached for reached in import_time[decl.first : idx + 1])
+            if binds[other] & defined[idx] or other in reached[idx]
         )
-        for idx, decl in decls.items()
+        for idx in decls
     }
 
 
