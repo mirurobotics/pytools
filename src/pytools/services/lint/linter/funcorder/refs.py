@@ -126,7 +126,24 @@ def _position(node: ast.expr) -> tuple[int, int]:
 
 
 def import_time_names(file: CheckInput, stmt: ast.stmt) -> set[str]:
-    """Return the names stmt loads outside function and lambda bodies.
+    """Return the names stmt loads outside function and lambda bodies."""
+    return {node.id for node in _import_time_loads(file, stmt)}
+
+
+def import_time_calls(file: CheckInput, stmt: ast.stmt) -> set[str]:
+    """Return the names stmt calls outside function and lambda bodies.
+
+    A decorator counts as a call.
+    """
+    nodes = list(ast.walk(stmt))
+    scopes = [node for node in nodes if isinstance(node, (*DEFS, ast.ClassDef))]
+    funcs = [node.func for node in nodes if isinstance(node, ast.Call)]
+    called = {*funcs, *(dec for scope in scopes for dec in scope.decorator_list)}
+    return {node.id for node in _import_time_loads(file, stmt) if node in called}
+
+
+def _import_time_loads(file: CheckInput, stmt: ast.stmt) -> list[ast.Name]:
+    """Return the names nodes stmt loads outside function and lambda bodies.
 
     A def's outer parts run before its name is bound, so its own name there is
     the def it replaces, such as the getter in a property's setter decorator. A
@@ -134,7 +151,7 @@ def import_time_names(file: CheckInput, stmt: ast.stmt) -> set[str]:
     """
     own = stmt.name if isinstance(stmt, DEFS) else ""
     pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0, frozenset()))]
-    names: set[str] = set()
+    loads: list[ast.Name] = []
     while pending:
         node, hidden = pending.pop()
         if (
@@ -143,9 +160,9 @@ def import_time_names(file: CheckInput, stmt: ast.stmt) -> set[str]:
             and node.id != own
             and not _is_hidden(hidden, node.id)
         ):
-            names.add(node.id)
+            loads.append(node)
         pending.extend(_import_time_parts(file, node, hidden))
-    return names
+    return loads
 
 
 def _is_hidden(hidden: _Hidden, name: str) -> bool:

@@ -129,15 +129,14 @@ def parse(x: Json) -> Json: ...
 def parse(x): return x
 """
 _NEED_THROUGH_CALL: Final = """\
-def _h(): pass
+class Store:
+    def get(self): return OTHER
+OTHER = 1
+def _h(): return VALUE
+VALUE = 1
 def _init(): return _h()
 class T:
-    x = _init()
-"""
-_VALUE_THROUGH_CALL: Final = """\
-def _init(): return VALUE
-VALUE = 1
-class T:
+    s: Store
     x = _init()
 """
 _EXEMPT_CYCLE_MEMBER: Final = """\
@@ -298,13 +297,13 @@ def test_build_waits_cycle_members_for_a_cycle_caller(
         pytest.param(_STUB_ANNOTATION, {2: frozenset({0})}, id="stub-annotation"),
         pytest.param(
             _NEED_THROUGH_CALL,
-            {0: frozenset(), 1: frozenset(), 2: frozenset({0, 1})},
-            id="through-a-call",
-        ),
-        pytest.param(
-            _VALUE_THROUGH_CALL,
-            {0: frozenset(), 2: frozenset({0, 1})},
-            id="value-through-a-call",
+            {
+                0: frozenset(),
+                2: frozenset(),
+                4: frozenset(),
+                5: frozenset({0, 2, 3, 4}),
+            },
+            id="through-calls-when-defined",
         ),
     ],
 )

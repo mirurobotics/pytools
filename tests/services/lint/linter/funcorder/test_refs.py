@@ -124,20 +124,16 @@ _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
 _CLASS_LOCAL: Final = """\
 class Other:
     Point = int
-    value = Point()
+    value = Point(), Size()
+    Size = int
 """
-_CLASS_LOCAL_LATER: Final = """\
-class Other:
-    value = Point()
-    Point = int
-"""
+_CALLS_AT_IMPORT: Final = "@deco\nclass T(Base):\n    x = make(helper)\n"
 _CLASS_LOCAL_COMPREHENSION: Final = """\
 class Other:
     Point = int
     Size = int
-    values = [Point() for Size in range(Size()) if Size]
+    values = [[Size for _ in Point()] for Size in range(Size())]
 """
-
 
 
 @pytest.mark.parametrize(
@@ -287,8 +283,7 @@ def test_import_time_names_skips_function_bodies(
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
-        pytest.param(_CLASS_LOCAL, {"int"}, id="bound-above"),
-        pytest.param(_CLASS_LOCAL_LATER, {"Point", "int"}, id="bound-below"),
+        pytest.param(_CLASS_LOCAL, {"Size", "int"}, id="bound-above-not-below"),
         pytest.param(
             _CLASS_LOCAL_COMPREHENSION, {"Point", "int", "range"}, id="comprehension"
         ),
@@ -299,6 +294,11 @@ def test_import_time_names_skips_class_local_names(
 ) -> None:
     file = parse(source)
     assert refs.import_time_names(file, file.tree.body[-1]) == expected
+
+
+def test_import_time_calls_returns_called_names(parse: Parse) -> None:
+    file = parse(_CALLS_AT_IMPORT)
+    assert refs.import_time_calls(file, file.tree.body[-1]) == {"deco", "make"}
 
 
 @pytest.mark.parametrize(

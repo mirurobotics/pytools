@@ -16,6 +16,7 @@ from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.refs import (
     bound_names,
     called_names,
+    import_time_calls,
     import_time_names,
 )
 
@@ -45,8 +46,7 @@ class Model:
 
 def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     """Return the calls between the defs and classes directly in scope."""
-    stmts = scope.body
-    stubs = _stubs(stmts)
+    stubs = _stubs(scope.body)
     decls = _decls(file, scope, stubs)
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
     called = {idx: _called(file, scope, decl) for idx, decl in decls.items()}
@@ -56,7 +56,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         for idx, found in refs.items()
     }
     reach = {idx: graph.reachable(callees, idx) for idx in callees}
-    loads = [import_time_names(file, stmt) for stmt in stmts]
+    loads = [import_time_names(file, stmt) for stmt in scope.body]
     import_time = [graph.import_time_reach(found, names, refs) for found in loads]
     pinned = graph.pinned(import_time, reach)
     calls = {
@@ -70,10 +70,11 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    needs = _needs(file, stmts, decls, loads, import_time, called)
+    reads = _def_time_reads(file, scope.body, names, refs, called)
+    needs = _needs(file, scope.body, decls, loads, import_time, reads)
     classes = find_classes(file, scope, decls, refs, loads, needs)
     return Model(
-        stmts, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
+        scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
     )
 
 
@@ -191,29 +192,46 @@ def _openers(
     return openers
 
 
+def _def_time_reads(
+    file: CheckInput,
+    stmts: list[ast.stmt],
+    names: dict[str, int],
+    refs: dict[int, list[int]],
+    called: dict[int, list[str]],
+) -> list[set[str]]:
+    """Return the names each statement reads through the decls it calls.
+
+    A decl called when the statement runs may run all it refers to too.
+    """
+    ran = [
+        graph.import_time_reach(import_time_calls(file, stmt), names, refs)
+        for stmt in stmts
+    ]
+    return [{name for idx in found for name in called[idx]} for found in ran]
+
+
 def _needs(
     file: CheckInput,
     stmts: list[ast.stmt],
     decls: dict[int, Decl],
     loads: list[set[str]],
     import_time: list[set[int]],
-    called: dict[int, list[str]],
+    reads: list[set[str]],
 ) -> dict[int, frozenset[int]]:
     """Return the statements above each decl that it uses when defined.
 
     The stubs merged into a decl are defined with it. A decl it uses then brings
-    all that decl refers to, which may run then too, and the names they read.
+    all that decl refers to, which may run then too, and one it calls then also
+    brings the names it reads.
     """
     binds = [bound_names(file, stmt) for stmt in stmts]
-    reached = {
-        idx: {other for found in import_time[decl.first : idx + 1] for other in found}
+    used = [found | reads[idx] for idx, found in enumerate(loads)]
+    defined = {
+        idx: {name for found in used[decl.first : idx + 1] for name in found}
         for idx, decl in decls.items()
     }
-    defined = {
-        idx: {
-            *(name for found in loads[decl.first : idx + 1] for name in found),
-            *(name for other in reached[idx] for name in called[other]),
-        }
+    reached = {
+        idx: {other for found in import_time[decl.first : idx + 1] for other in found}
         for idx, decl in decls.items()
     }
     return {
