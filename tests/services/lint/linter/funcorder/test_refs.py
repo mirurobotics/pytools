@@ -297,7 +297,6 @@ def test_import_time_names_skips_class_local_names(
     assert refs.import_time_names(file, file.tree, file.tree.body[-1]).loads == expected
 
 
-
 @pytest.mark.parametrize(
     ("source", "expected"),
     [

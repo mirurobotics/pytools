@@ -199,7 +199,7 @@ def _loaded_def_parts(node: _Root) -> list[ast.AST]:
     return [*loaded, *replaced]
 
 
-def _is_on(decorator: ast.expr, name: str) -> bool:
+def _is_on(decorator: ast.expr, name: str) -> TypeGuard[ast.Attribute]:
     value = decorator.value if isinstance(decorator, ast.Attribute) else None
     return isinstance(value, ast.Name) and value.id == name
 
