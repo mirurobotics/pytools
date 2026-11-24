@@ -4,7 +4,7 @@ target-version = "py312"
 [lint]
 select = [
     "E", "F", "W", "I", "B", "UP", "SIM", "N", "S", "RET", "PT", "PTH", "BLE",
-    "ARG", "ANN", "RUF", "PLR0913", "T20", "TD003", "ERA001", "ICN", "N999",
+    "ARG", "ANN", "RUF", "PLR0913", "T20", "TD003", "ICN", "N999",
 ]
 
 [lint.pylint]

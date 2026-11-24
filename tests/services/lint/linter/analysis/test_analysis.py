@@ -9,6 +9,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     function_body_lines,
     functions,
     is_code_line,
+    line_groups,
     module_header_end,
     walk_outside,
 )
@@ -129,3 +130,15 @@ def test_function_body_lines(parse: Parse, source: str, expected: set[int]) -> N
 )
 def test_module_header_end(parse: Parse, source: str, expected: int) -> None:
     assert module_header_end(parse(source)) == expected
+
+
+@pytest.mark.parametrize(
+    ("lines", "expected"),
+    [
+        pytest.param([], [], id="empty"),
+        pytest.param([3], [[3]], id="one-line"),
+        pytest.param([1, 2, 4, 6, 7], [[1, 2], [4], [6, 7]], id="gaps"),
+    ],
+)
+def test_line_groups(lines: list[int], expected: list[list[int]]) -> None:
+    assert line_groups(lines) == expected

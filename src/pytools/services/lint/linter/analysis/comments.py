@@ -4,7 +4,8 @@ import tokenize
 from dataclasses import dataclass
 
 _DIRECTIVE = re.compile(
-    r"#\s*(?:(?i:noqa)\b|(?:type|nolint|pragma|fmt|isort|mypy|ruff):)"
+    r"#\s*(?:(?i:noqa)\b|nosec\b"
+    r"|(?:type|nolint|pragma|fmt|isort|mypy|ruff|pylint|pyright):)"
 )
 
 

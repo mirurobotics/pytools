@@ -13,7 +13,7 @@ def f(parameter_name_too_long, n):
         if b:
             pass  # in body
 
-# stray note
+# f(n)
 """
 _FUNCLEN = Diagnostic("a.py", 1, "function f is 3 lines (limit 1)")
 _FILELEN = Diagnostic("a.py", 1, "file is 4 lines (limit 1)")
@@ -34,6 +34,7 @@ _STRAYCOMMENT = Diagnostic(
     "comment is not attached to a statement; remove it or move it directly above one",
 )
 _FUNCCOMMENT = Diagnostic("a.py", 4, "comments are not allowed inside function bodies")
+_COMMENTEDCODE = Diagnostic("a.py", 6, "commented-out code; delete it instead")
 
 
 @pytest.mark.parametrize(
@@ -49,43 +50,113 @@ _FUNCCOMMENT = Diagnostic("a.py", 4, "comments are not allowed inside function b
                 _VARNAME,
                 _STRAYCOMMENT,
                 _FUNCCOMMENT,
+                _COMMENTEDCODE,
             ],
             id="none",
         ),
         pytest.param(
             frozenset({Rule.FUNCLEN}),
-            [_FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT, _FUNCCOMMENT],
+            [
+                _FILELEN,
+                _NESTDEPTH,
+                _NAMELEN,
+                _VARNAME,
+                _STRAYCOMMENT,
+                _FUNCCOMMENT,
+                _COMMENTEDCODE,
+            ],
             id="funclen",
         ),
         pytest.param(
             frozenset({Rule.FILELEN}),
-            [_FUNCLEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT, _FUNCCOMMENT],
+            [
+                _FUNCLEN,
+                _NESTDEPTH,
+                _NAMELEN,
+                _VARNAME,
+                _STRAYCOMMENT,
+                _FUNCCOMMENT,
+                _COMMENTEDCODE,
+            ],
             id="filelen",
         ),
         pytest.param(
             frozenset({Rule.NESTDEPTH}),
-            [_FUNCLEN, _FILELEN, _NAMELEN, _VARNAME, _STRAYCOMMENT, _FUNCCOMMENT],
+            [
+                _FUNCLEN,
+                _FILELEN,
+                _NAMELEN,
+                _VARNAME,
+                _STRAYCOMMENT,
+                _FUNCCOMMENT,
+                _COMMENTEDCODE,
+            ],
             id="nestdepth",
         ),
         pytest.param(
             frozenset({Rule.NAMELEN}),
-            [_FUNCLEN, _FILELEN, _NESTDEPTH, _VARNAME, _STRAYCOMMENT, _FUNCCOMMENT],
+            [
+                _FUNCLEN,
+                _FILELEN,
+                _NESTDEPTH,
+                _VARNAME,
+                _STRAYCOMMENT,
+                _FUNCCOMMENT,
+                _COMMENTEDCODE,
+            ],
             id="namelen",
         ),
         pytest.param(
             frozenset({Rule.VARNAME}),
-            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _STRAYCOMMENT, _FUNCCOMMENT],
+            [
+                _FUNCLEN,
+                _FILELEN,
+                _NESTDEPTH,
+                _NAMELEN,
+                _STRAYCOMMENT,
+                _FUNCCOMMENT,
+                _COMMENTEDCODE,
+            ],
             id="varname",
         ),
         pytest.param(
             frozenset({Rule.STRAYCOMMENT}),
-            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME, _FUNCCOMMENT],
+            [
+                _FUNCLEN,
+                _FILELEN,
+                _NESTDEPTH,
+                _NAMELEN,
+                _VARNAME,
+                _FUNCCOMMENT,
+                _COMMENTEDCODE,
+            ],
             id="straycomment",
         ),
         pytest.param(
             frozenset({Rule.FUNCCOMMENT}),
-            [_FUNCLEN, _FILELEN, _NESTDEPTH, _NAMELEN, _VARNAME, _STRAYCOMMENT],
+            [
+                _FUNCLEN,
+                _FILELEN,
+                _NESTDEPTH,
+                _NAMELEN,
+                _VARNAME,
+                _STRAYCOMMENT,
+                _COMMENTEDCODE,
+            ],
             id="funccomment",
+        ),
+        pytest.param(
+            frozenset({Rule.COMMENTEDCODE}),
+            [
+                _FUNCLEN,
+                _FILELEN,
+                _NESTDEPTH,
+                _NAMELEN,
+                _VARNAME,
+                _STRAYCOMMENT,
+                _FUNCCOMMENT,
+            ],
+            id="commentedcode",
         ),
     ],
 )
