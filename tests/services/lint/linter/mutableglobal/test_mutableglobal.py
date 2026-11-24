@@ -52,6 +52,13 @@ _FORMAT_SPEC: Final = """\
 WIDTH: Final = 3
 LABEL: Final = f"{WIDTH!r:>{WIDTH}}-{WIDTH}"
 """
+_MULTILINE_NOLINT: Final = """\
+# nolint: mutableglobal
+__all__ = [
+    "run",
+]
+"""
+_LONG_CHAIN: Final = "LINE: Final = " + '"a" + ' * 2000 + '"a"\n'
 _MESSAGE: Final = "mutable global variable: use a Final constant or a function instead"
 
 
@@ -126,6 +133,7 @@ def test_check_skips_names_that_are_not_variables(parse: Parse, source: str) -> 
         pytest.param('NAME: Final = "a"\nLABEL: Final = f"{NAME}-b"\n', id="f-string"),
         pytest.param(_FORMAT_SPEC, id="f-string-format-spec"),
         pytest.param("if a:\n    LIMIT: Final = 3\n", id="inside-if"),
+        pytest.param(_LONG_CHAIN, id="long-operator-chain"),
     ],
 )
 def test_check_skips_final_constants(parse: Parse, source: str) -> None:
@@ -165,6 +173,7 @@ def test_check_reports_finals_that_are_not_constants(
         pytest.param("counter = 0  # nolint: mutableglobal\n", id="binding-line"),
         pytest.param("# nolint: mutableglobal\ncounter = 0\n", id="line-above"),
         pytest.param('__all__ = ["run"]  # nolint: mutableglobal\n', id="dunder-all"),
+        pytest.param(_MULTILINE_NOLINT, id="line-above-multiline-binding"),
     ],
 )
 def test_check_skips_name_with_nolint(parse: Parse, source: str) -> None:

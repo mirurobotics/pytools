@@ -50,44 +50,27 @@ def _is_constant_expr(expr: ast.expr) -> bool:
 
     Its leaves are literals, names and dotted references such as re.IGNORECASE,
     which Final keeps from being rebound; operators, tuples, frozensets and
-    f-strings combine them.
+    f-strings combine them. A stack, not recursion, so long chains don't
+    overflow.
     """
-    if isinstance(expr, ast.Name):
-        return True
-    if isinstance(expr, ast.Attribute):
-        return _is_dotted(expr)
-    if isinstance(expr, ast.Call):
-        return _is_frozenset(expr)
-    parts = _parts(expr)
-    return parts is not None and all(_is_constant_expr(part) for part in parts)
-
-
-def _is_dotted(expr: ast.Attribute) -> bool:
-    if isinstance(expr.value, ast.Attribute):
-        return _is_dotted(expr.value)
-    return isinstance(expr.value, ast.Name)
-
-
-def _is_frozenset(call: ast.Call) -> bool:
-    """Report whether call builds a frozenset of constants.
-
-    The frozenset copies a list or set display, so its items are what count.
-    """
-    is_frozenset = isinstance(call.func, ast.Name) and call.func.id == "frozenset"
-    if not is_frozenset or call.keywords or len(call.args) > 1:
-        return False
-    items = [
-        item
-        for arg in call.args
-        for item in (arg.elts if isinstance(arg, ast.List | ast.Set) else [arg])
-    ]
-    return all(_is_constant_expr(item) for item in items)
+    pending = [expr]
+    while pending:
+        parts = _parts(pending.pop())
+        if parts is None:
+            return False
+        pending.extend(parts)
+    return True
 
 
 def _parts(expr: ast.expr) -> list[ast.expr] | None:
     """Return the subexpressions expr is constant through, or None if it never is."""
-    if isinstance(expr, ast.Constant):
+    if isinstance(expr, ast.Constant | ast.Name):
         return []
+    if isinstance(expr, ast.Attribute):
+        is_dotted = isinstance(expr.value, ast.Attribute | ast.Name)
+        return [expr.value] if is_dotted else None
+    if isinstance(expr, ast.Call):
+        return _frozenset_items(expr)
     if isinstance(expr, ast.UnaryOp):
         return [expr.operand]
     if isinstance(expr, ast.BinOp):
@@ -100,6 +83,21 @@ def _parts(expr: ast.expr) -> list[ast.expr] | None:
         spec = [expr.format_spec] if expr.format_spec else []
         return [expr.value, *spec]
     return None
+
+
+def _frozenset_items(call: ast.Call) -> list[ast.expr] | None:
+    """Return the items a frozenset call is built from, or None for any other call.
+
+    The frozenset copies a list or set display, so its items are what count.
+    """
+    is_frozenset = isinstance(call.func, ast.Name) and call.func.id == "frozenset"
+    if not is_frozenset or call.keywords or len(call.args) > 1:
+        return None
+    return [
+        item
+        for arg in call.args
+        for item in (arg.elts if isinstance(arg, ast.List | ast.Set) else [arg])
+    ]
 
 
 def _check_name(
