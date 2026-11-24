@@ -84,9 +84,7 @@ def _users(
     The stubs merged into a decl refer for it.
     """
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
-    merged = {
-        stub: idx for idx, decl in decls.items() for stub in decl.span[:-1]
-    }
+    merged = {stub: idx for idx, decl in decls.items() for stub in decl.span[:-1]}
     referred = [set(refs.get(idx, [])) for idx in range(len(scope.body))]
     for idx, stmt in enumerate(scope.body):
         named = set(loads[idx])
