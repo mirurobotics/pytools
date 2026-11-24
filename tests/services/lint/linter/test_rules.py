@@ -17,13 +17,29 @@ def f(parameter_name_too_long, n):
 # f(n)
 
 total = 0
+
+def _g():
+    f()
 """
+
+
+@pytest.mark.parametrize(
+    "exclude",
+    [
+        pytest.param(frozenset(), id="none"),
+        *(pytest.param(frozenset({rule}), id=rule) for rule in Rule),
+    ],
+)
+def test_run_checks_honors_exclude(parse: Parse, exclude: frozenset[Rule]) -> None:
+    config = Config(max_func_len=1, max_file_len=1, max_nest_depth=1, exclude=exclude)
+    expected = [diag for rule, diag in _diagnostics().items() if rule not in exclude]
+    assert run_checks(parse(_SOURCE), config) == expected
 
 
 def _diagnostics() -> dict[Rule, Diagnostic]:
     return {
         Rule.FUNCLEN: Diagnostic("a.py", 1, "function f is 3 lines (limit 1)"),
-        Rule.FILELEN: Diagnostic("a.py", 1, "file is 5 lines (limit 1)"),
+        Rule.FILELEN: Diagnostic("a.py", 1, "file is 7 lines (limit 1)"),
         Rule.NESTDEPTH: Diagnostic(
             "a.py",
             3,
@@ -56,17 +72,7 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
             "mutable global variable: use a Final constant, a type statement"
             " or a function instead",
         ),
+        Rule.FUNCORDER: Diagnostic(
+            "a.py", 1, '"f" should be below its last caller "_g"'
+        ),
     }
-
-
-@pytest.mark.parametrize(
-    "exclude",
-    [
-        pytest.param(frozenset(), id="none"),
-        *(pytest.param(frozenset({rule}), id=rule) for rule in Rule),
-    ],
-)
-def test_run_checks_honors_exclude(parse: Parse, exclude: frozenset[Rule]) -> None:
-    config = Config(max_func_len=1, max_file_len=1, max_nest_depth=1, exclude=exclude)
-    expected = [diag for rule, diag in _diagnostics().items() if rule not in exclude]
-    assert run_checks(parse(_SOURCE), config) == expected

@@ -66,11 +66,6 @@ def _timed_run(name: str, run: Callable[[], bool]) -> _StepResult:
     return _StepResult(name, time.monotonic() - start, failed=not passed)
 
 
-def _write(message: str) -> None:
-    sys.stdout.write(f"{message}\n")
-    sys.stdout.flush()
-
-
 def _print_timings(results: list[_StepResult], total_seconds: float) -> None:
     rows = [(result.name, result.seconds) for result in results]
     rows.append(("total", total_seconds))
@@ -87,3 +82,8 @@ def _format_duration(seconds: float) -> str:
         return f"{rounded:.1f}s"
     minutes, remainder = divmod(round(rounded), 60)
     return f"{minutes}m{remainder:02d}s"
+
+
+def _write(message: str) -> None:
+    sys.stdout.write(f"{message}\n")
+    sys.stdout.flush()

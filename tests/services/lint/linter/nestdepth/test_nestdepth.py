@@ -176,10 +176,6 @@ _MESSAGE: Final = (
 )
 
 
-def _diags(lines: list[int]) -> list[Diagnostic]:
-    return [Diagnostic("a.py", line, _MESSAGE) for line in lines]
-
-
 @pytest.mark.parametrize(
     ("max_depth", "lines"),
     [
@@ -271,3 +267,7 @@ def test_check_walks_a_long_elif_chain(parse: Parse) -> None:
         + "    else:\n        if b:\n            pass\n"
     )
     assert nestdepth.check(parse(source), 1) == _diags([3003])
+
+
+def _diags(lines: list[int]) -> list[Diagnostic]:
+    return [Diagnostic("a.py", line, _MESSAGE) for line in lines]

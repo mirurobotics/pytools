@@ -22,10 +22,6 @@ def h():
 """
 
 
-def _config() -> Config:
-    return Config(max_func_len=1)
-
-
 def test_run_linter_prints_and_counts_diagnostics(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -66,3 +62,7 @@ def test_run_linter_warns_and_skips_unparsable_file(
     captured = capsys.readouterr()
     assert (count, captured.out) == (0, "")
     assert captured.err.startswith(f"warning: {bad_file}: ")
+
+
+def _config() -> Config:
+    return Config(max_func_len=1)
