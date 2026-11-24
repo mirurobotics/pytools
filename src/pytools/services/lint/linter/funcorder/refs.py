@@ -78,7 +78,10 @@ def _free_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
 
 
 def _roots(stmt: ast.stmt) -> list[tuple[_Root, frozenset[str]]]:
-    """Return stmt's outermost defs and lambdas, with the type params around them."""
+    """Return stmt's outermost defs and lambdas, with the type params around them.
+
+    A class's decorators run outside its type parameters' scope.
+    """
     pending: list[tuple[ast.AST, frozenset[str]]] = [(stmt, frozenset())]
     found: list[tuple[_Root, frozenset[str]]] = []
     while pending:
@@ -87,9 +90,11 @@ def _roots(stmt: ast.stmt) -> list[tuple[_Root, frozenset[str]]]:
             found.append((node, params))
             continue
         if isinstance(node, ast.ClassDef):
-            params = params | _type_params(node)
-        children = list(ast.iter_child_nodes(node))
-        pending.extend((child, params) for child in reversed(children))
+            outside, typed = node.decorator_list, params | _type_params(node)
+        else:
+            outside, typed = [], params
+        parts = reversed(list(ast.iter_child_nodes(node)))
+        pending.extend((part, params if part in outside else typed) for part in parts)
     return found
 
 

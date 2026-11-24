@@ -65,6 +65,9 @@ class S:
     s = u
 @dec([j])
 class T: pass
+class W:
+    global gx
+    gx = 2
 """
 _REBOUND: Final = """\
 class Point:
@@ -136,6 +139,12 @@ class Box[Item]:
     def method(self): return Item
 def make(): return Item()
 """
+_TYPE_PARAM_IN_DECORATOR: Final = """\
+class Item: pass
+@register(lambda: Item)
+class Box[Item]: pass
+def make(): return Item()
+"""
 _TYPE_PARAM_IN_NESTED_METHOD: Final = """\
 class Item: pass
 def make():
@@ -160,7 +169,7 @@ def test_find_classes_chains_methodless_class_needs(parse: Parse) -> None:
 
 
 def test_find_classes_finds_decls_that_run_code(parse: Parse) -> None:
-    expected = {3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 17, 18, 20, 23, 24}
+    expected = {3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 17, 18, 20, 23, 24, 25}
     assert _kept(parse, _RUNS_CODE) == expected
 
 
@@ -192,16 +201,17 @@ def test_find_classes_leaves_class_in_place(parse: Parse, source: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "source",
+    ("source", "user"),
     [
-        pytest.param(_TYPE_PARAM_IN_METHOD, id="class-in-scope"),
-        pytest.param(_TYPE_PARAM_IN_NESTED_METHOD, id="class-in-a-def"),
+        pytest.param(_TYPE_PARAM_IN_METHOD, 3, id="class-in-scope"),
+        pytest.param(_TYPE_PARAM_IN_DECORATOR, 1, id="decorator-outside-them"),
+        pytest.param(_TYPE_PARAM_IN_NESTED_METHOD, 2, id="class-in-a-def"),
     ],
 )
 def test_find_classes_hides_type_params_in_methods(
-    parse: Parse, source: str
+    parse: Parse, source: str, user: int
 ) -> None:
-    assert _find(parse, source).uses[0].user == len(parse(source).tree.body) - 1
+    assert _find(parse, source).uses[0].user == user
 
 
 def test_find_classes_places_users_that_stay(parse: Parse) -> None:

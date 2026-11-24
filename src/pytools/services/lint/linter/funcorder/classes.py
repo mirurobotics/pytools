@@ -36,7 +36,7 @@ class Classes:
     uses: dict[int, Use]  # where each class without methods that can move goes
     inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
-    _kept: frozenset[int]  # decls whose definition may run scope code, shadowed classes
+    _kept: frozenset[int]  # runs scope code, or a class shadowed or declaring a global
     _blocked: dict[int, frozenset[int]]  # the statements each class must not move past
 
     def may_pass(self, moved: Collection[int], passed: Collection[int]) -> bool:
