@@ -6,6 +6,7 @@ from pytools.services.lint.linter.commentedcode import commentedcode
 from pytools.services.lint.linter.filelen import filelen
 from pytools.services.lint.linter.funccomment import funccomment
 from pytools.services.lint.linter.funclen import funclen
+from pytools.services.lint.linter.mutableglobal import mutableglobal
 from pytools.services.lint.linter.namelen import namelen
 from pytools.services.lint.linter.nestdepth import nestdepth
 from pytools.services.lint.linter.straycomment import straycomment
@@ -43,4 +44,5 @@ def _rule_checkers(
         Rule.STRAYCOMMENT: straycomment.check,
         Rule.FUNCCOMMENT: funccomment.check,
         Rule.COMMENTEDCODE: commentedcode.check,
+        Rule.MUTABLEGLOBAL: mutableglobal.check,
     }

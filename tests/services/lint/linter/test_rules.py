@@ -15,13 +15,15 @@ def f(parameter_name_too_long, n):
             pass  # in body
 
 # f(n)
+
+total = 0
 """
 
 
 def _diagnostics() -> dict[Rule, Diagnostic]:
     return {
         Rule.FUNCLEN: Diagnostic("a.py", 1, "function f is 3 lines (limit 1)"),
-        Rule.FILELEN: Diagnostic("a.py", 1, "file is 4 lines (limit 1)"),
+        Rule.FILELEN: Diagnostic("a.py", 1, "file is 5 lines (limit 1)"),
         Rule.NESTDEPTH: Diagnostic(
             "a.py",
             3,
@@ -47,6 +49,11 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
         ),
         Rule.COMMENTEDCODE: Diagnostic(
             "a.py", 6, "commented-out code; delete it instead"
+        ),
+        Rule.MUTABLEGLOBAL: Diagnostic(
+            "a.py",
+            8,
+            "mutable global variable: use a Final constant or a function instead",
         ),
     }
 
