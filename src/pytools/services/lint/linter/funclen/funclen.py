@@ -12,8 +12,6 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 
-_LITERALS = (ast.Constant, ast.JoinedStr, ast.List, ast.Tuple, ast.Set, ast.Dict)
-
 
 def check(file: CheckInput, max_len: int) -> list[Diagnostic]:
     """Report functions over max_len code lines; a multi-line literal counts as one."""
@@ -47,14 +45,19 @@ def _count_lines(file: CheckInput, func: Function) -> int:
 
 
 def _literal_tail_lines(body: list[ast.stmt]) -> set[int]:
-    nodes = list(walk_outside(body, _LITERALS))
-    literals = [node for node in nodes if isinstance(node, _LITERALS)]
+    literal_types = _literal_types()
+    nodes = list(walk_outside(body, literal_types))
+    literals = [node for node in nodes if isinstance(node, literal_types)]
     skip = {
         line for lit in literals for line in range(lit.lineno + 1, _end_line(lit) + 1)
     }
     code_starts = {getattr(node, "lineno", None) for node in nodes}
     closing_lines = {_end_line(lit) for lit in literals}
     return skip - (closing_lines & code_starts)
+
+
+def _literal_types() -> tuple[type[ast.expr], ...]:
+    return (ast.Constant, ast.JoinedStr, ast.List, ast.Tuple, ast.Set, ast.Dict)
 
 
 def _end_line(node: ast.expr | ast.stmt) -> int:
