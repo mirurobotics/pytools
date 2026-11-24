@@ -10,7 +10,6 @@ class DeclKind(Enum):
 
     PUBLIC = auto()
     PRIVATE = auto()  # named with a leading underscore, and not a dunder
-    EXEMPT = auto()  # a def with a nolint, which keeps its place
     CLASS = auto()  # one caller, through its methods' calls
 
 
@@ -23,3 +22,4 @@ class Decl:
     name: str
     kind: DeclKind
     first: int  # its first stub, such as a property getter, or idx without one
+    exempt: bool  # has a funcorder nolint, so it keeps its place

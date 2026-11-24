@@ -10,21 +10,12 @@ type Parse = Callable[[str], CheckInput]
 
 _OBJ: Final = "class Obj:\n    def ident(self): return 1\n"
 _BELOW_USER: Final = "def test_a(): return [Obj()]\ndef test_b(): pass\n" + _OBJ
-_BELOW_HELPERS: Final = """\
-def run(): _helper()
-def _helper(): return Obj()
-def other(): pass
-class Obj:
-    def ident(self): return 1
-"""
-_PAST_DECLARATIONS: Final = """\
-def run(): return Obj()
-class Meta:
-    x: int
-def other(): pass
-class Obj:
-    def ident(self): return 1
-"""
+_BELOW_HELPERS: Final = (
+    "def run(): _helper()\ndef _helper(): return Obj()\ndef other(): pass\n" + _OBJ
+)
+_PAST_DECLARATIONS: Final = (
+    "def run(): return Obj()\nclass Meta:\n    x: int\ndef other(): pass\n" + _OBJ
+)
 _LAST_USER: Final = """\
 def a(): return Obj()
 def x(): pass
@@ -169,20 +160,11 @@ def outer():
             def ident(self, v=value): return v
     return Box
 """
-_WRITE_ABOVE: Final = """\
-class Box:
-    def make(self): return self.Obj()
-    class Update:
-        STATE.value = 2
-    def other(self): pass
-"""
-_STAR_IMPORT: Final = """\
-def run(): return Obj()
-from m import *
-def other(): pass
-class Obj:
-    def ident(self): return 1
-"""
+_BOX: Final = "class Box:\n    def make(self): return self.Obj()\n"
+_UPDATE: Final = "    class Update:\n        STATE.value = 2\n"
+_STAR_IMPORT: Final = (
+    "def run(): return Obj()\nfrom m import *\ndef other(): pass\n" + _OBJ
+)
 _HELPER_WAITS: Final = """\
 def run(): return Obj()
 def other(): pass
@@ -289,6 +271,13 @@ def test_check_skips_class_left_where_it_is(parse: Parse, source: str) -> None:
 
 
 @pytest.mark.parametrize(
+    "writer",
+    [
+        pytest.param(_UPDATE, id="class"),
+        pytest.param("    @_bump\n    def other(self): pass\n", id="decorated-def"),
+    ],
+)
+@pytest.mark.parametrize(
     "header",
     [
         pytest.param("    @_register\n    class Obj:\n", id="decorator"),
@@ -299,14 +288,23 @@ def test_check_skips_class_left_where_it_is(parse: Parse, source: str) -> None:
         pytest.param("    class Obj:\n        x = OTHER + 1\n", id="operator"),
         pytest.param("    class Obj:\n        def go(self, v: f()): pass\n", id="hint"),
         pytest.param("    class Obj:\n        def go(self, v: A.b): pass\n", id="dot"),
+        pytest.param("    class Obj:\n        x: 1 = 1 + 1\n", id="annotated-value"),
+        pytest.param("    class Obj(metaclass=1):\n", id="keyword"),
+        pytest.param("    class Obj:\n        (1).b = 1\n", id="attribute-target"),
+        pytest.param(
+            "    class Obj:\n        def go(self, v=1 + 1): pass\n", id="default"
+        ),
+        pytest.param("    class Obj:\n        x: Alias = 1\n", id="annotation-name"),
     ],
 )
-def test_check_skips_nested_class_running_code(parse: Parse, header: str) -> None:
-    source = _WRITE_ABOVE + header + "        def ident(self): return 1\n"
+def test_check_skips_nested_class_running_code(
+    parse: Parse, writer: str, header: str
+) -> None:
+    source = _BOX + writer + header + "        def ident(self): return 1\n"
     assert funcorder.check(parse(source)) == []
 
 
 def test_check_tucks_inert_nested_class(parse: Parse) -> None:
     inert = "    class Obj:\n        x = 1\n        def ident(self): pass\n"
     message = '"Box.Obj" should be directly below "Box.make"'
-    assert funcorder.check(parse(_WRITE_ABOVE + inert)) == [_diag(6, message)]
+    assert funcorder.check(parse(_BOX + _UPDATE + inert)) == [_diag(5, message)]

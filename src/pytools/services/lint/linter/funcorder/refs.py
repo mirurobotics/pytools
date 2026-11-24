@@ -81,51 +81,6 @@ def _roots(file: CheckInput, stmt: ast.stmt) -> list[tuple[_Root, frozenset[str]
     return found
 
 
-def _root_free_loads(
-    file: CheckInput, root: _Root, params: frozenset[str]
-) -> list[ast.Name]:
-    own = _bound_names(file, own_parts(root))
-    return [
-        node
-        for node, bound in _scoped_nodes(file, root, params)
-        if _is_load(node) and node.id not in bound and node.id not in own
-    ]
-
-
-def _scoped_nodes(
-    file: CheckInput, root: _Root, params: frozenset[str]
-) -> list[tuple[ast.AST, frozenset[str]]]:
-    """Return the nodes that run when root is called, with the names bound there.
-
-    A scope's names hide those in its nested scopes, but a class body passes on
-    only its type parameters, and a global name hides nothing.
-    """
-    body: list[ast.AST] = [root.body] if isinstance(root, ast.Lambda) else [*root.body]
-    todo: list[tuple[list[ast.AST], frozenset[str], ast.AST]] = [(body, params, root)]
-    found: list[tuple[ast.AST, frozenset[str]]] = []
-    while todo:
-        parts, outer, host = todo.pop()
-        nodes = _run_nodes(parts)
-        global_names = _declared(nodes, ast.Global)
-        bound = (outer - global_names) | _bound_names(file, nodes)
-        inner = outer | _type_params(host) if isinstance(host, ast.ClassDef) else bound
-        nested = [node for node in nodes if isinstance(node, SCOPES)]
-        todo.extend((_inner_parts(part), inner, part) for part in nested)
-        typed = _typed_outer_nodes(nodes)
-        found.extend((node, bound | typed.get(node, frozenset())) for node in nodes)
-    return found
-
-
-def _typed_outer_nodes(nodes: list[ast.AST]) -> dict[ast.AST, frozenset[str]]:
-    """Return the nodes of the scopes' outer parts that see their type parameters."""
-    typed: dict[ast.AST, frozenset[str]] = {}
-    for scope in nodes:
-        if isinstance(scope, (*DEFS, ast.ClassDef)):
-            inside = set(outer_parts(scope)) - set(_outside_type_params(scope))
-            typed.update(dict.fromkeys(_run_nodes(list(inside)), _type_params(scope)))
-    return typed
-
-
 def _position(node: ast.expr) -> tuple[int, int]:
     return node.lineno, node.col_offset
 
@@ -181,7 +136,7 @@ def _import_time_walk(
         loads.update(name for name in reads if not _is_hidden(hidden, name))
         func = node.func if isinstance(node, ast.Call) else None
         if isinstance(func, ast.Lambda):
-            loads.update(_lambda_loads(file, func) - hidden[2])
+            loads.update(name.id for name in _root_free_loads(file, func, hidden[2]))
         pending.extend(_import_time_parts(file, node, hidden, is_class=is_class))
     return nodes, loads
 
@@ -191,9 +146,49 @@ def _is_hidden(hidden: _Hidden, name: str) -> bool:
     return name in local or bound.get(name, idx) < idx
 
 
-def _lambda_loads(file: CheckInput, lam: ast.Lambda) -> set[str]:
-    loads = {node.id for node in ast.walk(lam.body) if _is_load(node)}
-    return loads - _bound_names(file, own_parts(lam))
+def _root_free_loads(
+    file: CheckInput, root: _Root, params: frozenset[str]
+) -> list[ast.Name]:
+    own = _bound_names(file, own_parts(root))
+    return [
+        node
+        for node, bound in _scoped_nodes(file, root, params)
+        if _is_load(node) and node.id not in bound and node.id not in own
+    ]
+
+
+def _scoped_nodes(
+    file: CheckInput, root: _Root, params: frozenset[str]
+) -> list[tuple[ast.AST, frozenset[str]]]:
+    """Return the nodes that run when root is called, with the names bound there.
+
+    A scope's names hide those in its nested scopes, but a class body passes on
+    only its type parameters, and a global name hides nothing.
+    """
+    body: list[ast.AST] = [root.body] if isinstance(root, ast.Lambda) else [*root.body]
+    todo: list[tuple[list[ast.AST], frozenset[str], ast.AST]] = [(body, params, root)]
+    found: list[tuple[ast.AST, frozenset[str]]] = []
+    while todo:
+        parts, outer, host = todo.pop()
+        nodes = _run_nodes(parts)
+        global_names = _declared(nodes, ast.Global)
+        bound = (outer - global_names) | _bound_names(file, nodes)
+        inner = outer | _type_params(host) if isinstance(host, ast.ClassDef) else bound
+        nested = [node for node in nodes if isinstance(node, SCOPES)]
+        todo.extend((_inner_parts(part), inner, part) for part in nested)
+        typed = _typed_outer_nodes(nodes)
+        found.extend((node, bound | typed.get(node, frozenset())) for node in nodes)
+    return found
+
+
+def _typed_outer_nodes(nodes: list[ast.AST]) -> dict[ast.AST, frozenset[str]]:
+    """Return the nodes of the scopes' outer parts that see their type parameters."""
+    typed: dict[ast.AST, frozenset[str]] = {}
+    for scope in nodes:
+        if isinstance(scope, (*DEFS, ast.ClassDef)):
+            inside = set(outer_parts(scope)) - set(_outside_type_params(scope))
+            typed.update(dict.fromkeys(_run_nodes(list(inside)), _type_params(scope)))
+    return typed
 
 
 def _import_time_parts(

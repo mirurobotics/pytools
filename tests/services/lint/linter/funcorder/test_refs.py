@@ -224,11 +224,7 @@ def _module_calls(parse: Parse, source: str) -> list[str]:
         pytest.param(_CLASSMETHOD, ["build"], id="cls"),
         pytest.param(_STATICMETHOD, [], id="staticmethod"),
         pytest.param("class T:\n    def run(): helper()\n", [], id="no-parameters"),
-        pytest.param(
-            "class T:\n    def run(self, other): other.help()\n",
-            [],
-            id="other-object",
-        ),
+        pytest.param("class T:\n    def run(self, o): o.h()\n", [], id="other-object"),
         pytest.param(_NESTED_CLASS, [], id="nested-class"),
         pytest.param(
             "class T:\n    def run(self): self.helper = 1\n", [], id="attribute-write"
@@ -272,6 +268,9 @@ def _method_calls(parse: Parse, source: str) -> list[str]:
         pytest.param(_METHOD_NAMED_LIKE_DECORATOR, {"retry"}, id="method-decorator"),
         pytest.param(_DEEP_STATEMENT, {"make"}, id="deep-expression"),
         pytest.param("x = [(lambda: P)() for P in t]\n", {"t"}, id="lambda-call"),
+        pytest.param("x = (lambda: [P for P in t])()\n", {"t"}, id="lambda-loop"),
+        pytest.param("x = (lambda: (lambda h: h)(0))()\n", set(), id="nested-lambda"),
+        pytest.param("x = (lambda P: P)(0)\n", set(), id="lambda-parameter"),
     ],
 )
 def test_import_time_names_skips_function_bodies(

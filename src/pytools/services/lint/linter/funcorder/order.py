@@ -1,4 +1,3 @@
-from pytools.services.lint.linter.funcorder.decl import DeclKind
 from pytools.services.lint.linter.funcorder.model import Model, must_precede
 from pytools.services.lint.linter.funcorder.tuck import tuck
 
@@ -144,7 +143,7 @@ def _is_ready(
     for the statements it uses when defined.
     """
     decl = model.decls.get(idx)
-    if decl is None or decl.kind is DeclKind.EXEMPT:
+    if decl is None or decl.exempt:
         return True
     if not done.issuperset(model.callers[idx]):
         return False

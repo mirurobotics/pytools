@@ -7,10 +7,8 @@ from pytools.services.lint.linter.analysis.analysis import (
     DEFS,
     CheckInput,
     Function,
-    Rule,
     walk_outside,
 )
-from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 from pytools.services.lint.linter.funcorder import graph
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.inert import is_inert
@@ -65,13 +63,14 @@ def find_classes(
     bindings = scope_bindings(file, scope)
     shadowed = _shadowed_classes(decls, bindings)
     kept = _runs_code(decls, effects, bindings) | shadowed | _writes_outer(decls)
-    kept |= _suppressed(file, decls)
     plain = _plain(decls, used)
     is_class = isinstance(scope, ast.ClassDef)
     blocked = _blocked(decls, effects, binders, kept, bindings, is_class=is_class)
-    uses = _place(decls, plain, blocked, kept)
+    exempt = {idx for idx, decl in decls.items() if decl.exempt}
+    fixed = kept | {idx for idx in exempt if decls[idx].kind is DeclKind.CLASS}
+    uses = _place(decls, plain, blocked, fixed)
     inherited = _inherited(plain, uses, graph.above(binders))
-    return Classes(uses, inherited, _tucked(decls, used), kept, blocked)
+    return Classes(uses, inherited, _tucked(decls, used), fixed, blocked)
 
 
 def _users(
@@ -155,13 +154,6 @@ def _has_outer_write(decl: Decl) -> bool:
     return any(isinstance(node, (ast.Global, ast.Nonlocal)) for node in nodes)
 
 
-def _suppressed(file: CheckInput, decls: dict[int, Decl]) -> frozenset[int]:
-    """Return the classes a funcorder nolint keeps in place, as it does a def."""
-    classes = [decl for decl in decls.values() if decl.kind is DeclKind.CLASS]
-    nolint = [one for one in classes if has_def_nolint(file, one.stmt, Rule.FUNCORDER)]
-    return frozenset(one.idx for one in nolint)
-
-
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
     """Return the users of each class without methods.
 
@@ -191,21 +183,21 @@ def _blocked(
     """Return the statements each class must not move past.
 
     Its binders bind a name it reads when defined. If it reads a name the scope
-    may bind, so may any statement but a decl that runs no scope code, such as a
-    call that sets a global. In a class scope, a class whose definition may run
-    code, perhaps the module's that `_runs_code` misses, is walled and a wall.
+    may bind, so may any statement but an inert decl that runs no scope code. In
+    a class scope, a class is also walled when its definition may run code,
+    perhaps the module's that `_runs_code` misses, or reads a name its body
+    doesn't bind.
     """
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    active = {cls for cls in classes if is_class and not _is_inert(decls[cls])}
+    active = {idx for idx, decl in decls.items() if not is_inert(decl.stmt)}
     walls = frozenset(range(len(effects))) - (decls.keys() - kept - active)
-    walled = {cls for cls in classes if effects[cls].reads & bindings.keys()} | active
+    walled = {cls for cls in classes if effects[cls].reads & bindings.keys()}
+    loose = {cls for cls in classes if effects[cls].reads - effects[cls].binds}
+    if is_class:
+        walled |= (active | loose) & set(classes)
     return {
         cls: binders[cls] | (walls if cls in walled else frozenset()) for cls in classes
     }
-
-
-def _is_inert(decl: Decl) -> bool:
-    return isinstance(decl.stmt, ast.ClassDef) and is_inert(decl.stmt)
 
 
 def _place(

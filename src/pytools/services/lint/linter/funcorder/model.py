@@ -113,22 +113,22 @@ def _decl(
     first = idx
     while first - 1 in stubs:
         first -= 1
-    kind = _kind(file, stmt, scope.body[first:idx])
-    return Decl(idx, stmt, prefix + stmt.name, kind, first)
+    exempt = _is_exempt(file, stmt, scope.body[first:idx])
+    return Decl(idx, stmt, prefix + stmt.name, _kind(stmt), first, exempt)
 
 
-def _kind(
+def _is_exempt(
     file: CheckInput, stmt: Function | ast.ClassDef, merged: list[ast.stmt]
-) -> DeclKind:
-    """Return stmt's kind; a dunder is Python's entry point, so it is public.
+) -> bool:
+    """Report whether a funcorder nolint sits on stmt or a def merged into it."""
+    defs = [stmt, *(stub for stub in merged if isinstance(stub, DEFS))]
+    return any(has_def_nolint(file, func, Rule.FUNCORDER) for func in defs)
 
-    A nolint on any def merged into stmt exempts it too.
-    """
+
+def _kind(stmt: Function | ast.ClassDef) -> DeclKind:
+    """Return stmt's kind; a dunder is Python's entry point, so it is public."""
     if isinstance(stmt, ast.ClassDef):
         return DeclKind.CLASS
-    defs = [stmt, *(stub for stub in merged if isinstance(stub, DEFS))]
-    if any(has_def_nolint(file, func, Rule.FUNCORDER) for func in defs):
-        return DeclKind.EXEMPT
     is_dunder = stmt.name.startswith("__") and stmt.name.endswith("__")
     if is_dunder or not stmt.name.startswith("_"):
         return DeclKind.PUBLIC
@@ -158,8 +158,8 @@ def _refs(
 def _is_enforced(
     decls: dict[int, Decl], caller: int, callee: int, pinned: set[int]
 ) -> bool:
-    kinds = (decls[caller].kind, decls[callee].kind)
-    return DeclKind.EXEMPT not in kinds and callee not in pinned
+    is_exempt = decls[caller].exempt or decls[callee].exempt
+    return not is_exempt and callee not in pinned
 
 
 def _waiting(
@@ -185,7 +185,7 @@ def _openers(
 ) -> dict[int, int | None]:
     openers: dict[int, int | None] = {}
     for idx, decl in decls.items():
-        if decl.kind is DeclKind.EXEMPT:
+        if decl.exempt:
             continue
         if callers[idx]:
             openers[comps[idx]] = None
@@ -221,4 +221,5 @@ def must_precede(model: Model, decl: Decl, other: Decl) -> bool:
     It must when other is a private def nothing calls.
     """
     is_unused = decl.idx not in model.used and other.idx not in model.used
-    return (decl.kind, other.kind) == (DeclKind.PUBLIC, DeclKind.PRIVATE) and is_unused
+    is_ranked = not (decl.exempt or other.exempt) and is_unused
+    return (decl.kind, other.kind) == (DeclKind.PUBLIC, DeclKind.PRIVATE) and is_ranked

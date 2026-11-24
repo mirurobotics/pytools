@@ -74,16 +74,8 @@ class Point(Protocol):
     def y(self) -> int:
         "Return y."
 """
-_PROPERTY: Final = """\
-class Point:
-    @property
-    def x(self): return 0
-"""
-_BARE_METHOD: Final = """\
-class Point(ABC):
-    @abstractmethod
-    def x(self): pass
-"""
+_PROPERTY: Final = "class Point:\n    @property\n    def x(self): return 0\n"
+_BARE_METHOD: Final = "class Point(ABC):\n    @abstractmethod\n    def x(self): pass\n"
 _ANNOTATION_ONLY: Final = """\
 class Point:
     x: int
@@ -147,9 +139,14 @@ def other(): pass
 class Point:
     value = SETTINGS["key"]
 """
-_NOLINT: Final = """\
-class Point:  # nolint: funcorder
-    x: int
+_NOLINT: Final = "class Point:  # nolint: funcorder\n    x: int\n"
+_EXEMPT_BETWEEN: Final = """\
+X = 1
+class Point:
+    x: X
+class Other:  # nolint: funcorder
+    y: int
+def make(): return Point()
 """
 _CLASS_BODY: Final = """\
 class Box:
@@ -249,6 +246,9 @@ def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
         ),
         pytest.param(_TYPE_PARAM, {0: f'{_REPORT} "make"'}, id="class-type-param"),
         pytest.param(_HOOK_ASSIGNED, {2: _PLUGIN_REPORT}, id="hook-is-a-bare-def"),
+        pytest.param(
+            _EXEMPT_BETWEEN, {1: f'{_REPORT} "make"'}, id="exempt-class-between"
+        ),
     ],
 )
 def test_plain_violations_reports_misplaced_class(

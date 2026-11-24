@@ -138,14 +138,15 @@ def _c(): pass
 
 
 def test_build_gives_each_decl_a_kind(parse: Parse) -> None:
-    kinds = {idx: decl.kind for idx, decl in _build(parse, _KINDS).decls.items()}
-    assert kinds == {
+    decls = _build(parse, _KINDS).decls
+    assert {idx: decl.kind for idx, decl in decls.items()} == {
         0: DeclKind.PUBLIC,
         1: DeclKind.PRIVATE,
         2: DeclKind.PUBLIC,
-        3: DeclKind.EXEMPT,
+        3: DeclKind.PRIVATE,
         4: DeclKind.CLASS,
     }
+    assert [idx for idx, decl in decls.items() if decl.exempt] == [3, 4]
 
 
 @pytest.mark.parametrize(
@@ -243,7 +244,7 @@ def test_build_enforces_calls_no_reorder_can_break(
             id="exempt-caller",
         ),
         pytest.param(_NOLINT_METHOD, {0: [], 1: [0]}, id="nolint-on-method"),
-        pytest.param(_NOLINT_CLASS, {0: [], 1: [0]}, id="nolint-on-class"),
+        pytest.param(_NOLINT_CLASS, {0: [], 1: []}, id="nolint-on-class"),
         pytest.param(_NOLINT_GETTER, {0: [], 2: []}, id="nolint-on-getter"),
         pytest.param(_NOLINT_OVERLOAD, {0: [], 2: []}, id="nolint-on-overload"),
     ],

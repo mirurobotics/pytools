@@ -52,6 +52,29 @@ class Point:
     x: int
 def _make(): return Point()
 """
+_WRITE_ABOVE: Final = """\
+import sys
+def make(): return Obj()
+class Update:
+    sys.state = 2
+def other(): pass
+class Obj:
+    captured = sys.state
+    def ident(self): return 1
+"""
+_DECORATED_ABOVE: Final = """\
+from plugins import register, REGISTRY
+def make(): return Point()
+@register
+def other(): pass
+class Point:
+    names = list(REGISTRY)
+"""
+_EXEMPT_CLASS: Final = """\
+def _h(): pass
+class R:  # nolint: funcorder
+    def run(self): _h()
+"""
 _CLASS_STAYS_BETWEEN: Final = """\
 def h(): return P()
 X = 1
@@ -163,6 +186,9 @@ def _diag(line: int, message: str) -> Diagnostic:
         pytest.param(_EXEMPT_CALLER, id="exempt-caller"),
         pytest.param(_EXEMPT_METHOD_IN_GROUP, id="exempt-method-inside-its-group"),
         pytest.param(_CLASS_ABOVE_CALLEE, id="methodless-class-above-callee"),
+        pytest.param(_WRITE_ABOVE, id="class-would-pass-a-write"),
+        pytest.param(_DECORATED_ABOVE, id="class-would-pass-a-decorator"),
+        pytest.param(_EXEMPT_CLASS, id="helper-above-an-exempt-class"),
         pytest.param(
             "def helper(): pass\ndef run(v=(lambda: helper())()): pass\n",
             id="lambda-called-in-a-default",
