@@ -5,6 +5,7 @@ from enum import Enum, auto
 from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
+    DEFS,
     CheckInput,
     header_end,
     walk_outside,
@@ -112,7 +113,7 @@ def outer_parts(scope: _Nested) -> list[ast.AST]:
         return [*scope.decorator_list, *scope.bases, *scope.keywords]
     if isinstance(scope, ast.Lambda):
         return _defaults(scope.args)
-    if isinstance(scope, ast.FunctionDef | ast.AsyncFunctionDef):
+    if isinstance(scope, DEFS):
         params = _params(scope.args)
         annotations = [param.annotation for param in params if param.annotation]
         returns = [scope.returns] if scope.returns else []
@@ -141,7 +142,7 @@ def own_parts(scope: _Scope) -> list[ast.AST]:
         return [*scope.type_params, *scope.body]
     if isinstance(scope, ast.Lambda):
         return [*_params(scope.args), scope.body]
-    if isinstance(scope, ast.FunctionDef | ast.AsyncFunctionDef):
+    if isinstance(scope, DEFS):
         return [*scope.type_params, *_params(scope.args), *scope.body]
     return [gen.target for gen in scope.generators]
 
@@ -153,7 +154,7 @@ def _params(args: ast.arguments) -> list[ast.arg]:
 
 def binding(file: CheckInput, node: ast.AST, var_kind: NameKind) -> DeclaredName | None:
     """Return the name node binds, if any, as a var_kind when it is a variable."""
-    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+    if isinstance(node, DEFS):
         is_test = node.name.startswith("test_")
         func_kind = NameKind.TEST_FUNC if is_test else NameKind.FUNC
         return DeclaredName(node.name, node.lineno, node.lineno, func_kind, node)

@@ -2,6 +2,7 @@ import ast
 from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
+    DEFS,
     CheckInput,
     Function,
     walk_outside,
@@ -14,7 +15,6 @@ from pytools.services.lint.linter.analysis.names import (
     own_parts,
 )
 
-DEFS: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
 _ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 _COMPS: Final = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 

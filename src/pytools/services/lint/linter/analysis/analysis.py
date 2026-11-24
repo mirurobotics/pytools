@@ -2,10 +2,13 @@ import ast
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Final
 
 from pytools.services.lint.linter.analysis.comments import Comment
 
 type Function = ast.FunctionDef | ast.AsyncFunctionDef
+
+DEFS: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 
 class Rule(StrEnum):
@@ -113,11 +116,7 @@ def is_code_line(file: CheckInput, number: int) -> bool:
 
 def functions(tree: ast.Module) -> list[Function]:
     """Return every function in tree, nested ones included, in line order."""
-    found = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
-    ]
+    found = [node for node in ast.walk(tree) if isinstance(node, DEFS)]
     return sorted(found, key=lambda func: func.lineno)
 
 

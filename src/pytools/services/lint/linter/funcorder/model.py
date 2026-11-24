@@ -4,13 +4,14 @@ from enum import Enum, auto
 from itertools import chain, pairwise
 from typing import Final
 
-from pytools.services.lint.linter.analysis.analysis import CheckInput, Function, Rule
-from pytools.services.lint.linter.analysis.nolint import has_def_nolint
-from pytools.services.lint.linter.funcorder.refs import (
+from pytools.services.lint.linter.analysis.analysis import (
     DEFS,
-    called_names,
-    import_time_names,
+    CheckInput,
+    Function,
+    Rule,
 )
+from pytools.services.lint.linter.analysis.nolint import has_def_nolint
+from pytools.services.lint.linter.funcorder.refs import called_names, import_time_names
 
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
