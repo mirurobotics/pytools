@@ -58,16 +58,17 @@ def _runs(file: CheckInput, group: list[int]) -> list[list[_Line]]:
     runs: list[list[_Line]] = [[]]
     for number in group:
         text = file.comments[number].text
-        if is_directive(text) or _is_encoding_declaration(number, text):
+        if is_directive(text) or _is_encoding_declaration(file, number):
             runs.append([])
         else:
             runs[-1].append(_line(number, text))
     return [run for run in runs if run]
 
 
-def _is_encoding_declaration(number: int, comment: str) -> bool:
-    """Report whether comment declares the file's encoding under PEP 263."""
-    return number <= 2 and _ENCODING.match(comment) is not None
+def _is_encoding_declaration(file: CheckInput, number: int) -> bool:
+    """Report whether line number declares the file's encoding under PEP 263."""
+    is_cookie_line = number == 1 or (number == 2 and not is_code_line(file, 1))
+    return is_cookie_line and _ENCODING.match(file.comments[number].text) is not None
 
 
 def _line(number: int, comment: str) -> _Line:

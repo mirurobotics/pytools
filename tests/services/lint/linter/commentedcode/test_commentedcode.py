@@ -145,6 +145,8 @@ def _diags(*lines: int) -> list[Diagnostic]:
         pytest.param(_DOCSTRING, _diags(1), id="docstring"),
         pytest.param("#\n# first = 1\n", _diags(2), id="first-non-blank-line"),
         pytest.param("# noqa: E501\n# first = 1\n", _diags(2), id="after-directive"),
+        pytest.param("import os\n# coding=utf-8\n", _diags(2), id="coding-after-code"),
+        pytest.param("import os\n\n# coding=utf-8\n", _diags(3), id="coding-on-line-3"),
     ],
 )
 def test_check_reports_commented_out_code(
@@ -209,6 +211,7 @@ def test_check_skips_prose(parse: Parse, comment: str) -> None:
         pytest.param('LABEL = "# first = 1"\n', id="hash-in-string"),
         pytest.param("# pylint: disable=too-many-lines\n", id="pylint-pragma"),
         pytest.param("# coding=utf-8\nimport os\n", id="encoding-declaration"),
+        pytest.param("#!/usr/bin/env python\n# coding=utf-8\n", id="coding-on-line-2"),
     ],
 )
 def test_check_skips_groups_that_are_not_code(parse: Parse, source: str) -> None:
