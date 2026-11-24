@@ -62,6 +62,7 @@ class Model:
     waiting: frozenset[int]  # cycle members placed only after a cycle caller
     needs: dict[int, frozenset[int]]  # statements a decl uses when defined
     plain: _Users  # the users of each used class without methods
+    plain_needs: dict[int, frozenset[int]]  # needs, with those of classes it uses
     tucked: _Users  # the defs above each class with methods that use it
 
 
@@ -93,8 +94,9 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     waiting = _waiting(decls, callers, cycles, comps)
     needs = _needs(file, stmts, decls, loads)
     plain, tucked = _class_users(file, scope, decls, names, refs, loads)
+    classes = plain, _plain_needs(plain, needs), tucked
     return Model(
-        stmts, decls, stubs, calls, callers, cycles, used, waiting, needs, plain, tucked
+        stmts, decls, stubs, calls, callers, cycles, used, waiting, needs, *classes
     )
 
 
@@ -299,6 +301,20 @@ def _tucked(decls: dict[int, Decl], users: _Users) -> _Users:
 
 def _has_methods(decl: Decl) -> bool:
     return any(isinstance(stmt, DEFS) for stmt in decl.stmt.body)
+
+
+def _plain_needs(
+    plain: _Users, needs: dict[int, frozenset[int]]
+) -> dict[int, frozenset[int]]:
+    """Return what each class without methods needs when defined.
+
+    The classes it uses go above it, so what they need counts as its own.
+    """
+    uses = {cls: [other for other in plain if cls in plain[other]] for cls in plain}
+    return {
+        cls: needs[cls].union(*(needs[other] for other in graph.reachable(uses, cls)))
+        for cls in plain
+    }
 
 
 def must_precede(model: Model, decl: Decl, other: Decl) -> bool:

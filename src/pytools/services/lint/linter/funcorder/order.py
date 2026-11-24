@@ -27,7 +27,7 @@ def _arrange(
     model: Model, blockers: dict[int, set[int]], *, settled: bool
 ) -> tuple[list[int], set[int]]:
     units = {unit[-1]: unit for unit in _units(model, settled=settled)}
-    inherited = {idx: _plain_needs(model, units[idx]) for idx in model.decls}
+    inherited = {idx: _inherited_needs(model, units[idx]) for idx in model.decls}
     waits = {
         idx: (blockers[idx] | model.needs[idx] | inherited[idx]) - set(units[idx])
         for idx in model.decls
@@ -89,21 +89,18 @@ def _anchored(model: Model) -> set[int]:
     }
 
 
-def _plain_needs(model: Model, unit: list[int]) -> set[int]:
+def _inherited_needs(model: Model, unit: list[int]) -> set[int]:
     """Return what the classes without methods unit uses need when defined.
 
     Such a class goes above its first user, so each user waits for what it
-    needs, and for what the classes it uses need in turn.
+    needs.
     """
-    plain = model.plain
-    pending = [cls for cls, users in plain.items() if any(idx in unit for idx in users)]
-    seen: set[int] = set()
-    while pending:
-        cls = pending.pop()
-        if cls not in seen:
-            seen.add(cls)
-            pending.extend(other for other, users in plain.items() if cls in users)
-    return {need for cls in seen for need in model.needs[cls]}
+    return {
+        need
+        for cls, users in model.plain.items()
+        if any(idx in users for idx in unit)
+        for need in model.plain_needs[cls]
+    }
 
 
 def _pick(
