@@ -10,8 +10,6 @@ from pytools.services.lint.linter.analysis.nolint import has_name_nolint
 
 _MIN_NAME_LEN: Final = 3
 
-_VARIABLES = frozenset({NameKind.MODULE_VAR, NameKind.LOCAL_VAR})
-
 
 def check(file: CheckInput) -> list[Diagnostic]:
     """Report parameters and variables whose names are too short to read."""
@@ -20,7 +18,8 @@ def check(file: CheckInput) -> list[Diagnostic]:
 
 
 def _check_name(file: CheckInput, name: DeclaredName) -> Diagnostic | None:
-    if name.kind not in _VARIABLES or not _is_too_short(name.text):
+    is_variable = name.kind in (NameKind.MODULE_VAR, NameKind.LOCAL_VAR)
+    if not is_variable or not _is_too_short(name.text):
         return None
     if has_name_nolint(file, name, Rule.VARNAME):
         return None
