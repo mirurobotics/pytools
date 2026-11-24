@@ -31,6 +31,12 @@ def run():
         def m(self): return x()
     return C
 """
+_GLOBAL: Final = """\
+def run():
+    global helper
+    helper = cache(helper)
+    return helper()
+"""
 _CLASS: Final = """\
 class T:
     X = setup()
@@ -47,6 +53,24 @@ def run():
         pass
     except ValueError as value:
         return value
+"""
+_COMPREHENSION_WALRUS: Final = """\
+def run(items):
+    results = [(helper := item) for item in items]
+    return helper()
+"""
+_NONLOCAL: Final = """\
+def run():
+    helper = 1
+    def inner():
+        nonlocal helper
+        helper = 2
+    return helper
+"""
+_DOTTED_IMPORT: Final = """\
+def run():
+    import os.path
+    return os.path.join()
 """
 _LOCAL_IMPORT: Final = """\
 def run(value):
@@ -84,6 +108,12 @@ class T(Base):
     X = make()
     def run(self): body()
 """
+_METHOD_NAMED_LIKE_DECORATOR: Final = """\
+def retry(f): return f
+class Client:
+    @retry
+    def retry(self): pass
+"""
 _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
 
 
@@ -103,6 +133,17 @@ _DEEP_STATEMENT: Final = "VALUE = " + "1 + " * 2000 + "make()\n"
             id="lambda-parameter",
         ),
         pytest.param(_CLASS_BODY_IN_DEF, ["x"], id="class-body-in-def"),
+        pytest.param(
+            "def run(items): return [helper(x) for x in items]\n",
+            ["helper"],
+            id="call-in-comprehension",
+        ),
+        pytest.param(
+            "def run(): return [helper for helper in helper()]\n",
+            ["helper"],
+            id="first-iterable",
+        ),
+        pytest.param(_GLOBAL, ["cache", "helper", "helper"], id="global"),
         pytest.param(_CLASS, ["helper"], id="class-methods"),
     ],
 )
@@ -127,6 +168,9 @@ def test_called_names_returns_names_run_when_called(
             id="comprehension-target",
         ),
         pytest.param(_MATCH_CAPTURE, [], id="match-capture"),
+        pytest.param(_COMPREHENSION_WALRUS, [], id="comprehension-walrus"),
+        pytest.param(_NONLOCAL, [], id="nonlocal"),
+        pytest.param(_DOTTED_IMPORT, [], id="dotted-import"),
         pytest.param(_LOCAL_IMPORT, [], id="local-import"),
         pytest.param(_IMPORT_ALIAS, [], id="import-alias"),
     ],
@@ -170,6 +214,11 @@ def _module_calls(parse: Parse, source: str) -> list[str]:
             ["b"],
             id="lambda-receiver-parameter",
         ),
+        pytest.param(
+            "class T:\n    def run(self, items): return [self.help() for x in items]\n",
+            ["help"],
+            id="comprehension",
+        ),
     ],
 )
 def test_called_names_returns_receiver_calls_in_class(
@@ -196,6 +245,7 @@ def _method_calls(parse: Parse, source: str) -> list[str]:
         pytest.param(
             "@value.setter\ndef value(new): pass\n", set(), id="own-name-in-decorator"
         ),
+        pytest.param(_METHOD_NAMED_LIKE_DECORATOR, {"retry"}, id="method-decorator"),
         pytest.param(_DEEP_STATEMENT, {"make"}, id="deep-expression"),
     ],
 )
