@@ -34,6 +34,18 @@ class T:
         for self in items:
             self.help()
 """
+_EXEMPT_CALLER: Final = """\
+class T:
+    def a(self): pass
+    def _h(self): pass
+    def e(self): self._h()  # nolint: funcorder
+"""
+_EXEMPT_METHOD_IN_GROUP: Final = """\
+class T:
+    def a(self): pass
+    def _e(self): pass  # nolint: funcorder
+    def b(self): pass
+"""
 _STEPDOWN: Final = """\
 def _helper(): pass
 def _other(): _helper()
@@ -120,6 +132,16 @@ def _diag(line: int, message: str) -> Diagnostic:
             "def helper(): pass\ndef build(): return config.helper, dict(helper=1)\n",
             id="attribute-and-keyword",
         ),
+        pytest.param(
+            "def _helper(): pass  # nolint: funcorder\ndef run(): _helper()\n",
+            id="exempt-function",
+        ),
+        pytest.param(
+            "# nolint: funcorder\ndef _helper(): pass\ndef run(): _helper()\n",
+            id="exempt-function-line-above",
+        ),
+        pytest.param(_EXEMPT_CALLER, id="exempt-caller"),
+        pytest.param(_EXEMPT_METHOD_IN_GROUP, id="exempt-method-inside-its-group"),
     ],
 )
 def test_check_skips_ordered_source(parse: Parse, source: str) -> None:
