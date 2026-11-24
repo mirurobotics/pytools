@@ -78,6 +78,8 @@ def _parts(expr: ast.expr) -> list[ast.expr] | None:
         return [expr.operand]
     if isinstance(expr, ast.BinOp):
         return [expr.left, expr.right]
+    if isinstance(expr, ast.Compare):
+        return [expr.left, *expr.comparators]
     if isinstance(expr, ast.BoolOp | ast.JoinedStr):
         return expr.values
     if isinstance(expr, ast.Tuple):

@@ -121,6 +121,7 @@ def test_check_skips_names_that_are_not_variables(parse: Parse, source: str) -> 
         pytest.param("LIMIT: Final = -1\n", id="unary-operator"),
         pytest.param('LINE: Final = "-" * 3\n', id="binary-operator"),
         pytest.param("DEBUG: Final = False or True\n", id="bool-operator"),
+        pytest.param('WINDOWS: Final = sys.platform == "win32"\n', id="comparison"),
         pytest.param("MAX: Final = LIMIT + 1\n", id="name"),
         pytest.param("from re import I\nFLAGS: Final = I\n", id="imported-name"),
         pytest.param("FLAGS: Final = re.I | re.M\n", id="dotted-reference"),
