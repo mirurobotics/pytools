@@ -45,11 +45,7 @@ def _final_constants(tree: ast.Module) -> list[ast.Name]:
 
 
 def _is_constant(stmt: ast.AnnAssign, names: set[str]) -> bool:
-    """Report whether stmt declares a constant: a Final that is immutable throughout.
-
-    Anything that holds state, such as a list or a compiled regex, is what a
-    function returns instead.
-    """
+    """Report whether stmt declares a Final set to a constant expression."""
     if stmt.value is None or not _is_final(stmt.annotation):
         return False
     return _is_constant_expr(stmt.value, names)
