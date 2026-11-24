@@ -135,6 +135,13 @@ def _a(): _b()
 def _b(): _a(); _e()
 def _c(): pass
 """
+_CLASS_CHAIN: Final = """\
+C = 1
+class Q:
+    x = C
+class P(Q): pass
+def run(p: P): pass
+"""
 
 
 def test_build_gives_each_decl_a_kind(parse: Parse) -> None:
@@ -290,6 +297,11 @@ def test_build_finds_what_each_decl_uses_when_defined(
     parse: Parse, source: str, needs: dict[int, frozenset[int]]
 ) -> None:
     assert _build(parse, source).needs == needs
+
+
+def test_build_chains_what_methodless_classes_need(parse: Parse) -> None:
+    plain_needs = _build(parse, _CLASS_CHAIN).plain_needs
+    assert plain_needs == {1: frozenset({0}), 2: frozenset({0, 1})}
 
 
 def _build(parse: Parse, source: str) -> model.Model:

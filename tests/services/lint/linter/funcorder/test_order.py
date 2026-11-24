@@ -55,6 +55,21 @@ B = record("b")
 def _h(): pass
 def run(): _h(); _g()
 """
+_CLASS_NEEDS: Final = """\
+def run(): _f()
+C = 1
+class P:
+    x = C
+def _f(p: P): pass
+"""
+_CLASS_CHAIN_NEEDS: Final = """\
+def run(): _f()
+C = 1
+class Q:
+    x = C
+class P(Q): pass
+def _f(p: P): pass
+"""
 
 
 @pytest.mark.parametrize(
@@ -122,6 +137,12 @@ def test_check_skips_def_directly_below(parse: Parse, source: str) -> None:
         ),
         pytest.param(
             _DEFAULT_BELOW_CALLER, ([0, 1, 2, 3], set()), id="def-waits-for-its-default"
+        ),
+        pytest.param(_CLASS_NEEDS, ([0, 1, 3], set()), id="user-waits-for-class-needs"),
+        pytest.param(
+            _CLASS_CHAIN_NEEDS,
+            ([0, 1, 4], set()),
+            id="user-waits-for-class-chain-needs",
         ),
     ],
 )

@@ -1,0 +1,185 @@
+from collections.abc import Callable
+from typing import Final
+
+import pytest
+
+from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
+from pytools.services.lint.linter.funcorder import funcorder, model, plain
+
+type Parse = Callable[[str], CheckInput]
+
+_POINT: Final = "class Point:\n    x: int\n"
+_RUN: Final = "def run(): pass\n"
+_MAKE: Final = "def make(): return Point()\n"
+_REPORT: Final = 'class "Point" should be directly above its first user'
+_STATEMENT_BETWEEN: Final = """\
+class Point:
+    x: int
+ORIGIN = 0
+def make(): return Point()
+"""
+_SAME_USER: Final = """\
+class Point:
+    x: int
+class Size:
+    width: int
+def make(p: Point, s: Size): pass
+"""
+_DEEPER_ABOVE: Final = """\
+class Point:
+    x: int
+class Line:
+    start: Point
+def make(line: Line): pass
+"""
+_RISES_PAST_NEED: Final = """\
+def make(): return Point()
+ORIGIN = 0
+class Point:
+    x = ORIGIN
+"""
+_CYCLE: Final = """\
+def run(): return A, B
+class A:
+    other = lambda: B()
+class B:
+    other = lambda: A()
+"""
+_DATACLASS: Final = "@dataclass(frozen=True)\nclass Point:\n    x: int\n"
+_PROTOCOL: Final = """\
+class Point(Protocol):
+    def x(self) -> int: ...
+    def y(self) -> int:
+        "Return y."
+"""
+_PROPERTY: Final = """\
+class Point:
+    @property
+    def x(self): return 0
+"""
+_ABSTRACT: Final = """\
+class Point(ABC):
+    @abstractmethod
+    def x(self): pass
+"""
+_CLASS_BODY: Final = """\
+class Box:
+    def make(self): return self.Point()
+    class Point:
+        x: int
+"""
+_FUNCTION_BODY: Final = """\
+def run():
+    class Point:
+        x: int
+    def helper(): pass
+    return Point()
+"""
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param(_POINT + _MAKE, id="directly-above"),
+        pytest.param(_STATEMENT_BETWEEN, id="statement-between"),
+        pytest.param(_SAME_USER, id="another-class-above-the-same-user"),
+        pytest.param(_DEEPER_ABOVE, id="class-it-uses-above"),
+        pytest.param(_RISES_PAST_NEED, id="move-would-pass-what-it-uses"),
+        pytest.param("def make(p: 'Point'): pass\n" + _POINT, id="string-annotation"),
+        pytest.param(_CYCLE, id="classes-using-each-other"),
+    ],
+)
+def test_plain_violations_skips_placed_class(parse: Parse, source: str) -> None:
+    assert plain.plain_violations(_build(parse, source)) == {}
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(_MAKE + _POINT, {1: f'{_REPORT} "make"'}, id="below-its-user"),
+        pytest.param(_POINT + _RUN + _MAKE, {0: f'{_REPORT} "make"'}, id="def-between"),
+        pytest.param(
+            _POINT + _RUN + "ORIGIN = Point()\n",
+            {0: f"{_REPORT} on line 4"},
+            id="module-statement",
+        ),
+        pytest.param(
+            _POINT + _RUN + "class Line(Point):\n    def length(self): return 0\n",
+            {0: f'{_REPORT} "Line"'},
+            id="base",
+        ),
+        pytest.param(
+            _POINT + _RUN + "class Line:\n    def start(self): return Point()\n",
+            {0: f'{_REPORT} "Line"'},
+            id="method-of-another-class",
+        ),
+        pytest.param(
+            _POINT + _RUN + "def make(p: Point): pass\n",
+            {0: f'{_REPORT} "make"'},
+            id="annotation",
+        ),
+        pytest.param(
+            _POINT + _RUN + "@register(Point)\ndef make(): pass\n",
+            {0: f'{_REPORT} "make"'},
+            id="decorator",
+        ),
+        pytest.param(
+            _POINT + _RUN + "def make(p=Point()): pass\n",
+            {0: f'{_REPORT} "make"'},
+            id="default",
+        ),
+    ],
+)
+def test_plain_violations_reports_misplaced_class(
+    parse: Parse, source: str, expected: dict[int, str]
+) -> None:
+    assert plain.plain_violations(_build(parse, source)) == expected
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param(_DATACLASS, id="dataclass"),
+        pytest.param("class Point(Enum):\n    X = 1\n", id="enum"),
+        pytest.param("class Point(NamedTuple):\n    x: int\n", id="named-tuple"),
+        pytest.param("class Point(TypedDict):\n    x: int\n", id="typed-dict"),
+        pytest.param(_PROTOCOL, id="protocol-of-stubs"),
+    ],
+)
+def test_plain_violations_places_methodless_class(parse: Parse, source: str) -> None:
+    built = _build(parse, source + _RUN + _MAKE)
+    assert plain.plain_violations(built) == {0: f'{_REPORT} "make"'}
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param("class Point:\n    def __init__(self): pass\n", id="dunder"),
+        pytest.param(_PROPERTY, id="property"),
+        pytest.param(_ABSTRACT, id="abstract-method"),
+    ],
+)
+def test_plain_violations_skips_class_with_methods(parse: Parse, source: str) -> None:
+    assert plain.plain_violations(_build(parse, source + _RUN + _MAKE)) == {}
+
+
+def test_check_places_classes_in_each_class_body(parse: Parse) -> None:
+    message = 'class "Box.Point" should be directly above its first user "Box.make"'
+    assert funcorder.check(parse(_CLASS_BODY)) == [Diagnostic("a.py", 3, message)]
+
+
+def test_check_skips_classes_in_function_bodies(parse: Parse) -> None:
+    assert funcorder.check(parse(_FUNCTION_BODY)) == []
+
+
+def test_plain_violations_follows_a_long_chain(parse: Parse) -> None:
+    chain = "".join(map("class C{}(C{}): pass\n".format, range(1, 1200), range(1199)))
+    source = "class C0:\n    x: int\n" + _RUN + chain + "def make(): return C1199()\n"
+    built = _build(parse, source)
+    expected = 'class "C0" should be directly above its first user "C1"'
+    assert plain.plain_violations(built) == {0: expected}
+
+
+def _build(parse: Parse, source: str) -> model.Model:
+    file = parse(source)
+    return model.build(file, file.tree)

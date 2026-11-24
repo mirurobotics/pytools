@@ -46,6 +46,12 @@ class T:
     def _e(self): pass  # nolint: funcorder
     def b(self): pass
 """
+_CLASS_ABOVE_CALLEE: Final = """\
+def run(): return _make()
+class Point:
+    x: int
+def _make(): return Point()
+"""
 _STEPDOWN: Final = """\
 def _helper(): pass
 def _other(): _helper()
@@ -148,6 +154,7 @@ def _diag(line: int, message: str) -> Diagnostic:
         ),
         pytest.param(_EXEMPT_CALLER, id="exempt-caller"),
         pytest.param(_EXEMPT_METHOD_IN_GROUP, id="exempt-method-inside-its-group"),
+        pytest.param(_CLASS_ABOVE_CALLEE, id="methodless-class-above-callee"),
     ],
 )
 def test_check_skips_ordered_source(parse: Parse, source: str) -> None:
