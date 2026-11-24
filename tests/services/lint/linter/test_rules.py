@@ -4,7 +4,7 @@ from typing import Final
 import pytest
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
-from pytools.services.lint.linter.rules import Config, run_checks
+from pytools.services.lint.linter.rules import Config, run_checks, run_fixes
 
 type Parse = Callable[[str], CheckInput]
 
@@ -76,3 +76,17 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
             "a.py", 1, '"f" should be below its last caller "_g"'
         ),
     }
+
+
+@pytest.mark.parametrize(
+    ("exclude", "expected"),
+    [
+        pytest.param(frozenset(), "def run(): _h()\ndef _h(): pass\n", id="none"),
+        pytest.param(frozenset({Rule.FUNCORDER}), None, id="funcorder"),
+    ],
+)
+def test_run_fixes_honors_exclude(
+    parse: Parse, exclude: frozenset[Rule], expected: str | None
+) -> None:
+    source = parse("def _h(): pass\ndef run(): _h()\n")
+    assert run_fixes(source, Config(exclude=exclude)) == expected

@@ -4,7 +4,7 @@ from typing import Final
 import pytest
 
 from pytools.services.lint.linter.rules import Config
-from pytools.services.lint.linter.run import run_linter
+from pytools.services.lint.linter.run import run_fixer, run_linter
 
 _TWO_LONG_FUNCTIONS: Final = """\
 def f():
@@ -20,6 +20,8 @@ _SHORT_FUNCTION: Final = """\
 def h():
     return 1
 """
+_MISPLACED: Final = "def _h(): pass\ndef run(): _h()\n"
+_ORDERED: Final = "def run(): _h()\ndef _h(): pass\n"
 
 
 def test_run_linter_prints_and_counts_diagnostics(
@@ -66,3 +68,23 @@ def test_run_linter_warns_and_skips_unparsable_file(
 
 def _config() -> Config:
     return Config(max_func_len=1)
+
+
+def test_run_fixer_rewrites_misplaced_file(tmp_path: Path) -> None:
+    misplaced = tmp_path / "misplaced.py"
+    misplaced.write_text(_MISPLACED, encoding="utf-8")
+    ordered = tmp_path / "ordered.py"
+    ordered.write_text(_ORDERED, encoding="utf-8")
+    run_fixer([str(misplaced), str(ordered)], Config())
+    assert misplaced.read_text(encoding="utf-8") == _ORDERED
+    assert ordered.read_text(encoding="utf-8") == _ORDERED
+
+
+def test_run_fixer_warns_and_skips_unparsable_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bad_file = tmp_path / "bad.py"
+    bad_file.write_bytes(b"def f(:\n")
+    run_fixer([str(bad_file)], Config())
+    assert bad_file.read_bytes() == b"def f(:\n"
+    assert capsys.readouterr().err.startswith(f"warning: {bad_file}: ")
