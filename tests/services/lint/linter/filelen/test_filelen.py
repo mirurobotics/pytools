@@ -49,7 +49,10 @@ _NOLINT_ON_DOCSTRING_END: Final = """\
 '''  # nolint: filelen
 b = 2
 """
-_OVER_LIMIT = Diagnostic("a.py", 1, "file is 3 lines (limit 2)")
+
+
+def _over_limit() -> Diagnostic:
+    return Diagnostic("a.py", 1, "file is 3 lines (limit 2)")
 
 
 @pytest.mark.parametrize(
@@ -57,7 +60,7 @@ _OVER_LIMIT = Diagnostic("a.py", 1, "file is 3 lines (limit 2)")
     [
         pytest.param(4, [], id="under"),
         pytest.param(3, [], id="at"),
-        pytest.param(2, [_OVER_LIMIT], id="over"),
+        pytest.param(2, [_over_limit()], id="over"),
     ],
 )
 def test_check_reports_files_over_the_limit(
@@ -101,7 +104,7 @@ def test_check_skips_file_with_nolint(parse: Parse, source: str) -> None:
     ],
 )
 def test_check_reports_file_without_its_nolint(parse: Parse, source: str) -> None:
-    assert filelen.check(parse(source), 2) == [_OVER_LIMIT]
+    assert filelen.check(parse(source), 2) == [_over_limit()]
 
 
 @pytest.mark.parametrize(
