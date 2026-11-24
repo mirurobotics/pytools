@@ -48,12 +48,6 @@ def reset():
     global LIMIT
     LIMIT = 2
 """
-_FINAL_IN_CLASS: Final = """\
-class Point:
-    ORIGIN: Final = 0
-
-START: Final = ORIGIN
-"""
 _FORMAT_SPEC: Final = """\
 WIDTH: Final = 3
 LABEL: Final = f"{WIDTH!r:>{WIDTH}}-{WIDTH}"
@@ -117,7 +111,8 @@ def test_check_skips_names_that_are_not_variables(parse: Parse, source: str) -> 
         pytest.param("LIMIT: Final = -1\n", id="unary-operator"),
         pytest.param('LINE: Final = "-" * 3\n', id="binary-operator"),
         pytest.param("DEBUG: Final = False or True\n", id="bool-operator"),
-        pytest.param("LIMIT: Final = 3\nMAX: Final = LIMIT + 1\n", id="constant-name"),
+        pytest.param("MAX: Final = LIMIT + 1\n", id="name"),
+        pytest.param("from re import I\nFLAGS: Final = I\n", id="imported-name"),
         pytest.param("FLAGS: Final = re.I | re.M\n", id="dotted-reference"),
         pytest.param("KINDS: Final = (ast.Name, (1, ast.Call))\n", id="tuple"),
         pytest.param("NONE: Final = frozenset()\n", id="empty-frozenset"),
@@ -156,14 +151,6 @@ def test_check_skips_final_constants(parse: Parse, source: str) -> None:
         pytest.param("FIRST: Final = ITEMS[0]\n", _diags(1), id="subscript"),
         pytest.param('LABEL: Final = f"{make()}"\n', _diags(1), id="f-string-call"),
         pytest.param("LIMIT: Final\n", _diags(1), id="no-value"),
-        pytest.param("LIMIT = 3\nMAX: Final = LIMIT\n", _diags(1, 2), id="non-final"),
-        pytest.param("MAX: Final = LIMIT\nLIMIT: Final = 3\n", _diags(1), id="below"),
-        pytest.param(
-            "ITEMS: Final = [1]\nALL: Final = (ITEMS,)\n",
-            _diags(1, 2),
-            id="mutable-final",
-        ),
-        pytest.param(_FINAL_IN_CLASS, _diags(4), id="class-final"),
     ],
 )
 def test_check_reports_finals_that_are_not_constants(

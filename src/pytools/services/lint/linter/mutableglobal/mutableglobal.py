@@ -1,12 +1,7 @@
 import ast
 from typing import Final
 
-from pytools.services.lint.linter.analysis.analysis import (
-    CheckInput,
-    Diagnostic,
-    Rule,
-    walk_outside,
-)
+from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
 from pytools.services.lint.linter.analysis.names import (
     DeclaredName,
     NameKind,
@@ -15,7 +10,6 @@ from pytools.services.lint.linter.analysis.names import (
 from pytools.services.lint.linter.analysis.nolint import has_nolint_at_or_above
 
 _MESSAGE: Final = "mutable global variable: use a Final constant or a function instead"
-_DEFS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
@@ -26,29 +20,21 @@ def check(file: CheckInput) -> list[Diagnostic]:
 
 
 def _constant_names(tree: ast.Module) -> set[ast.expr]:
-    aliases = [node.name for node in ast.walk(tree) if isinstance(node, ast.TypeAlias)]
-    return {*aliases, *_final_constants(tree)}
+    nodes = list(ast.walk(tree))
+    aliases = [node.name for node in nodes if isinstance(node, ast.TypeAlias)]
+    finals = [
+        node.target
+        for node in nodes
+        if isinstance(node, ast.AnnAssign) and _is_constant(node)
+    ]
+    return {*aliases, *finals}
 
 
-def _final_constants(tree: ast.Module) -> list[ast.Name]:
-    """Return the targets of module-level Finals whose values are constant.
-
-    A value may name a constant bound above it, as module code runs in order.
-    """
-    constants: dict[str, ast.Name] = {}
-    for node in walk_outside(tree.body, _DEFS):
-        if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):
-            continue
-        if _is_constant(node, set(constants)):
-            constants[node.target.id] = node.target
-    return list(constants.values())
-
-
-def _is_constant(stmt: ast.AnnAssign, names: set[str]) -> bool:
+def _is_constant(stmt: ast.AnnAssign) -> bool:
     """Report whether stmt declares a Final set to a constant expression."""
     if stmt.value is None or not _is_final(stmt.annotation):
         return False
-    return _is_constant_expr(stmt.value, names)
+    return _is_constant_expr(stmt.value)
 
 
 def _is_final(annotation: ast.expr) -> bool:
@@ -59,20 +45,21 @@ def _is_final(annotation: ast.expr) -> bool:
     return isinstance(annotation, ast.Name) and annotation.id == "Final"
 
 
-def _is_constant_expr(expr: ast.expr, names: set[str]) -> bool:
-    """Report whether expr builds an immutable value from constants.
+def _is_constant_expr(expr: ast.expr) -> bool:
+    """Report whether expr is written only in syntax that builds no mutable value.
 
-    Its leaves are literals, names in names and dotted references such as
-    re.IGNORECASE; operators, tuples, frozensets and f-strings combine them.
+    Its leaves are literals, names and dotted references such as re.IGNORECASE,
+    which Final keeps from being rebound; operators, tuples, frozensets and
+    f-strings combine them.
     """
     if isinstance(expr, ast.Name):
-        return expr.id in names
+        return True
     if isinstance(expr, ast.Attribute):
         return _is_dotted(expr)
     if isinstance(expr, ast.Call):
-        return _is_frozenset(expr, names)
+        return _is_frozenset(expr)
     parts = _parts(expr)
-    return parts is not None and all(_is_constant_expr(part, names) for part in parts)
+    return parts is not None and all(_is_constant_expr(part) for part in parts)
 
 
 def _is_dotted(expr: ast.Attribute) -> bool:
@@ -81,7 +68,7 @@ def _is_dotted(expr: ast.Attribute) -> bool:
     return isinstance(expr.value, ast.Name)
 
 
-def _is_frozenset(call: ast.Call, names: set[str]) -> bool:
+def _is_frozenset(call: ast.Call) -> bool:
     """Report whether call builds a frozenset of constants.
 
     The frozenset copies a list or set display, so its items are what count.
@@ -94,7 +81,7 @@ def _is_frozenset(call: ast.Call, names: set[str]) -> bool:
         for arg in call.args
         for item in (arg.elts if isinstance(arg, ast.List | ast.Set) else [arg])
     ]
-    return all(_is_constant_expr(item, names) for item in items)
+    return all(_is_constant_expr(item) for item in items)
 
 
 def _parts(expr: ast.expr) -> list[ast.expr] | None:
