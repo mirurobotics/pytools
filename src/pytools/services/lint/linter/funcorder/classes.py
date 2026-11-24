@@ -10,10 +10,21 @@ type _Users = dict[int, list[int]]
 
 
 @dataclass(frozen=True)
+class Use:
+    """Where a class without methods goes: directly above its first user."""
+
+    user: int
+    at: int  # the place of that user, or of the class it goes above
+    depth: int  # how many such classes it goes above, one the user of the next
+
+
+@dataclass(frozen=True)
 class Classes:
     """Where the classes directly in a scope go."""
 
     plain: _Users  # the users of each used class without methods
+    uses: dict[int, Use]  # where each such class goes
+    movable: frozenset[int]  # the ones that can go there
     plain_needs: dict[int, frozenset[int]]  # needs, with those of classes it uses
     tucked: _Users  # the defs above each class with methods that use it
 
@@ -30,7 +41,9 @@ def find_classes(
     users = _users(file, scope, decls, refs, loads)
     used = {cls: found for cls, found in users.items() if found}
     plain = _plain(decls, used)
-    return Classes(plain, _plain_needs(plain, needs), _tucked(decls, used))
+    uses, movable = _place(decls, plain, needs)
+    plain_needs = _plain_needs(plain, movable, needs)
+    return Classes(plain, uses, movable, plain_needs, _tucked(decls, used))
 
 
 def _users(
@@ -79,17 +92,119 @@ def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
     }
 
 
-def _plain_needs(
-    plain: _Users, needs: dict[int, frozenset[int]]
-) -> dict[int, frozenset[int]]:
-    """Return what each class without methods needs when defined.
+def _place(
+    decls: dict[int, Decl], plain: _Users, needs: dict[int, frozenset[int]]
+) -> tuple[dict[int, Use], frozenset[int]]:
+    """Return where each class without methods goes, and the ones that can.
 
-    The classes it uses go above it, so what they need counts as its own.
+    One that can't move stays put, so the classes it uses go above it where it
+    is. Each round fixes the classes the round before couldn't move.
     """
-    uses = {cls: [other for other in plain if cls in plain[other]] for cls in plain}
+    fixed: frozenset[int] = frozenset()
+    while True:
+        uses = _first_uses(decls, plain, fixed)
+        movable = _movable(needs, uses, fixed)
+        stuck = frozenset(uses) - movable
+        if stuck <= fixed:
+            return uses, movable
+        fixed |= stuck
+
+
+def _first_uses(
+    decls: dict[int, Decl], plain: _Users, fixed: frozenset[int]
+) -> dict[int, Use]:
+    """Return where each class without methods goes, above its first user.
+
+    A user that is such a class and can move counts where that class goes, one
+    deeper, so the deeper class sits above it.
+    """
+    uses: dict[int, Use] = {}
+    for cls in plain:
+        _resolve(decls, plain, fixed, uses, cls)
+    return uses
+
+
+def _resolve(
+    decls: dict[int, Decl],
+    plain: _Users,
+    fixed: frozenset[int],
+    uses: dict[int, Use],
+    root: int,
+) -> None:
+    """Add root's use to uses, after those of the classes that use it.
+
+    A stack, not recursion, so a long chain of such classes doesn't overflow.
+    """
+    pending = [root]
+    while pending:
+        cls = pending[-1]
+        moving = [user for user in plain[cls] if user in plain and user not in fixed]
+        todo = [user for user in moving if user not in uses]
+        if todo:
+            pending.extend(todo)
+        else:
+            uses[pending.pop()] = _use(decls, plain[cls], uses, fixed)
+
+
+def _use(
+    decls: dict[int, Decl],
+    users: list[int],
+    uses: dict[int, Use],
+    fixed: frozenset[int],
+) -> Use:
+    """Return the first of users.
+
+    A use through such a class comes before a direct use at the same place. A
+    decl's place is that of its first stub.
+    """
+    keys = [
+        (uses[user].at, 0, -uses[user].depth - 1, user)
+        if user in uses and user not in fixed
+        else (decls[user].first if user in decls else user, 1, 0, user)
+        for user in users
+    ]
+    place, _, depth, user = min(keys)
+    return Use(user, place, -depth)
+
+
+def _movable(
+    needs: dict[int, frozenset[int]], uses: dict[int, Use], fixed: frozenset[int]
+) -> frozenset[int]:
+    """Return the classes that can move to their first user.
+
+    One that rises must not pass a statement it uses when defined, unless that
+    is a deeper class rising with it, so deeper classes are decided first.
+    """
+    movable: set[int] = set()
+    for cls in sorted(uses, key=lambda idx: -uses[idx].depth):
+        found = needs[cls]
+        is_movable = all(_stays_above(uses, movable, uses[cls], need) for need in found)
+        if cls not in fixed and is_movable:
+            movable.add(cls)
+    return frozenset(movable)
+
+
+def _stays_above(uses: dict[int, Use], movable: set[int], use: Use, need: int) -> bool:
+    if need < use.at:
+        return True
+    other = uses.get(need)
+    is_deeper = other is not None and other.at == use.at and other.depth > use.depth
+    return is_deeper and need in movable
+
+
+def _plain_needs(
+    plain: _Users, movable: frozenset[int], needs: dict[int, frozenset[int]]
+) -> dict[int, frozenset[int]]:
+    """Return what each class without methods that can move needs when defined.
+
+    The ones it uses go above it, so what they need counts as its own.
+    """
+    inner = {
+        cls: [other for other in movable if cls in plain[other]] for cls in movable
+    }
     return {
-        cls: needs[cls].union(*(needs[other] for other in graph.reachable(uses, cls)))
-        for cls in plain
+        cls: needs[cls].union(*(needs[other] for other in graph.reachable(inner, cls)))
+        for cls in movable
     }
 
 

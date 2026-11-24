@@ -93,14 +93,15 @@ def _anchored(model: Model) -> set[int]:
 def _inherited_needs(model: Model, unit: list[int]) -> set[int]:
     """Return what the classes without methods unit uses need when defined.
 
-    Such a class goes above its first user, so each user waits for what it
-    needs.
+    Such a class that can move goes above its first user, so each user waits for
+    what it needs. One that can't stays put, so no user waits for it.
     """
+    classes = model.classes
     return {
         need
-        for cls, users in model.classes.plain.items()
-        if any(idx in users for idx in unit)
-        for need in model.classes.plain_needs[cls]
+        for cls, found in classes.plain_needs.items()
+        if any(idx in classes.plain[cls] for idx in unit)
+        for need in found
     }
 
 
