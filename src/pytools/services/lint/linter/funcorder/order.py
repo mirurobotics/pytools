@@ -73,7 +73,7 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
         elif idx in model.decls:
             units.append([*pending, idx])
             pending = []
-        elif idx in model.stubs or (is_carried and idx not in model.decls):
+        elif idx in model.stubs or is_carried:
             pending.append(idx)
         else:
             units.extend([held] for held in [*pending, idx])
