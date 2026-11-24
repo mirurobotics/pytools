@@ -19,8 +19,8 @@ def has_shared_lines(file: CheckInput, scope: ast.Module | ast.ClassDef) -> bool
 def render(file: CheckInput, orders: dict[ast.Module | ast.ClassDef, list[int]]) -> str:
     """Return file's source with each scope's statements laid out in its order.
 
-    A statement moves with the comments above it, and gets blank lines above it
-    that ruff format accepts.
+    A statement moves with the comments and blank lines above it; ruff format
+    sets the spacing afterwards.
     """
     found = (_region(file, scope, order) for scope, order in orders.items())
     regions = sorted(found, key=lambda region: region.lines.start)
@@ -35,8 +35,6 @@ class _Region:
     chunks: list[range]  # each statement, with the comments directly above it
     gaps: list[range]  # the lines between each chunk and the one before it
     order: list[int]
-    is_def: list[bool]
-    blank: int  # the blank lines ruff format puts around a def in the scope
 
 
 def _region(
@@ -50,13 +48,8 @@ def _region(
     ]
     gaps = [range(end + 1, start) for end, start in zip(ends[:-1], starts, strict=True)]
     gaps[0] = range(starts[0], starts[0])
-    is_def = [
-        isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
-        for stmt in scope.body
-    ]
-    blank = 2 if isinstance(scope, ast.Module) else 1
     lines = range(starts[0], ends[-1] + 1)
-    return _Region(lines, chunks, gaps, order, is_def, blank)
+    return _Region(lines, chunks, gaps, order)
 
 
 def _ends(file: CheckInput, scope: ast.Module | ast.ClassDef) -> list[int]:
@@ -95,28 +88,8 @@ def _render_region(
     file: CheckInput, regions: list[_Region], region: _Region
 ) -> list[str]:
     out: list[str] = []
-    prev: int | None = None
     for idx in region.order:
-        out.extend(_separator(file, region, prev, idx))
+        gap = region.gaps[idx]
+        out.extend(file.lines[gap.start - 1 : gap.stop - 1])
         out.extend(_render_lines(file, regions, region.chunks[idx]))
-        prev = idx
     return out
-
-
-def _separator(
-    file: CheckInput, region: _Region, prev: int | None, idx: int
-) -> list[str]:
-    """Return the lines to put above chunk idx when it follows chunk prev.
-
-    A chunk that still follows the one it did keeps its gap. Otherwise the gap's
-    comments go with it, below the blank lines ruff format and isort accept.
-    """
-    gap = region.gaps[idx]
-    found = file.lines[gap.start - 1 : gap.stop - 1]
-    if prev == idx - 1:
-        return found
-    blanks = next((pos for pos, line in enumerate(found) if line.strip()), len(found))
-    if prev is None:
-        return found[blanks:]
-    is_def = region.is_def[prev] or region.is_def[idx]
-    return [""] * (region.blank if is_def else 1) + found[blanks:]

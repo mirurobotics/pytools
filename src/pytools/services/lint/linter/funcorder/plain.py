@@ -2,6 +2,34 @@ from pytools.services.lint.linter.funcorder.classes import Use
 from pytools.services.lint.linter.funcorder.model import Model
 
 
+def place(model: Model, order: list[int]) -> list[int]:
+    """Return order with each class without methods that can move put back in.
+
+    One plain_violations reports goes directly above its first user, deeper
+    ones above it; the rest stay directly above the statement below them.
+    """
+    uses = model.classes.uses
+    above: dict[int, list[int]] = {}
+    for cls in sorted(uses, key=lambda idx: (-uses[idx].depth, idx)):
+        target = cls + 1 if _is_near(model, cls) else uses[cls].at
+        above.setdefault(target, []).append(cls)
+    return [placed for idx in order for placed in _stacked(above, idx)]
+
+
+def _stacked(above: dict[int, list[int]], idx: int) -> list[int]:
+    """Return idx below the classes that go above it, each below its own.
+
+    A stack, not recursion, so a long chain of such classes doesn't overflow.
+    """
+    found: list[int] = []
+    pending = [idx]
+    while pending:
+        top = pending.pop()
+        found.append(top)
+        pending.extend(above.get(top, []))
+    return found[::-1]
+
+
 def plain_violations(model: Model) -> dict[int, str]:
     """Report each class without methods not directly above its first user.
 
