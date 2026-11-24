@@ -59,7 +59,7 @@ _CLASS_NEEDS: Final = """\
 def run(): _f(); _make()
 def _make(): return 1
 class P:
-    x = _make
+    x = [_make]
 def _f(p: P): pass
 """
 _CLASS_STAYS: Final = """\
@@ -96,7 +96,7 @@ _CLASS_CHAIN_NEEDS: Final = """\
 def run(): _f(); _make()
 def _make(): return 1
 class Q:
-    x = _make
+    x = [_make]
 class P:
     q: Q
 def _f(p: P): pass

@@ -9,7 +9,11 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.funcorder import graph
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
-from pytools.services.lint.linter.funcorder.refs import ImportTimeNames, called_names
+from pytools.services.lint.linter.funcorder.refs import (
+    ImportTimeNames,
+    bound_names,
+    called_names,
+)
 
 type _Users = dict[int, list[int]]
 
@@ -47,7 +51,8 @@ def find_classes(
     used = {cls: found for cls, found in users.items() if found}
     runs = _runs_code(decls, effects)
     plain = _plain(decls, used)
-    uses = _place(decls, plain, needs, runs)
+    rebinds = _rebinds(file, scope, effects, plain)
+    uses = _place(decls, plain, needs, runs, rebinds)
     inherited = _inherited(plain, uses, needs)
     return Classes(uses, inherited, _tucked(decls, used), runs)
 
@@ -111,11 +116,30 @@ def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
     }
 
 
+def _rebinds(
+    file: CheckInput,
+    scope: ast.Module | ast.ClassDef,
+    effects: list[ImportTimeNames],
+    plain: _Users,
+) -> dict[int, frozenset[int]]:
+    """Return the statements that bind or delete a name each class reads when defined.
+
+    A class moved past one would read another value, or none.
+    """
+    changes = [bound_names(file, stmt) for stmt in scope.body]
+    reads = {cls: effects[cls].loads for cls in plain}
+    return {
+        cls: frozenset(idx for idx, found in enumerate(changes) if found & read)
+        for cls, read in reads.items()
+    }
+
+
 def _place(
     decls: dict[int, Decl],
     plain: _Users,
     needs: dict[int, frozenset[int]],
     runs: frozenset[int],
+    rebinds: dict[int, frozenset[int]],
 ) -> dict[int, Use]:
     """Return where each class without methods that can move goes.
 
@@ -125,7 +149,7 @@ def _place(
     fixed = runs & plain.keys()
     while True:
         uses = _first_uses(decls, plain, fixed)
-        movable = _movable(needs, uses, fixed)
+        movable = _movable(needs, rebinds, uses, fixed)
         stuck = frozenset(uses) - movable
         if stuck <= fixed:
             return {cls: use for cls, use in uses.items() if cls in movable}
@@ -190,18 +214,24 @@ def _use(
 
 
 def _movable(
-    needs: dict[int, frozenset[int]], uses: dict[int, Use], fixed: frozenset[int]
+    needs: dict[int, frozenset[int]],
+    rebinds: dict[int, frozenset[int]],
+    uses: dict[int, Use],
+    fixed: frozenset[int],
 ) -> frozenset[int]:
     """Return the classes that can move to their first user.
 
     One that rises must not pass a statement it uses when defined, unless that
-    is a deeper class rising with it, so deeper classes are decided first.
+    is a deeper class rising with it, so deeper classes are decided first. One
+    that sinks must not pass a statement that binds or deletes a name it reads
+    when defined.
     """
     movable: set[int] = set()
     for cls in sorted(uses, key=lambda idx: -uses[idx].depth):
-        found = needs[cls]
-        is_movable = all(_stays_above(uses, movable, uses[cls], need) for need in found)
-        if cls not in fixed and is_movable:
+        use = uses[cls]
+        is_movable = all(_stays_above(uses, movable, use, need) for need in needs[cls])
+        is_kept = rebinds[cls].isdisjoint(range(cls + 1, use.at))
+        if cls not in fixed and is_movable and is_kept:
             movable.add(cls)
     return frozenset(movable)
 

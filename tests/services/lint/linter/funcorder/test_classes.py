@@ -10,7 +10,7 @@ type Parse = Callable[[str], CheckInput]
 _CLASS_CHAIN: Final = """\
 C = 1
 class Q:
-    x = C
+    x = [C]
 class P:
     q: Q
 def run(p: P): pass
@@ -19,7 +19,7 @@ _RUNS_CODE: Final = """\
 from m import dec
 V = 1
 class A:
-    a: Opt[V] = V
+    a: Opt[V] = [V]
     b = [V, (V,)]
 class B(V): pass
 class C:
@@ -43,6 +43,8 @@ class K:
     k = sorted(items, key=j)
 class L:
     lo, hi = V
+class M:
+    m = V
 """
 _USER_STAYS: Final = """\
 def make(): return Line()
@@ -61,7 +63,7 @@ def test_find_classes_chains_methodless_class_needs(parse: Parse) -> None:
 
 
 def test_find_classes_finds_decls_that_run_code(parse: Parse) -> None:
-    assert _find(parse, _RUNS_CODE).runs == {3, 4, 5, 6, 7, 8, 9, 10, 12, 13}
+    assert _find(parse, _RUNS_CODE).runs == {3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14}
 
 
 def test_find_classes_places_users_that_stay(parse: Parse) -> None:

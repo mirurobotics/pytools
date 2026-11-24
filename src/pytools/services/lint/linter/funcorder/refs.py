@@ -119,13 +119,10 @@ def _position(node: ast.expr) -> tuple[int, int]:
 
 @dataclass(frozen=True)
 class ImportTimeNames:
-    """The names a statement uses when it runs, outside def bodies.
-
-    A lambda's reads count as called, since the lambda may be called.
-    """
+    """The names a statement uses when it runs, outside def bodies."""
 
     loads: set[str]  # loaded from the scope it's in, outside lambda bodies
-    called: set[str]  # used other than by only loading them
+    called: set[str]  # used other than by only loading them, or read in a lambda
     binds: frozenset[str]  # bound anywhere it runs, but by an import
 
 
@@ -139,8 +136,7 @@ def import_time_names(
     In a class scope, a nested class body or a comprehension past its first
     iterable can't see the scope's names, so it's left out. A name used other
     than by only loading it may run that object's code, and so may one a lambda
-    reads, since the lambda may be called. A stack, not recursion, so deep
-    nesting doesn't overflow.
+    reads. A stack, not recursion, so deep nesting doesn't overflow.
     """
     own = stmt.name if isinstance(stmt, DEFS) else ""
     is_class = isinstance(scope, ast.ClassDef)
@@ -166,13 +162,11 @@ def _loaded_parts(node: ast.AST) -> list[ast.AST]:
     Those are an annotation, a value assigned to names or attributes without
     unpacking it, a list or tuple element, and a subscript slice of a name or
     attribute, such as `list[Vec]`. A call argument may run, since the callee
-    can call it.
+    can call it, and so may a named value, since a class body hands what it
+    binds to `__set_name__`.
     """
-    if isinstance(node, ast.Assign) and all(map(_is_target, node.targets)):
-        return [node.value]
-    if isinstance(node, ast.AnnAssign):
-        value = [node.value] if node.value and _is_target(node.target) else []
-        return [node.annotation, *value]
+    if isinstance(node, (ast.Assign, ast.AnnAssign)):
+        return _loaded_assign_parts(node)
     if isinstance(node, (ast.List, ast.Tuple)):
         return list(node.elts)
     if isinstance(node, _ROOTS):
@@ -182,8 +176,19 @@ def _loaded_parts(node: ast.AST) -> list[ast.AST]:
     return []
 
 
-def _is_target(node: ast.expr) -> bool:
-    return isinstance(node, (ast.Name, ast.Attribute))
+def _loaded_assign_parts(node: ast.Assign | ast.AnnAssign) -> list[ast.AST]:
+    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+    parts: list[ast.AST] = [node.annotation] if isinstance(node, ast.AnnAssign) else []
+    is_plain = all(isinstance(target, (ast.Name, ast.Attribute)) for target in targets)
+    if node.value is not None and is_plain and not _is_named(node.value):
+        parts.append(node.value)
+    return parts
+
+
+def _is_named(node: ast.expr) -> bool:
+    while isinstance(node, ast.Attribute):
+        node = node.value
+    return isinstance(node, ast.Name)
 
 
 def _loaded_def_parts(node: _Root) -> list[ast.AST]:
@@ -199,12 +204,6 @@ def _loaded_def_parts(node: _Root) -> list[ast.AST]:
 def _is_on(decorator: ast.expr, name: str) -> TypeGuard[ast.Attribute]:
     value = decorator.value if isinstance(decorator, ast.Attribute) else None
     return isinstance(value, ast.Name) and value.id == name
-
-
-def _is_named(node: ast.expr) -> bool:
-    while isinstance(node, ast.Attribute):
-        node = node.value
-    return isinstance(node, ast.Name)
 
 
 def _is_hidden(hidden: _Hidden, name: str) -> bool:
@@ -280,13 +279,8 @@ def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
 
 
 def _class_bindings(file: CheckInput, cls: ast.ClassDef) -> dict[str, int]:
-    """Return the first statement of cls's body that surely binds each name.
-
-    A name the body deletes anywhere may load the module's again.
-    """
-    nodes = [node for stmt in cls.body for node in ast.walk(stmt)]
-    names = [node for node in nodes if isinstance(node, ast.Name)]
-    deleted = {name.id for name in names if isinstance(name.ctx, ast.Del)}
+    """Return where cls's body first surely binds each name it never deletes."""
+    deleted = _deleted(_run_nodes(list(cls.body)))
     body = list(enumerate(cls.body))
     return {
         name: idx
@@ -310,21 +304,27 @@ def _is_definite(stmt: ast.stmt) -> bool:
 
 
 def bound_names(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:
-    """Return the names stmt binds in the scope it runs in."""
+    """Return the names stmt binds or deletes in the scope it runs in."""
     return _bound_names(file, _run_nodes([stmt]))
 
 
 def _bound_names(file: CheckInput, nodes: list[ast.AST]) -> frozenset[str]:
     """Return the names nodes bind, which hide a def of the same name.
 
-    An import binds a name too, and a global or nonlocal name binds elsewhere.
+    An import or deletion binds a name too; a global or nonlocal name binds elsewhere.
     """
     found = [binding(file, node, NameKind.LOCAL_VAR) for node in nodes]
     aliases = [node for node in nodes if isinstance(node, ast.alias)]
     imported = [alias.asname or alias.name.partition(".")[0] for alias in aliases]
     names = {*imported, *(name.text for name in found if name is not None)}
+    names.update(_deleted(nodes))
     declared = _declared(nodes, ast.Global) | _declared(nodes, ast.Nonlocal)
     return frozenset(names - declared)
+
+
+def _deleted(nodes: list[ast.AST]) -> frozenset[str]:
+    names = [node for node in nodes if isinstance(node, ast.Name)]
+    return frozenset(name.id for name in names if isinstance(name.ctx, ast.Del))
 
 
 def _declared(nodes: list[ast.AST], kind: type[ast.Global | ast.Nonlocal]) -> set[str]:
