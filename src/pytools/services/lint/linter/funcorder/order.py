@@ -29,9 +29,11 @@ def _arrange(
 ) -> tuple[list[int], set[int]]:
     units = {unit[-1]: unit for unit in _units(model, settled=settled)}
     inherited = {idx: _inherited_needs(model, units[idx]) for idx in model.decls}
+    needs = {
+        idx: blockers[idx] | model.needs[idx] | inherited[idx] for idx in model.decls
+    }
     waits = {
-        idx: (blockers[idx] | model.needs[idx] | inherited[idx]) - set(units[idx])
-        for idx in model.decls
+        idx: _placed(model, found) - set(units[idx]) for idx, found in needs.items()
     }
     left = dict.fromkeys(key for key in units if key not in model.classes.uses)
     stack: list[int] = []
@@ -57,8 +59,8 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
 
     A statement no def or class carries is a unit of its own, and so is each
     statement above the first def or class: the header never moves. A class
-    without methods that can move to its first user carries none: it moves
-    there alone.
+    without methods that can move to its first user moves there alone, so the
+    statements above it go with the next def or class.
     """
     first = min(model.decls, default=0)
     anchored = _anchored(model)
@@ -66,7 +68,9 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
     pending: list[int] = []
     for idx in range(len(model.stmts)):
         is_carried = idx > first and not settled and idx not in anchored
-        if idx in model.decls and idx not in model.classes.uses:
+        if idx in model.classes.uses:
+            units.append([idx])
+        elif idx in model.decls:
             units.append([*pending, idx])
             pending = []
         elif idx in model.stubs or (is_carried and idx not in model.decls):
@@ -98,6 +102,12 @@ def _inherited_needs(model: Model, unit: list[int]) -> set[int]:
     """
     inherited = model.classes.inherited
     return {need for idx in unit for need in inherited.get(idx, frozenset())}
+
+
+def _placed(model: Model, needs: set[int]) -> set[int]:
+    """Return where needs end up: a class that moves goes above its first user."""
+    uses = model.classes.uses
+    return {uses[need].at if need in uses else need for need in needs}
 
 
 def _pick(
