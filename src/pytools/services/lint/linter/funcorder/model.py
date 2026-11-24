@@ -36,7 +36,7 @@ class Model:
     """The calls between the defs and classes directly in a scope.
 
     A class counts as one caller, through its methods' calls. Calls out of or
-    into an exempt def, and into a def used at import time, are not enforced.
+    into an exempt def, and into a def run at import time, are not enforced.
     """
 
     stmts: list[ast.stmt]
@@ -61,7 +61,7 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     callees = {
         idx: _callees(file, scope, decl, stubs, by_name) for idx, decl in decls.items()
     }
-    pinned = _pinned(scope.body, by_name)
+    pinned = _pinned(scope.body, decls, callees)
     calls = {
         idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
         for idx, found in callees.items()
@@ -138,9 +138,16 @@ def _callees(
     return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
 
 
-def _pinned(stmts: list[ast.stmt], by_name: dict[str, int]) -> set[int]:
-    """Return the defs stmts use at import time, which must stay above that use."""
-    return {by_name[name] for name in import_time_names(stmts) if name in by_name}
+def _pinned(
+    stmts: list[ast.stmt], decls: dict[int, Decl], callees: dict[int, list[int]]
+) -> set[int]:
+    """Return the decls stmts use at import time and every def they reach.
+
+    Each runs at import time, so it must stay above that use.
+    """
+    names = {decl.stmt.name: idx for idx, decl in decls.items()}
+    used = {names[name] for name in import_time_names(stmts) if name in names}
+    return used.union(*(_reachable(callees, idx) for idx in used))
 
 
 def _is_enforced(

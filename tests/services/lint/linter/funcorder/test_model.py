@@ -51,6 +51,26 @@ def value(): return 1
 @value.setter
 def value(new): pass
 """
+_TRANSITIVE_PIN: Final = """\
+def _helper(): pass
+def run(): _helper()
+VALUE = run()
+def other(): _helper()
+"""
+_INSTANTIATED_CLASS_PIN: Final = """\
+def _h(): pass
+class T:
+    def __init__(self): _h()
+VALUE = T()
+def other(): _h()
+"""
+_METHOD_NAMED_LIKE_DECORATOR: Final = """\
+def retry(f): return f
+class Client:
+    @retry
+    def retry(self): pass
+def _wrap(): return retry
+"""
 _NOLINT_METHOD: Final = """\
 def _helper(): pass
 class Runner:
@@ -84,12 +104,14 @@ def test_build_gives_each_decl_a_kind(parse: Parse) -> None:
 @pytest.mark.parametrize(
     ("source", "stubs", "calls"),
     [
-        pytest.param(_OVERLOADS, {0, 1}, {2: [3], 3: []}, id="overloads"),
-        pytest.param(_PROPERTY, {0}, {1: [2, 3], 2: [], 3: []}, id="property"),
+        pytest.param(_OVERLOADS, frozenset({0, 1}), {2: [3], 3: []}, id="overloads"),
+        pytest.param(
+            _PROPERTY, frozenset({0}), {1: [2, 3], 2: [], 3: []}, id="property"
+        ),
     ],
 )
 def test_build_merges_a_def_with_its_stubs(
-    parse: Parse, source: str, stubs: set[int], calls: dict[int, list[int]]
+    parse: Parse, source: str, stubs: frozenset[int], calls: dict[int, list[int]]
 ) -> None:
     built = _build(parse, source)
     assert (built.stubs, built.calls) == (stubs, calls)
@@ -121,6 +143,15 @@ def test_build_merges_a_def_with_its_stubs(
             id="no-import-time-use",
         ),
         pytest.param(_SETTER_CALLEE, {0: [2], 2: []}, id="own-setter-decorator"),
+        pytest.param(_TRANSITIVE_PIN, {0: [], 1: [], 3: []}, id="transitive"),
+        pytest.param(
+            _INSTANTIATED_CLASS_PIN, {0: [], 1: [], 3: []}, id="instantiated-class"
+        ),
+        pytest.param(
+            _METHOD_NAMED_LIKE_DECORATOR,
+            {0: [], 1: [], 2: []},
+            id="method-named-like-its-decorator",
+        ),
     ],
 )
 def test_build_skips_calls_into_import_time_defs(
@@ -157,17 +188,19 @@ def test_build_enforces_calls_unless_a_def_is_exempt(
     [
         pytest.param(
             "def _b(): _a()\ndef run(): _a()\ndef _a(): _b()\n",
-            {0},
+            frozenset({0}),
             id="cycle-called-from-outside",
         ),
         pytest.param(
-            "def _b(): _a()\ndef _a(): _b()\ndef run(): pass\n", {1}, id="opener"
+            "def _b(): _a()\ndef _a(): _b()\ndef run(): pass\n",
+            frozenset({1}),
+            id="opener",
         ),
-        pytest.param(_EXEMPT_CYCLE_MEMBER, {3}, id="exempt-member"),
+        pytest.param(_EXEMPT_CYCLE_MEMBER, frozenset({3}), id="exempt-member"),
     ],
 )
 def test_build_waits_cycle_members_for_a_cycle_caller(
-    parse: Parse, source: str, waiting: set[int]
+    parse: Parse, source: str, waiting: frozenset[int]
 ) -> None:
     assert _build(parse, source).waiting == waiting
 
