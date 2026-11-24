@@ -108,11 +108,6 @@ _DOCSTRING = """\
 # def helper():
 #     '''Do a thing.'''
 """
-_CODE_AFTER_DIRECTIVE = """\
-# old way:
-# noqa: E501
-# first = 1
-"""
 _EXAMPLE_UNDER_PROSE = """\
 # Example:
 #     run()
@@ -149,7 +144,7 @@ def _diags(*lines: int) -> list[Diagnostic]:
         pytest.param(_NESTED_BARE_ANNOTATION, _diags(2), id="nested-annotation"),
         pytest.param(_DOCSTRING, _diags(1), id="docstring"),
         pytest.param("#\n# first = 1\n", _diags(2), id="first-non-blank-line"),
-        pytest.param(_CODE_AFTER_DIRECTIVE, _diags(3), id="code-after-directive"),
+        pytest.param("# noqa: E501\n# first = 1\n", _diags(2), id="after-directive"),
     ],
 )
 def test_check_reports_commented_out_code(
