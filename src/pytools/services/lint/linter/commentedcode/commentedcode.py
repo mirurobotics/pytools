@@ -85,13 +85,13 @@ def _parse(source: str) -> ast.Module | None:
     """Parse source, or return None if it is not Python.
 
     Prose that parses can raise warnings, such as invalid escapes, that are
-    not the user's to fix.
+    not the user's to fix. Source nested too deeply to parse is not code.
     """
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             return ast.parse(source)
-    except SyntaxError:
+    except (SyntaxError, RecursionError, MemoryError):
         return None
 
 
