@@ -1,4 +1,5 @@
 import ast
+from collections import Counter
 from dataclasses import dataclass
 
 from pytools.services.lint.linter.analysis.analysis import (
@@ -34,7 +35,7 @@ class Classes:
     uses: dict[int, Use]  # where each class without methods that can move goes
     inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
-    runs: frozenset[int]  # decls whose definition may run code from the scope
+    kept: frozenset[int]  # decls that never move
 
 
 def find_classes(
@@ -49,12 +50,13 @@ def find_classes(
     loads = [found.loads for found in effects]
     users = _users(file, scope, decls, refs, loads)
     used = {cls: found for cls, found in users.items() if found}
-    runs = _runs_code(decls, effects)
+    changes = [bound_names(file, stmt) for stmt in scope.body]
+    kept = _runs_code(decls, effects) | _rebound(decls, changes)
     plain = _plain(decls, used)
-    rebinds = _rebinds(file, scope, effects, plain)
-    uses = _place(decls, plain, needs, runs, rebinds)
+    rebinds = _rebinds(changes, effects, plain)
+    uses = _place(decls, plain, needs, kept, rebinds)
     inherited = _inherited(plain, uses, needs)
-    return Classes(uses, inherited, _tucked(decls, used), runs)
+    return Classes(uses, inherited, _tucked(decls, used), kept)
 
 
 def _users(
@@ -99,6 +101,16 @@ def _runs_code(
     return frozenset(idx for idx in decls if not effects[idx].called.isdisjoint(local))
 
 
+def _rebound(decls: dict[int, Decl], changes: list[frozenset[str]]) -> frozenset[int]:
+    """Return the classes whose name another statement binds or deletes.
+
+    A use of that name may mean another binding, so such a class never moves.
+    """
+    counts = Counter(name for found in changes for name in found)
+    classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
+    return frozenset(cls for cls in classes if counts[decls[cls].stmt.name] > 1)
+
+
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
     """Return the users of each class without methods.
 
@@ -117,16 +129,12 @@ def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
 
 
 def _rebinds(
-    file: CheckInput,
-    scope: ast.Module | ast.ClassDef,
-    effects: list[ImportTimeNames],
-    plain: _Users,
+    changes: list[frozenset[str]], effects: list[ImportTimeNames], plain: _Users
 ) -> dict[int, frozenset[int]]:
     """Return the statements that bind or delete a name each class reads when defined.
 
     A class moved past one would read another value, or none.
     """
-    changes = [bound_names(file, stmt) for stmt in scope.body]
     reads = {cls: effects[cls].loads for cls in plain}
     return {
         cls: frozenset(idx for idx, found in enumerate(changes) if found & read)
@@ -138,7 +146,7 @@ def _place(
     decls: dict[int, Decl],
     plain: _Users,
     needs: dict[int, frozenset[int]],
-    runs: frozenset[int],
+    kept: frozenset[int],
     rebinds: dict[int, frozenset[int]],
 ) -> dict[int, Use]:
     """Return where each class without methods that can move goes.
@@ -146,7 +154,7 @@ def _place(
     One that can't move stays put, so the classes it uses go above it where it
     is. Each round fixes the classes the round before couldn't move.
     """
-    fixed = runs & plain.keys()
+    fixed = kept & plain.keys()
     while True:
         uses = _first_uses(decls, plain, fixed)
         movable = _movable(needs, rebinds, uses, fixed)

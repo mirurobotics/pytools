@@ -46,6 +46,14 @@ class L:
 class M:
     m = V
 """
+_REBOUND: Final = """\
+class Point:
+    x = 1
+def old(p=Point): pass
+class Point:
+    x = 2
+def new(p=Point): pass
+"""
 _USER_STAYS: Final = """\
 def make(): return Line()
 X = 1
@@ -63,7 +71,12 @@ def test_find_classes_chains_methodless_class_needs(parse: Parse) -> None:
 
 
 def test_find_classes_finds_decls_that_run_code(parse: Parse) -> None:
-    assert _find(parse, _RUNS_CODE).runs == {3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14}
+    assert _find(parse, _RUNS_CODE).kept == {3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14}
+
+
+def test_find_classes_keeps_rebound_classes(parse: Parse) -> None:
+    classes = _find(parse, _REBOUND)
+    assert (classes.kept, classes.uses) == ({0, 2}, {})
 
 
 def test_find_classes_places_users_that_stay(parse: Parse) -> None:

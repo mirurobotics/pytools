@@ -46,14 +46,14 @@ def _is_tuckable(
     """Report whether the tree at start can move up under the tree at last.
 
     It can't hold a statement, which runs in order at import time, or a decl
-    whose definition may run code from the scope, and in the file the class
-    must rise below that tree's end without passing what it uses when defined.
-    Nor can a tree it passes hold what it waits for or a caller.
+    that never moves, and in the file the class must rise below that tree's
+    end without passing what it uses when defined. Nor can a tree it passes
+    hold what it waits for or a caller.
     """
     tree, end = trees[start], trees[last][-1]
     if any(idx not in model.decls and idx not in model.stubs for idx in tree):
         return False
-    if not model.classes.runs.isdisjoint(tree):
+    if not model.classes.kept.isdisjoint(tree):
         return False
     if not max(model.needs[tree[0]], default=-1) < end < tree[0]:
         return False
