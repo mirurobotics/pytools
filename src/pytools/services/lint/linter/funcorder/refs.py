@@ -14,7 +14,7 @@ from pytools.services.lint.linter.analysis.names import (
     own_parts,
 )
 
-_DEFS: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
+DEFS: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
 _ROOTS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 _COMPS: Final = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 
@@ -23,32 +23,38 @@ type _Comp = ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
 
 
 def called_names(
-    file: CheckInput, scope: ast.Module | ast.ClassDef, stmt: ast.stmt
+    file: CheckInput,
+    scope: ast.Module | ast.ClassDef,
+    stmt: ast.stmt,
+    *,
+    calls_only: bool = False,
 ) -> list[str]:
     """Return the names stmt calls, in order, in code that runs only when called.
 
-    A method calls its class's methods only through its receiver.
+    A method calls its class's methods only through its receiver. With
+    calls_only, only the calls that run when stmt runs are left: no plain
+    references, and nothing in a nested function body.
     """
     if isinstance(scope, ast.ClassDef):
-        return _receiver_calls(file, stmt)
-    return _free_calls(file, stmt)
+        return _receiver_calls(file, stmt, calls_only=calls_only)
+    return _free_calls(file, stmt, calls_only=calls_only)
 
 
-def _receiver_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
-    if not isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef):
+def _receiver_calls(file: CheckInput, stmt: ast.stmt, *, calls_only: bool) -> list[str]:
+    if not isinstance(stmt, DEFS):
         return []
     receiver = _receiver(stmt)
-    attrs = [
-        (node, bound)
-        for node, bound in _scoped_nodes(file, stmt)
-        if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load)
-    ]
+    nodes = _scoped_nodes(file, stmt, calls_only=calls_only)
+    funcs = _call_funcs([node for node, _ in nodes])
     own = [
-        attr
-        for attr, bound in attrs
-        if isinstance(attr.value, ast.Name)
-        and attr.value.id == receiver
+        node
+        for node, bound in nodes
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.ctx, ast.Load)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == receiver
         and receiver not in bound
+        and (node in funcs or not calls_only)
     ]
     return [attr.attr for attr in sorted(own, key=_position)]
 
@@ -62,35 +68,43 @@ def _receiver(func: Function) -> str | None:
     return None if is_static or not params else params[0].arg
 
 
-def _free_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
+def _free_calls(file: CheckInput, stmt: ast.stmt, *, calls_only: bool) -> list[str]:
     """Return the names stmt refers to in code that runs only when called."""
     nodes = walk_outside([stmt], _ROOTS)
     roots = [node for node in nodes if isinstance(node, _ROOTS)]
-    return [name for root in roots for name in _root_free_calls(file, root)]
-
-
-def _root_free_calls(file: CheckInput, root: _Root) -> list[str]:
-    params = _bound_names(file, own_parts(root))
-    names = [
-        (node, bound)
-        for node, bound in _scoped_nodes(file, root)
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+    return [
+        name
+        for root in roots
+        for name in _root_free_calls(file, root, calls_only=calls_only)
     ]
+
+
+def _root_free_calls(file: CheckInput, root: _Root, *, calls_only: bool) -> list[str]:
+    params = _bound_names(file, own_parts(root))
+    nodes = _scoped_nodes(file, root, calls_only=calls_only)
+    funcs = _call_funcs([node for node, _ in nodes])
     loads = [
-        name for name, bound in names if name.id not in bound and name.id not in params
+        node
+        for node, bound in nodes
+        if isinstance(node, ast.Name)
+        and isinstance(node.ctx, ast.Load)
+        and node.id not in bound
+        and node.id not in params
+        and (node in funcs or not calls_only)
     ]
     return [name.id for name in sorted(loads, key=_position)]
 
 
 def _scoped_nodes(
-    file: CheckInput, root: _Root
+    file: CheckInput, root: _Root, *, calls_only: bool
 ) -> list[tuple[ast.AST, frozenset[str]]]:
     """Return the nodes that run when root is called, with the names bound there.
 
     A name bound in a scope hides a def in that scope and the scopes nested in
     it, but a class body's names don't reach its methods, and a global name
-    hides nothing. Root's own parameters are left out. A stack, not recursion,
-    so deep nesting doesn't overflow.
+    hides nothing. Root's own parameters are left out, and with calls_only, so
+    are nested function bodies. A stack, not recursion, so deep nesting doesn't
+    overflow.
     """
     body: list[ast.AST] = [root.body] if isinstance(root, ast.Lambda) else [*root.body]
     pending: list[tuple[list[ast.AST], frozenset[str], bool]] = [
@@ -103,10 +117,16 @@ def _scoped_nodes(
         global_names = _declared(nodes, ast.Global)
         bound = (outer - global_names) | _bound_names(file, nodes)
         inner = outer if is_class else bound
-        for scope in [node for node in nodes if isinstance(node, SCOPES)]:
-            comp = outer_parts(scope) if isinstance(scope, _COMPS) else []
-            scope_parts = [*own_parts(scope), *comp]
-            pending.append((scope_parts, inner, isinstance(scope, ast.ClassDef)))
+        scopes = [
+            node
+            for node in nodes
+            if isinstance(node, SCOPES)
+            and not (calls_only and isinstance(node, _ROOTS))
+        ]
+        pending.extend(
+            (_inner_parts(scope), inner, isinstance(scope, ast.ClassDef))
+            for scope in scopes
+        )
         found.extend((node, bound) for node in nodes)
     return found
 
@@ -157,32 +177,58 @@ def _declared(nodes: list[ast.AST], kind: type[ast.Global | ast.Nonlocal]) -> se
     return {name for node in nodes if isinstance(node, kind) for name in node.names}
 
 
+def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
+    """Return the parts of scope that run in it.
+
+    A comprehension's first iterable runs in the scope around it instead.
+    """
+    if not isinstance(scope, _COMPS):
+        return own_parts(scope)
+    first = scope.generators[0].iter
+    inner = [part for part in outer_parts(scope) if part is not first]
+    return [*own_parts(scope), *inner]
+
+
 def _position(node: ast.expr) -> tuple[int, int]:
     return node.lineno, node.col_offset
 
 
-def import_time_names(stmts: list[ast.stmt]) -> set[str]:
-    """Return the names stmts load outside function and lambda bodies.
+def import_time_names(stmt: ast.stmt, *, calls_only: bool = False) -> set[str]:
+    """Return the names stmt loads outside function and lambda bodies.
 
-    The outer parts of a def directly in stmts run before its name is bound, so
-    its own name there is the def it replaces, such as the getter in a
-    property's setter decorator. A stack, not recursion, so deep nesting doesn't
-    overflow.
+    With calls_only, only the names it calls. A def's outer parts run before
+    its name is bound, so its own name there is the def it replaces, such as
+    the getter in a property's setter decorator.
     """
-    pending: list[tuple[ast.AST, str]] = [
-        (stmt, stmt.name if isinstance(stmt, _DEFS) else "") for stmt in stmts
-    ]
-    names: set[str] = set()
+    own = stmt.name if isinstance(stmt, DEFS) else ""
+    nodes = _import_time_nodes(stmt)
+    funcs = _call_funcs(nodes)
+    return {
+        node.id
+        for node in nodes
+        if isinstance(node, ast.Name)
+        and isinstance(node.ctx, ast.Load)
+        and node.id != own
+        and (node in funcs or not calls_only)
+    }
+
+
+def _import_time_nodes(stmt: ast.stmt) -> list[ast.AST]:
+    """Return stmt and the nodes under it outside function and lambda bodies.
+
+    A stack, not recursion, so deep nesting doesn't overflow.
+    """
+    pending: list[ast.AST] = [stmt]
+    nodes: list[ast.AST] = []
     while pending:
-        node, own = pending.pop()
-        if (
-            isinstance(node, ast.Name)
-            and isinstance(node.ctx, ast.Load)
-            and node.id != own
-        ):
-            names.add(node.id)
+        node = pending.pop()
+        nodes.append(node)
         if isinstance(node, _ROOTS):
-            pending.extend((part, own) for part in outer_parts(node))
+            pending.extend(outer_parts(node))
         else:
-            pending.extend((child, own) for child in ast.iter_child_nodes(node))
-    return names
+            pending.extend(ast.iter_child_nodes(node))
+    return nodes
+
+
+def _call_funcs(nodes: list[ast.AST]) -> set[ast.expr]:
+    return {node.func for node in nodes if isinstance(node, ast.Call)}

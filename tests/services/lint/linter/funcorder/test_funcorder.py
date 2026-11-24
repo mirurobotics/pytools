@@ -75,6 +75,12 @@ def _help(): return 1
 _DEEP_EXPRESSION: Final = (
     "def _h(): pass\ndef run(): return " + "1 + " * 2000 + "_h()\n"
 )
+_MAIN_GUARD: Final = """\
+def _helper(): pass
+def main(): _helper()
+if __name__ == "__main__":
+    main()
+"""
 _PUBLIC_METHOD_ENTRY: Final = """\
 class T:
     def _a(self): pass
@@ -200,6 +206,11 @@ def test_check_skips_ordered_source(parse: Parse, source: str) -> None:
             _DEEP_EXPRESSION,
             [_diag(1, '"_h" should be below its last caller "run"')],
             id="deep-expression",
+        ),
+        pytest.param(
+            _MAIN_GUARD,
+            [_diag(1, '"_helper" should be below its last caller "main"')],
+            id="main-guard",
         ),
     ],
 )

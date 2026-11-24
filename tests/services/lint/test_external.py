@@ -12,10 +12,6 @@ from pytools.services.lint import external
 type Call = tuple[list[str], dict[str, object]]
 
 
-def _ruff_config() -> list[str]:
-    return ["--config", str(files("pytools.services.lint") / "ruff.toml")]
-
-
 def _mypy_config() -> list[str]:
     return ["--config-file", str(files("pytools.services.lint") / "mypy.ini")]
 
@@ -37,6 +33,10 @@ def test_list_python_files_lists_relative_to_cwd(
     kwargs = {"stdout": subprocess.PIPE, "text": True, "check": False}
     assert python_files == [str(Path("src", "a.py")), str(Path("..", "b.py"))]
     assert calls == [(command, kwargs)]
+
+
+def _ruff_config() -> list[str]:
+    return ["--config", str(files("pytools.services.lint") / "ruff.toml")]
 
 
 def test_list_python_files_is_none_when_ruff_fails(

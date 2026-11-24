@@ -64,12 +64,41 @@ class T:
 VALUE = T()
 def other(): _h()
 """
+_FACTORY_PIN: Final = """\
+def _helper(): pass
+class Runner:
+    def __init__(self): _helper()
+def initialize(): return Runner()
+VALUE = initialize()
+def other(): _helper()
+"""
 _METHOD_NAMED_LIKE_DECORATOR: Final = """\
 def retry(f): return f
 class Client:
     @retry
     def retry(self): pass
 def _wrap(): return retry
+"""
+_MAIN_GUARD: Final = """\
+def _helper(): pass
+def main(): _helper()
+if __name__ == "__main__":
+    main()
+"""
+_REFERENCED_HANDLER: Final = """\
+def _parse(): pass
+def _handle_a(): _parse()
+HANDLERS = {"a": _handle_a}
+def other(): _parse()
+"""
+_DECORATOR_WRAPPER: Final = """\
+def _log(): pass
+def _deco(f):
+    def wrapper(): _log(); return f()
+    return wrapper
+@_deco
+def run(): pass
+def other(): _log()
 """
 _NOLINT_METHOD: Final = """\
 def _helper(): pass
@@ -80,6 +109,19 @@ _NOLINT_CLASS: Final = """\
 def _helper(): pass
 class Runner:  # nolint: funcorder
     def run(self): _helper()
+"""
+_NOLINT_GETTER: Final = """\
+def run(): return value
+@property
+def value(): pass  # nolint: funcorder
+@value.setter
+def value(new): pass
+"""
+_NOLINT_OVERLOAD: Final = """\
+def run(): return parse(1)
+@overload
+def parse(x: int) -> int: ...  # nolint: funcorder
+def parse(x): return x
 """
 _EXEMPT_CYCLE_MEMBER: Final = """\
 def _e(): _a()  # nolint: funcorder
@@ -148,6 +190,9 @@ def test_build_merges_a_def_with_its_stubs(
             _INSTANTIATED_CLASS_PIN, {0: [], 1: [], 3: []}, id="instantiated-class"
         ),
         pytest.param(
+            _FACTORY_PIN, {0: [], 1: [], 2: [], 4: []}, id="class-built-by-factory"
+        ),
+        pytest.param(
             _METHOD_NAMED_LIKE_DECORATOR,
             {0: [], 1: [], 2: []},
             id="method-named-like-its-decorator",
@@ -155,6 +200,24 @@ def test_build_merges_a_def_with_its_stubs(
     ],
 )
 def test_build_skips_calls_into_import_time_defs(
+    parse: Parse, source: str, calls: dict[int, list[int]]
+) -> None:
+    assert _build(parse, source).calls == calls
+
+
+@pytest.mark.parametrize(
+    ("source", "calls"),
+    [
+        pytest.param(_MAIN_GUARD, {0: [], 1: [0]}, id="main-guard"),
+        pytest.param(_REFERENCED_HANDLER, {0: [], 1: [0], 3: [0]}, id="referenced-def"),
+        pytest.param(
+            _DECORATOR_WRAPPER,
+            {0: [], 1: [0], 2: [], 3: [0]},
+            id="decorator-wrapper",
+        ),
+    ],
+)
+def test_build_enforces_calls_no_reorder_can_break(
     parse: Parse, source: str, calls: dict[int, list[int]]
 ) -> None:
     assert _build(parse, source).calls == calls
@@ -175,6 +238,8 @@ def test_build_skips_calls_into_import_time_defs(
         ),
         pytest.param(_NOLINT_METHOD, {0: [], 1: [0]}, id="nolint-on-method"),
         pytest.param(_NOLINT_CLASS, {0: [], 1: [0]}, id="nolint-on-class"),
+        pytest.param(_NOLINT_GETTER, {0: [], 2: []}, id="nolint-on-getter"),
+        pytest.param(_NOLINT_OVERLOAD, {0: [], 2: []}, id="nolint-on-overload"),
     ],
 )
 def test_build_enforces_calls_unless_a_def_is_exempt(
