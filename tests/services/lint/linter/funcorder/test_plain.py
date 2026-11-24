@@ -217,6 +217,10 @@ def test_plain_violations_places_methodless_class(parse: Parse, source: str) -> 
     [
         pytest.param("class Point:\n    def __init__(self): pass\n", id="dunder"),
         pytest.param(_PROPERTY, id="property"),
+        pytest.param(
+            "class Point:\n    if FLAG:\n        def x(self): return 0\n",
+            id="method-in-a-branch",
+        ),
         pytest.param(_BARE_METHOD, id="pass-body"),
     ],
 )

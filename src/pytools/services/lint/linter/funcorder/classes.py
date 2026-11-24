@@ -1,7 +1,12 @@
 import ast
 from dataclasses import dataclass
 
-from pytools.services.lint.linter.analysis.analysis import DEFS, CheckInput, Function
+from pytools.services.lint.linter.analysis.analysis import (
+    DEFS,
+    CheckInput,
+    Function,
+    walk_outside,
+)
 from pytools.services.lint.linter.funcorder import graph
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.refs import called_names
@@ -224,8 +229,12 @@ def _tucked(decls: dict[int, Decl], users: _Users) -> _Users:
 
 
 def _has_methods(decl: Decl) -> bool:
-    """Report whether decl has a def with more than a docstring or `...`."""
-    return any(isinstance(stmt, DEFS) and _has_body(stmt) for stmt in decl.stmt.body)
+    """Report whether decl has a def with more than a docstring or `...`.
+
+    A def under a compound statement in the class body counts too.
+    """
+    nodes = walk_outside(decl.stmt.body, (*DEFS, ast.ClassDef))
+    return any(isinstance(node, DEFS) and _has_body(node) for node in nodes)
 
 
 def _has_body(func: Function) -> bool:
