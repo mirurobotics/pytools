@@ -82,6 +82,8 @@ def _roots(file: CheckInput, stmt: ast.stmt) -> list[tuple[_Root, frozenset[str]
         if isinstance(node, ROOTS):
             found.append((node, params))
             parts = outer_parts(node)
+        elif isinstance(node, _COMPS):
+            parts = [node.generators[0].iter, *_inner_parts(node)]
         outside, hidden = _hidden_in(file, node, params)
         pending.extend((part, params if part in outside else hidden) for part in parts)
     return found
@@ -144,7 +146,7 @@ class ImportTimeNames:
     loads: set[str]  # loaded from the scope it's in, outside lambda bodies
     called: set[str]  # used other than by only loading them, or read in a lambda
     stored: set[str]  # a class body's values, which only `__set_name__` may run
-    binds: frozenset[str]  # bound anywhere it runs, but by an import, or made global
+    binds: frozenset[str]  # bound, except by import, plus every name it declares global
 
 
 def import_time_names(
@@ -227,10 +229,7 @@ def _outer_parts_hiding(
 def _hidden_in(
     file: CheckInput, node: ast.AST, params: frozenset[str]
 ) -> tuple[list[ast.AST], frozenset[str]]:
-    """Return node's parts that don't see the names it hides, and those names.
-
-    A comprehension's targets and a class's or def's type parameters hide names.
-    """
+    """Return node's parts outside its targets and type params, and those names."""
     if isinstance(node, _COMPS):
         targets = _bound_names(file, _run_nodes(own_parts(node)))
         return [node.generators[0].iter], params | targets

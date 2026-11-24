@@ -160,11 +160,7 @@ class Other:
             ["helper"],
             id="call-in-comprehension",
         ),
-        pytest.param(
-            "def run(): return [x for x in helper()]\n",
-            ["helper"],
-            id="first-iterable",
-        ),
+        pytest.param("def run(): [x for x in h()]\n", ["h"], id="first-iterable"),
         pytest.param(
             "def run(): return [helper for helper in helper()]\n",
             ["helper"],
@@ -172,6 +168,7 @@ class Other:
         ),
         pytest.param(_GLOBAL, ["cache", "helper", "helper"], id="global"),
         pytest.param(_CLASS, ["helper"], id="class-methods"),
+        pytest.param("def run(k=lambda: h()): pass\n", ["h"], id="lambda-default"),
     ],
 )
 def test_called_names_returns_names_run_when_called(

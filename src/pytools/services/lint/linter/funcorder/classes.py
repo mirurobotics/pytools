@@ -139,12 +139,12 @@ def _runs_code(
 def _bare_def_names(decls: dict[int, Decl], effects: list[ImportTimeNames]) -> set[str]:
     """Return the names that only undecorated defs bind."""
     defs = {
-        idx
+        idx: decl.stmt.name
         for idx, decl in decls.items()
         if isinstance(decl.stmt, DEFS) and not decl.stmt.decorator_list
     }
-    others = [found.binds for idx, found in enumerate(effects) if idx not in defs]
-    return {decls[idx].stmt.name for idx in defs}.difference(*others)
+    others = [found.binds - {defs.get(idx, "")} for idx, found in enumerate(effects)]
+    return set(defs.values()).difference(*others)
 
 
 def _writes_globals(decls: dict[int, Decl]) -> frozenset[int]:

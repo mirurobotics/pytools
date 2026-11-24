@@ -139,6 +139,15 @@ def run(): return Point()
 class Point:
     x = make()
 """
+_GLOBAL_HOOK: Final = """\
+def _hook(owner, name): pass
+def install(): global _hook; _hook = Hook()
+install()
+def make(): return Point()
+def helper(): pass
+class Point:
+    x = _hook
+"""
 _TYPE_PARAM_IN_METHOD: Final = """\
 class Item: pass
 def run(): pass
@@ -181,6 +190,18 @@ _LAMBDA_IN_COMPREHENSION: Final = """\
 class Point: pass
 def run(): pass
 makers = [lambda: Point for Point in (int,)]
+def last(): return Point()
+"""
+_TYPE_PARAM_IN_DEFAULT: Final = """\
+class Item: pass
+def make():
+    def inner[Item](arg=Item): pass
+def last(): return Item()
+"""
+_LAMBDA_IN_FIRST_ITERABLE: Final = """\
+class Point: pass
+def run(): pass
+points = [Point for Point in map(lambda raw: Point(raw), RAW)]
 def last(): return Point()
 """
 _USER_STAYS: Final = """\
@@ -226,6 +247,7 @@ def _kept(parse: Parse, source: str) -> set[int]:
         pytest.param(_GLOBAL_IN_CLASS, id="class-body-rebinds-its-name"),
         pytest.param(_GLOBAL_WRITTEN_BELOW, id="move-would-pass-a-global-write"),
         pytest.param(_GLOBAL_CALLED, id="class-calls-a-global-set-in-a-def"),
+        pytest.param(_GLOBAL_HOOK, id="class-stores-a-def-made-global"),
     ],
 )
 def test_find_classes_leaves_class_in_place(parse: Parse, source: str) -> None:
@@ -240,6 +262,7 @@ def test_find_classes_leaves_class_in_place(parse: Parse, source: str) -> None:
         pytest.param(_TYPE_PARAM_IN_NESTED_METHOD, 2, id="class-in-a-def"),
         pytest.param(_TYPE_PARAM_IN_NESTED_BASES, 2, id="bases-in-a-def"),
         pytest.param(_TYPE_PARAM_IN_ANNOTATION, 2, id="annotation-in-a-def"),
+        pytest.param(_TYPE_PARAM_IN_DEFAULT, 1, id="default-in-a-def"),
     ],
 )
 def test_find_classes_scopes_type_params(parse: Parse, source: str, user: int) -> None:
@@ -251,6 +274,7 @@ def test_find_classes_scopes_type_params(parse: Parse, source: str, user: int) -
     [
         pytest.param(_LAMBDA_DEFAULT, 2, id="lambda-in-a-default"),
         pytest.param(_LAMBDA_IN_COMPREHENSION, 3, id="lambda-in-a-comprehension"),
+        pytest.param(_LAMBDA_IN_FIRST_ITERABLE, 2, id="lambda-in-a-first-iterable"),
     ],
 )
 def test_find_classes_finds_users_in_lambdas(

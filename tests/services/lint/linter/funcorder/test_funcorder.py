@@ -232,6 +232,11 @@ def test_check_skips_ordered_source(parse: Parse, source: str) -> None:
             [_diag(6, '"_f" should be directly below "run"')],
             id="methodless-class-that-stays-between",
         ),
+        pytest.param(
+            "def _h(): pass\ndef run(key=lambda: _h()): pass\n",
+            [_diag(1, '"_h" should be below its last caller "run"')],
+            id="lambda-in-a-default",
+        ),
     ],
 )
 def test_check_reports_def_out_of_order(
