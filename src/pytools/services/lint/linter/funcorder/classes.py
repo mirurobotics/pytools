@@ -9,14 +9,15 @@ from pytools.services.lint.linter.analysis.analysis import (
     Function,
     walk_outside,
 )
+from pytools.services.lint.linter.analysis.names import outer_parts
 from pytools.services.lint.linter.funcorder import graph
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
-from pytools.services.lint.linter.funcorder.inert import is_inert
 from pytools.services.lint.linter.funcorder.refs import (
     ImportTimeNames,
     called_names,
     scope_bindings,
 )
+from pytools.services.lint.linter.funcorder.walls import Walls, find_walls
 
 type _Users = dict[int, list[int]]
 
@@ -37,15 +38,14 @@ class Classes:
     uses: dict[int, Use]  # where each class without methods that can move goes
     inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
-    _kept: frozenset[int]  # the decls that never move
-    _blocked: dict[int, frozenset[int]]  # the statements each decl must not move past
+    _fixed: frozenset[int]  # the decls that never move, exempt classes included
+    _walls: Walls
 
     def may_pass(self, moved: Collection[int], passed: Collection[int]) -> bool:
         """Report whether the decls moved may move together past those passed."""
-        if not self._kept.isdisjoint(moved):
+        if not self._fixed.isdisjoint(moved):
             return False
-        blocked = [self._blocked.get(idx, frozenset()) for idx in moved]
-        return all(found.isdisjoint(passed) for found in blocked)
+        return not any(self._walls.crossed(idx, passed) for idx in moved)
 
 
 def find_classes(
@@ -65,12 +65,12 @@ def find_classes(
     kept = _runs_code(decls, effects, bindings) | shadowed | _writes_outer(decls)
     plain = _plain(decls, used)
     is_class = isinstance(scope, ast.ClassDef)
-    blocked = _blocked(decls, effects, binders, kept, bindings, is_class=is_class)
+    walls = find_walls(decls, effects, binders, kept, bindings, is_class=is_class)
     exempt = {idx for idx, decl in decls.items() if decl.exempt}
     fixed = kept | {idx for idx in exempt if decls[idx].kind is DeclKind.CLASS}
-    uses = _place(decls, plain, blocked, fixed)
+    uses = _place(decls, plain, walls, fixed)
     inherited = _inherited(plain, uses, graph.above(binders))
-    return Classes(uses, inherited, _tucked(decls, used), fixed, blocked)
+    return Classes(uses, inherited, _tucked(decls, used), fixed, walls)
 
 
 def _users(
@@ -144,7 +144,10 @@ def _bare_def_names(decls: dict[int, Decl], bindings: Counter[str]) -> set[str]:
 
 
 def _writes_outer(decls: dict[int, Decl]) -> frozenset[int]:
-    """Return the classes whose header has a walrus, or body a global or nonlocal."""
+    """Return the classes whose header has a walrus, or body a global or nonlocal.
+
+    A walrus in the body binds only in the class namespace.
+    """
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     return frozenset(idx for idx in classes if _has_outer_write(decls[idx].stmt))
 
@@ -152,11 +155,11 @@ def _writes_outer(decls: dict[int, Decl]) -> frozenset[int]:
 def _has_outer_write(stmt: Function | ast.ClassDef) -> bool:
     if not isinstance(stmt, ast.ClassDef):
         return False
-    header = [*stmt.decorator_list, *stmt.bases, *stmt.keywords]
-    in_header = [node for part in header for node in ast.walk(part)]
-    nodes = [*walk_outside(stmt.body, DEFS), *in_header]
-    writes = (ast.Global, ast.Nonlocal, ast.NamedExpr)
-    return any(isinstance(node, writes) for node in nodes)
+    in_header = [node for part in outer_parts(stmt) for node in ast.walk(part)]
+    is_walrus = any(isinstance(node, ast.NamedExpr) for node in in_header)
+    nodes = walk_outside(stmt.body, DEFS)
+    is_declared = any(isinstance(node, (ast.Global, ast.Nonlocal)) for node in nodes)
+    return is_walrus or is_declared
 
 
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
@@ -176,53 +179,25 @@ def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
     }
 
 
-def _blocked(
-    decls: dict[int, Decl],
-    effects: list[ImportTimeNames],
-    binders: dict[int, frozenset[int]],
-    kept: frozenset[int],
-    bindings: Counter[str],
-    *,
-    is_class: bool,
-) -> dict[int, frozenset[int]]:
-    """Return the statements each decl must not move past.
-
-    Its binders bind a name it reads when defined. Any statement but an inert
-    decl that runs no scope code may run code or bind a name, so a decl whose
-    definition may run code must not pass one, nor may one that reads a name the
-    scope may bind, nor, in a class scope, a class that reads a name its body
-    doesn't bind.
-    """
-    classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    active = {idx for idx, decl in decls.items() if not is_inert(decl.stmt)}
-    walls = frozenset(range(len(effects))) - (decls.keys() - kept - active)
-    walled = active | {idx for idx in decls if effects[idx].reads & bindings.keys()}
-    if is_class:
-        walled |= {cls for cls in classes if effects[cls].reads - effects[cls].binds}
-    return {
-        idx: binders[idx] | (walls if idx in walled else frozenset()) for idx in decls
-    }
-
-
 def _place(
     decls: dict[int, Decl],
     plain: _Users,
-    blocked: dict[int, frozenset[int]],
-    kept: frozenset[int],
+    walls: Walls,
+    fixed: frozenset[int],
 ) -> dict[int, Use]:
     """Return where each class without methods that can move goes.
 
     One that can't move stays put, so the classes it uses go above it where it
     is. Each round fixes the classes the round before couldn't move.
     """
-    fixed = kept & plain.keys()
+    staying = fixed & plain.keys()
     while True:
-        uses = _first_uses(decls, plain, fixed)
-        movable = _movable(blocked, uses, fixed)
+        uses = _first_uses(decls, plain, staying)
+        movable = _movable(walls, uses, staying)
         stuck = frozenset(uses) - movable
-        if stuck <= fixed:
+        if stuck <= staying:
             return {cls: use for cls, use in uses.items() if cls in movable}
-        fixed |= stuck
+        staying |= stuck
 
 
 def _first_uses(
@@ -283,7 +258,7 @@ def _use(
 
 
 def _movable(
-    blocked: dict[int, frozenset[int]], uses: dict[int, Use], fixed: frozenset[int]
+    walls: Walls, uses: dict[int, Use], fixed: frozenset[int]
 ) -> frozenset[int]:
     """Return the classes that can move to their first user.
 
@@ -294,7 +269,7 @@ def _movable(
     for cls in sorted(uses, key=lambda idx: -uses[idx].depth):
         use = uses[cls]
         passed = range(cls + 1, use.at) if cls < use.at else range(use.at, cls)
-        crossed = blocked[cls].intersection(passed)
+        crossed = walls.crossed(cls, passed)
         is_movable = all(_moves_with(uses, movable, use, idx) for idx in crossed)
         if cls not in fixed and is_movable:
             movable.add(cls)

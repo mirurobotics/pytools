@@ -9,7 +9,7 @@ from pytools.services.lint.linter.funcorder import funcorder, model, plain
 type Parse = Callable[[str], CheckInput]
 
 _POINT: Final = "class Point:\n    x: int\n"
-_RUN: Final = "def run(): pass\n"
+_RUN: Final = "def run(x: int | None) -> list[int]: pass\n"
 _MAKE: Final = "def make(): return Point()\n"
 _REPORT: Final = 'class "Point" should be directly above its first user'
 _LINE_REPORT: Final = 'class "Line" should be directly above its first user "make"'
