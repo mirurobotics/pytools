@@ -1,32 +1,33 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.commentedcode import commentedcode
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
-_FUNCTION_BODY = """\
+_FUNCTION_BODY: Final = """\
 def helper():
     # first = 1
     # first += 1
     # return first
     return 2
 """
-_TOP_LEVEL = """\
+_TOP_LEVEL: Final = """\
 # def old():
 #     print("hi")
 
 # LEGACY = 3
 """
-_CODE_AFTER_PROSE = """\
+_CODE_AFTER_PROSE: Final = """\
 def helper():
     # the old way:
     #cleanup(True)
     pass
 """
-_CONTROL_FLOW = """\
+_CONTROL_FLOW: Final = """\
 # for item in items: pass
 
 # while running: step()
@@ -42,7 +43,7 @@ _CONTROL_FLOW = """\
 # except OSError:
 #     pass
 """
-_INDENTED_RUNS = """\
+_INDENTED_RUNS: Final = """\
 # def old():
 #\tprint("hi")
 
@@ -51,7 +52,7 @@ _INDENTED_RUNS = """\
 
 #first = 1
 """
-_CALLS_AND_ASSIGNMENTS = """\
+_CALLS_AND_ASSIGNMENTS: Final = """\
 # (run())
 
 # await done
@@ -64,13 +65,13 @@ _CALLS_AND_ASSIGNMENTS = """\
 
 # yield value
 """
-_METHOD_CHAIN = """\
+_METHOD_CHAIN: Final = """\
 def helper():
     # (builder.
     #     run())
     pass
 """
-_DEFINITIONS = """\
+_DEFINITIONS: Final = """\
 # class Point: pass
 
 # type Alias = Base
@@ -83,7 +84,7 @@ def helper():
     # counts: dict[str, int] = {}
     pass
 """
-_BARE_ANNOTATIONS = """\
+_BARE_ANNOTATIONS: Final = """\
 # mu: Lock
 #
 # def lock():
@@ -97,31 +98,31 @@ def helper():
     # group.add(1)
     pass
 """
-_NESTED_BARE_ANNOTATION = """\
+_NESTED_BARE_ANNOTATION: Final = """\
 def helper():
     # for item in items:
     #     buf: Buffer
     #     render(buf, item)
     pass
 """
-_DOCSTRING = """\
+_DOCSTRING: Final = """\
 # def helper():
 #     '''Do a thing.'''
 """
-_EXAMPLE_UNDER_PROSE = """\
+_EXAMPLE_UNDER_PROSE: Final = """\
 # Example:
 #     run()
 #   value = run()
 # fmt: off
 """
-_NOLINT = """\
+_NOLINT: Final = """\
 # nolint: commentedcode
 # first = 1
 
 # nolint: funclen
 # second = 2
 """
-_MESSAGE = "commented-out code; delete it instead"
+_MESSAGE: Final = "commented-out code; delete it instead"
 
 
 def _diags(*lines: int) -> list[Diagnostic]:

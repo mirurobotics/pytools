@@ -2,6 +2,7 @@ import ast
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
@@ -9,8 +10,8 @@ from pytools.services.lint.linter.analysis.analysis import (
     walk_outside,
 )
 
-_TYPE_PARAMS = (ast.TypeVar, ast.ParamSpec, ast.TypeVarTuple)
-_SCOPES = (
+_TYPE_PARAMS: Final = (ast.TypeVar, ast.ParamSpec, ast.TypeVarTuple)
+_SCOPES: Final = (
     ast.FunctionDef,
     ast.AsyncFunctionDef,
     ast.Lambda,

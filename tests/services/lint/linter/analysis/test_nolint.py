@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -7,22 +8,28 @@ from pytools.services.lint.linter.analysis.comments import Comment
 from pytools.services.lint.linter.analysis.names import declared_names
 from pytools.services.lint.linter.analysis.nolint import (
     has_name_nolint,
+    has_nolint_at_or_above,
     has_nolint_on_lines,
 )
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
-_MAPPING_REST = """\
+_MAPPING_REST: Final = """\
 match a:
     case {
         **name  # nolint: varname
     }:
         pass
 """
-_WRAPPED_DEF = """\
+_WRAPPED_DEF: Final = """\
 def name(
     first,
 ): return first  # nolint: varname
+"""
+_WRAPPED_BINDING: Final = """\
+name = (
+    1
+)  # nolint: varname
 """
 
 
@@ -44,6 +51,27 @@ def test_has_name_nolint_searches_the_name_lines(
     file = parse(source)
     name = declared_names(file)[0]
     assert has_name_nolint(file, name, Rule.VARNAME) is expected
+
+
+@pytest.mark.parametrize(
+    ("source", "first", "last", "expected"),
+    [
+        pytest.param("name = 1  # nolint: varname\n", 1, 1, True, id="first-line"),
+        pytest.param(_WRAPPED_BINDING, 1, 3, True, id="last-line"),
+        pytest.param("# nolint: varname\nname = 1\n", 2, 2, True, id="comment-above"),
+        pytest.param(
+            "other = 1  # nolint: varname\nname = 1\n", 2, 2, False, id="code-above"
+        ),
+        pytest.param(
+            "# nolint: varname\n\nname = 1\n", 3, 3, False, id="blank-line-between"
+        ),
+    ],
+)
+def test_has_nolint_at_or_above_counts_the_line_above(
+    parse: Parse, source: str, first: int, last: int, expected: bool
+) -> None:
+    file = parse(source)
+    assert has_nolint_at_or_above(file, Rule.VARNAME, first, last) is expected
 
 
 @pytest.mark.parametrize(

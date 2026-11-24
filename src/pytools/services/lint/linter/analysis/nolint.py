@@ -1,5 +1,6 @@
 import ast
 import re
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
@@ -12,7 +13,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 from pytools.services.lint.linter.analysis.comments import Comment
 from pytools.services.lint.linter.analysis.names import DeclaredName
 
-_NOLINT = re.compile(r"#\s*nolint:([^#]*)")
+_NOLINT: Final = r"#\s*nolint:([^#]*)"
 
 
 def has_name_nolint(file: CheckInput, name: DeclaredName, rule: Rule) -> bool:
@@ -28,10 +29,17 @@ def has_def_nolint(file: CheckInput, node: Function | ast.ClassDef, rule: Rule) 
 
     A comment-only line just above them counts too.
     """
-    first = start_line(node)
+    return has_nolint_at_or_above(file, rule, start_line(node), header_end(file, node))
+
+
+def has_nolint_at_or_above(file: CheckInput, rule: Rule, first: int, last: int) -> bool:
+    """Report whether a nolint for rule sits on a line in [first, last].
+
+    A comment-only line just above first counts too.
+    """
     if first > 1 and not is_code_line(file, first - 1):
         first -= 1
-    return has_nolint_on_lines(file.comments, rule, first, header_end(file, node))
+    return has_nolint_on_lines(file.comments, rule, first, last)
 
 
 def has_nolint_on_lines(
@@ -46,7 +54,7 @@ def has_nolint_on_lines(
 
 
 def _is_nolint_for(comment: str, rule: Rule) -> bool:
-    match = _NOLINT.search(comment)
+    match = re.search(_NOLINT, comment)
     if match is None:
         return False
     entries = (entry.split() for entry in match.group(1).split(","))

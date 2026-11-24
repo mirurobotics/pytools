@@ -1,3 +1,5 @@
+from typing import Final
+
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
 from pytools.services.lint.linter.analysis.names import (
     DeclaredName,
@@ -6,11 +8,11 @@ from pytools.services.lint.linter.analysis.names import (
 )
 from pytools.services.lint.linter.analysis.nolint import has_name_nolint
 
-_MIN_NAME_LEN = 3
+_MIN_NAME_LEN: Final = 3
 
 # i for iteration, a and b for comparison, ok, id and db as common shorthands.
-_ALLOWED = frozenset({"_", "i", "a", "b", "ok", "id", "db"})
-_VARIABLES = frozenset({NameKind.MODULE_VAR, NameKind.LOCAL_VAR})
+_ALLOWED: Final = frozenset({"_", "i", "a", "b", "ok", "id", "db"})
+_VARIABLES: Final = frozenset({NameKind.MODULE_VAR, NameKind.LOCAL_VAR})
 
 
 def check(file: CheckInput) -> list[Diagnostic]:

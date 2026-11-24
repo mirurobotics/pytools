@@ -9,12 +9,19 @@ import pytest
 
 from pytools.services.lint import external
 
-Call = tuple[list[str], dict[str, object]]
+type Call = tuple[list[str], dict[str, object]]
 
-_CONFIG_DIR = files("pytools.services.lint")
-_RUFF = ["--config", str(_CONFIG_DIR / "ruff.toml")]
-_MYPY = ["--config-file", str(_CONFIG_DIR / "mypy.ini")]
-_PATHS = ["src", "tests"]
+
+def _ruff_config() -> list[str]:
+    return ["--config", str(files("pytools.services.lint") / "ruff.toml")]
+
+
+def _mypy_config() -> list[str]:
+    return ["--config-file", str(files("pytools.services.lint") / "mypy.ini")]
+
+
+def _paths() -> list[str]:
+    return ["src", "tests"]
 
 
 def _fake_run(
@@ -39,8 +46,9 @@ def test_list_python_files_lists_relative_to_cwd(
     cwd = Path.cwd()
     listed = [cwd / "src" / "a.py", cwd / "stub.pyi", cwd.parent / "b.py"]
     calls = _fake_run(monkeypatch, 0, "".join(f"{path}\n" for path in listed))
-    python_files = external.list_python_files(_PATHS)
-    command = [sys.executable, "-m", "ruff", "check", "--show-files", *_RUFF, *_PATHS]
+    python_files = external.list_python_files(_paths())
+    args = ["check", "--show-files", *_ruff_config(), *_paths()]
+    command = [sys.executable, "-m", "ruff", *args]
     kwargs = {"stdout": subprocess.PIPE, "text": True, "check": False}
     assert python_files == [str(Path("src", "a.py")), str(Path("..", "b.py"))]
     assert calls == [(command, kwargs)]
@@ -50,7 +58,7 @@ def test_list_python_files_is_none_when_ruff_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _fake_run(monkeypatch, 2)
-    assert external.list_python_files(_PATHS) is None
+    assert external.list_python_files(_paths()) is None
 
 
 @pytest.mark.parametrize(("returncode", "passed"), [(0, True), (1, False)])
@@ -58,22 +66,22 @@ def test_list_python_files_is_none_when_ruff_fails(
     ("runner", "tool_args"),
     [
         (
-            partial(external.run_ruff_format, _PATHS, fix=True),
-            ["ruff", "format", *_RUFF],
+            partial(external.run_ruff_format, _paths(), fix=True),
+            ["ruff", "format", *_ruff_config()],
         ),
         (
-            partial(external.run_ruff_format, _PATHS, fix=False),
-            ["ruff", "format", "--check", *_RUFF],
+            partial(external.run_ruff_format, _paths(), fix=False),
+            ["ruff", "format", "--check", *_ruff_config()],
         ),
         (
-            partial(external.run_ruff_check, _PATHS, fix=True),
-            ["ruff", "check", "--fix", *_RUFF],
+            partial(external.run_ruff_check, _paths(), fix=True),
+            ["ruff", "check", "--fix", *_ruff_config()],
         ),
         (
-            partial(external.run_ruff_check, _PATHS, fix=False),
-            ["ruff", "check", *_RUFF],
+            partial(external.run_ruff_check, _paths(), fix=False),
+            ["ruff", "check", *_ruff_config()],
         ),
-        (partial(external.run_mypy, _PATHS), ["mypy", *_MYPY]),
+        (partial(external.run_mypy, _paths()), ["mypy", *_mypy_config()]),
     ],
 )
 def test_runner_runs_tool_with_shared_config(
@@ -84,5 +92,5 @@ def test_runner_runs_tool_with_shared_config(
     passed: bool,
 ) -> None:
     calls = _fake_run(monkeypatch, returncode)
-    command = [sys.executable, "-m", *tool_args, *_PATHS]
+    command = [sys.executable, "-m", *tool_args, *_paths()]
     assert (runner(), calls) == (passed, [(command, {"check": False})])

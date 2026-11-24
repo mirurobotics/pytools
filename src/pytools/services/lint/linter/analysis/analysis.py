@@ -19,6 +19,7 @@ class Rule(StrEnum):
     STRAYCOMMENT = "straycomment"
     FUNCCOMMENT = "funccomment"
     COMMENTEDCODE = "commentedcode"
+    MUTABLEGLOBAL = "mutableglobal"
 
 
 @dataclass(frozen=True)

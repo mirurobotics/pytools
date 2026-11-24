@@ -1,68 +1,69 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.namelen import namelen
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
-_LOCAL_AT = "a" * 20
-_LOCAL_OVER = "a" * 21
-_NAME_AT = "a" * 30
-_NAME_OVER = "a" * 31
-_TEST_AT = "test_" + "a" * 45
-_TEST_OVER = "test_" + "a" * 46
-_LONG = "x" * 31
+_LOCAL_AT: Final = "a" * 20
+_LOCAL_OVER: Final = "a" * 21
+_NAME_AT: Final = "a" * 30
+_NAME_OVER: Final = "a" * 31
+_TEST_AT: Final = "test_" + "a" * 45
+_TEST_OVER: Final = "test_" + "a" * 46
+_LONG: Final = "x" * 31
 
-_REBOUND = f"""\
+_REBOUND: Final = f"""\
 def f():
     {_LOCAL_OVER} = 1
     {_LOCAL_OVER} = 2
 """
-_NESTED = f"""\
+_NESTED: Final = f"""\
 def outer():
     def inner():
         {_LOCAL_OVER} = 1
 
     {_LOCAL_OVER} = 2
 """
-_COMPREHENSION = f"""\
+_COMPREHENSION: Final = f"""\
 def f():
     {_LOCAL_OVER} = 1
     return [{_LOCAL_OVER} for {_LOCAL_OVER} in a]
 """
-_LAMBDA = f"""\
+_LAMBDA: Final = f"""\
 def f():
     {_LOCAL_OVER} = 1
     return lambda {_LOCAL_OVER}: {_LOCAL_OVER}
 """
-_COMPREHENSION_WALRUS = f"""\
+_COMPREHENSION_WALRUS: Final = f"""\
 def f():
     a = [({_LOCAL_OVER} := b) for b in c]
     {_LOCAL_OVER} = 1
 """
-_TYPE_PARAMETERS = f"""\
+_TYPE_PARAMETERS: Final = f"""\
 {_LOCAL_OVER} = 1
 type A[{_LOCAL_OVER}] = int
 type B[{_LOCAL_OVER}] = int
 def f[{_LOCAL_OVER}]():
     global {_LOCAL_OVER}
 """
-_NOLINT_ON_PARAMETER = f"""\
+_NOLINT_ON_PARAMETER: Final = f"""\
 def f(
     {_LONG},  # nolint: namelen
 ):
     pass
 """
-_NOLINT_ON_FIRST_IN_DICT = f"""\
+_NOLINT_ON_FIRST_IN_DICT: Final = f"""\
 def f():
     return {{
         "a": ({_LONG} := 1),  # nolint: namelen
         ({_LONG} := 2): 3,
     }}
 """
-_NOLINT_ON_MAPPING_REST = f"""\
+_NOLINT_ON_MAPPING_REST: Final = f"""\
 def f():
     match a:
         case {{
@@ -71,7 +72,7 @@ def f():
         }}:
             pass
 """
-_NOLINT_ON_EXCEPT_ALIAS = f"""\
+_NOLINT_ON_EXCEPT_ALIAS: Final = f"""\
 def f():
     try:
         pass
@@ -80,14 +81,14 @@ def f():
     ) as {_LONG}:  # nolint: namelen
         pass
 """
-_NOLINT_IN_EXCEPT_BODY = f"""\
+_NOLINT_IN_EXCEPT_BODY: Final = f"""\
 try:
     pass
 except E as {_LONG}:
     # nolint: namelen
     pass
 """
-_MULTILINE_MATCH_AS = """\
+_MULTILINE_MATCH_AS: Final = """\
 def f():
     match a:
         case (
@@ -95,7 +96,7 @@ def f():
         ) as {}:
             pass
 """
-_MULTILINE_EXCEPT = """\
+_MULTILINE_EXCEPT: Final = """\
 def f():
     try:
         pass

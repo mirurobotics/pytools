@@ -1,4 +1,5 @@
 import ast
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
@@ -12,7 +13,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 
-_LITERALS = (ast.Constant, ast.JoinedStr, ast.List, ast.Tuple, ast.Set, ast.Dict)
+_LITERALS: Final = (ast.Constant, ast.JoinedStr, ast.List, ast.Tuple, ast.Set, ast.Dict)
 
 
 def check(file: CheckInput, max_len: int) -> list[Diagnostic]:

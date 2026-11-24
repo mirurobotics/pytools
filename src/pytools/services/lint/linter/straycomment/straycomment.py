@@ -1,4 +1,5 @@
 import ast
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
@@ -11,7 +12,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.analysis.comments import is_directive
 
-_MESSAGE = (
+_MESSAGE: Final = (
     "comment is not attached to a statement; remove it or move it directly above one"
 )
 

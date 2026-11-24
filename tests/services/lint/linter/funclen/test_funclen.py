@@ -1,19 +1,20 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.funclen import funclen
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
-_THREE_LINES = """\
+_THREE_LINES: Final = """\
 def f():
     a = 1
     b = 2
     c = 3
 """
-_NESTED = """\
+_NESTED: Final = """\
 def a():
     def a_inner():
         x = 1
@@ -26,7 +27,7 @@ def b():
     x = 1
     y = 2
 """
-_NOLINT_AFTER_SIGNATURE = """\
+_NOLINT_AFTER_SIGNATURE: Final = """\
 def f(
     a: int,
 ) -> int:  # nolint: funclen
@@ -34,7 +35,7 @@ def f(
     c = 2
     return a
 """
-_NOLINT_ON_INNER = """\
+_NOLINT_ON_INNER: Final = """\
 def outer():
     # nolint: funclen
     def inner():
@@ -44,7 +45,7 @@ def outer():
 
     return inner
 """
-_NOLINT_ON_DECORATED_INNER = """\
+_NOLINT_ON_DECORATED_INNER: Final = """\
 def outer():
     # nolint: funclen
     @decorator
@@ -55,7 +56,7 @@ def outer():
 
     return inner
 """
-_NOLINT_ON_OUTER = """\
+_NOLINT_ON_OUTER: Final = """\
 def outer():  # nolint: funclen
     def inner():
         a = 1
@@ -64,13 +65,13 @@ def outer():  # nolint: funclen
 
     return inner
 """
-_NOLINT_ON_DEF_LINE = """\
+_NOLINT_ON_DEF_LINE: Final = """\
 def f():  # nolint: funclen
     a = 1
     b = 2
     c = 3
 """
-_DOCSTRING = """\
+_DOCSTRING: Final = """\
 def f():
     '''Doc.
 
@@ -79,14 +80,14 @@ def f():
     a = 1
     b = 2
 """
-_BLANK_AND_COMMENT_LINES = """\
+_BLANK_AND_COMMENT_LINES: Final = """\
 def f():
     a = 1
 
     # note
     b = 2
 """
-_LIST = """\
+_LIST: Final = """\
 def f():
     a = [
         1,
@@ -94,21 +95,21 @@ def f():
     ]
     return a
 """
-_DICT = """\
+_DICT: Final = """\
 def f():
     a = {
         1: 2,
     }
     return a
 """
-_STRING = """\
+_STRING: Final = """\
 def f():
     a = '''
     text
     '''
     return a
 """
-_CLOSING_LINE_STARTS_LITERAL = """\
+_CLOSING_LINE_STARTS_LITERAL: Final = """\
 def f():
     g([
         1,
@@ -116,18 +117,18 @@ def f():
         2,
     ])
 """
-_CALL_ARGS = """\
+_CALL_ARGS: Final = """\
 def f():
     g(
         1,
     )
 """
-_ASYNC = """\
+_ASYNC: Final = """\
 async def f():
     await g()
     await h()
 """
-_DECORATED_FIRST_STATEMENT = """\
+_DECORATED_FIRST_STATEMENT: Final = """\
 def f(fn):
     @wraps(fn)
     def wrapper():
@@ -135,7 +136,7 @@ def f(fn):
 
     return wrapper
 """
-_DOCSTRING_ONLY = """\
+_DOCSTRING_ONLY: Final = """\
 def f():
     '''Doc.'''
 """

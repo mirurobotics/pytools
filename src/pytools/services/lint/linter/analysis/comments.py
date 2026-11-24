@@ -2,8 +2,9 @@ import io
 import re
 import tokenize
 from dataclasses import dataclass
+from typing import Final
 
-_DIRECTIVE = re.compile(
+_DIRECTIVE: Final = (
     r"#\s*(?:(?i:noqa)\b|nosec\b"
     r"|(?:type|nolint|pragma|fmt|isort|mypy|ruff|pylint|pyright):)"
 )
@@ -29,4 +30,4 @@ def collect_comments(source: str) -> dict[int, Comment]:
 
 def is_directive(text: str) -> bool:
     """Report whether a comment is a tool directive such as # noqa."""
-    return _DIRECTIVE.match(text) is not None
+    return re.match(_DIRECTIVE, text) is not None

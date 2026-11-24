@@ -1,3 +1,5 @@
+from typing import Final
+
 import pytest
 
 from pytools.services.lint.linter.analysis.comments import (
@@ -6,7 +8,7 @@ from pytools.services.lint.linter.analysis.comments import (
     is_directive,
 )
 
-_SOURCE = """\
+_SOURCE: Final = """\
 # top
 x = "# not a comment"  # trailing
 

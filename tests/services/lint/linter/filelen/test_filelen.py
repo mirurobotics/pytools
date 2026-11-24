@@ -1,18 +1,19 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.filelen import filelen
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
-_THREE_LINES = """\
+_THREE_LINES: Final = """\
 a = 1
 b = 2
 c = 3
 """
-_SHEBANG_COMMENTS_AND_BLANKS = """\
+_SHEBANG_COMMENTS_AND_BLANKS: Final = """\
 #!/usr/bin/env python
 # note
 
@@ -21,34 +22,37 @@ a = 1
 b = 2  # trailing
 
 """
-_DOCSTRING = """\
+_DOCSTRING: Final = """\
 '''Doc.
 More.
 '''
 a = 1
 """
-_LIST = """\
+_LIST: Final = """\
 a = [
     1,
     2,
 ]
 """
-_STRING = """\
+_STRING: Final = """\
 a = '''
 text
 '''
 """
-_HASH_IN_STRING = """\
+_HASH_IN_STRING: Final = """\
 a = '''
 # not a comment
 '''
 """
-_NOLINT_ON_DOCSTRING_END = """\
+_NOLINT_ON_DOCSTRING_END: Final = """\
 '''Doc.
 '''  # nolint: filelen
 b = 2
 """
-_OVER_LIMIT = Diagnostic("a.py", 1, "file is 3 lines (limit 2)")
+
+
+def _over_limit() -> Diagnostic:
+    return Diagnostic("a.py", 1, "file is 3 lines (limit 2)")
 
 
 @pytest.mark.parametrize(
@@ -56,7 +60,7 @@ _OVER_LIMIT = Diagnostic("a.py", 1, "file is 3 lines (limit 2)")
     [
         pytest.param(4, [], id="under"),
         pytest.param(3, [], id="at"),
-        pytest.param(2, [_OVER_LIMIT], id="over"),
+        pytest.param(2, [_over_limit()], id="over"),
     ],
 )
 def test_check_reports_files_over_the_limit(
@@ -100,7 +104,7 @@ def test_check_skips_file_with_nolint(parse: Parse, source: str) -> None:
     ],
 )
 def test_check_reports_file_without_its_nolint(parse: Parse, source: str) -> None:
-    assert filelen.check(parse(source), 2) == [_OVER_LIMIT]
+    assert filelen.check(parse(source), 2) == [_over_limit()]
 
 
 @pytest.mark.parametrize(

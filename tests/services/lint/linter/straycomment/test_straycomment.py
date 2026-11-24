@@ -1,13 +1,14 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.straycomment import straycomment
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
-_BANNER = """\
+_BANNER: Final = """\
 import os
 
 # ----------------
@@ -17,7 +18,7 @@ import os
 def helper():
     pass
 """
-_LOOSE_NOTES = """\
+_LOOSE_NOTES: Final = """\
 class Point:
     first = 1
 
@@ -30,17 +31,17 @@ class Point:
 
 LIMIT = 2
 """
-_END_OF_FILE = """\
+_END_OF_FILE: Final = """\
 def helper():
     pass
 
 # TODO: more
 """
-_ONE_LINE_DEF = """\
+_ONE_LINE_DEF: Final = """\
 def helper(): pass
 # loose note
 """
-_DIRECTIVE_THEN_PROSE = """\
+_DIRECTIVE_THEN_PROSE: Final = """\
 import os
 
 # noqa: E402
@@ -48,34 +49,34 @@ import os
 
 LIMIT = 2
 """
-_SIGNATURE = """\
+_SIGNATURE: Final = """\
 def helper(
     # first is documented.
     first,
 ):
     pass
 """
-_LITERAL = """\
+_LITERAL: Final = """\
 LIMITS = [
     # the lower limit
     1,
 ]
 """
-_ELSE = """\
+_ELSE: Final = """\
 if ready:
     pass
 # about else
 else:
     pass
 """
-_ELIF = """\
+_ELIF: Final = """\
 if ready:
     pass
 # about elif
 elif done:
     pass
 """
-_EXCEPT_FINALLY = """\
+_EXCEPT_FINALLY: Final = """\
 try:
     pass
 # about except
@@ -85,13 +86,13 @@ except OSError:
 finally:
     pass
 """
-_CASE = """\
+_CASE: Final = """\
 match value:
     # about case
     case 1:
         pass
 """
-_CLASS_TAIL = """\
+_CLASS_TAIL: Final = """\
 def helper():
     pass
 
@@ -101,7 +102,7 @@ class Point:
 
     # trailing note
 """
-_ATTACHED = """\
+_ATTACHED: Final = """\
 import os  # trailing
 
 # Above a statement.
@@ -118,7 +119,7 @@ class Point:
     # Above a field.
     first = 1  # trailing
 """
-_HEADER = """\
+_HEADER: Final = """\
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Copyright 2026 Example.
@@ -127,7 +128,7 @@ _HEADER = """\
 
 import os
 """
-_IF_UNDER_ELSE = """\
+_IF_UNDER_ELSE: Final = """\
 if ready:
     pass
 else:
@@ -135,7 +136,7 @@ else:
     if done:
         pass
 """
-_FUNCTION_BODIES = """\
+_FUNCTION_BODIES: Final = """\
 def helper():
     first = 1
 
@@ -151,13 +152,13 @@ class Point:
 
         # trailing method note
 """
-_HASH_IN_STRING = """\
+_HASH_IN_STRING: Final = """\
 LABEL = "# not a comment"
 TEXT = '''
 # not a comment either
 '''
 """
-_MESSAGE = (
+_MESSAGE: Final = (
     "comment is not attached to a statement; remove it or move it directly above one"
 )
 

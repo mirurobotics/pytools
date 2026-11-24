@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import argparse
+from typing import Final
 
 from pytools.services.lint.lint import LintError, LintOptions, run_lint
 from pytools.services.lint.linter.analysis.analysis import Rule
 from pytools.services.lint.linter.rules import Config
 
-_DESCRIPTION = (
+_DESCRIPTION: Final = (
     "Run the full Python lint suite: ruff check, ruff format, custom linter and "
     "mypy. By default, runs in fix mode. Use --no-fix for CI (check-only) mode."
 )

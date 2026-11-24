@@ -1,18 +1,19 @@
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.varname import varname
 
-Parse = Callable[[str], CheckInput]
+type Parse = Callable[[str], CheckInput]
 
-_REBOUND = """\
+_REBOUND: Final = """\
 def f():
     n = 1
     n = 2
 """
-_MULTILINE_EXCEPT = """\
+_MULTILINE_EXCEPT: Final = """\
 def f():
     try:
         pass
@@ -21,13 +22,13 @@ def f():
     ) as n:
         pass
 """
-_NOLINT_ON_PARAMETER = """\
+_NOLINT_ON_PARAMETER: Final = """\
 def f(
     n,  # nolint: varname
 ):
     pass
 """
-_NOLINT_ON_EXCEPT_ALIAS = """\
+_NOLINT_ON_EXCEPT_ALIAS: Final = """\
 def f():
     try:
         pass
@@ -36,7 +37,7 @@ def f():
     ) as n:  # nolint: varname
         pass
 """
-_NOLINT_ON_MAPPING_REST = """\
+_NOLINT_ON_MAPPING_REST: Final = """\
 def f():
     match a:
         case {
@@ -45,7 +46,7 @@ def f():
         }:
             pass
 """
-_NOLINT_IN_EXCEPT_BODY = """\
+_NOLINT_IN_EXCEPT_BODY: Final = """\
 try:
     pass
 except E as n:
