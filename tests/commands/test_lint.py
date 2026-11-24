@@ -16,23 +16,26 @@ class _TwoRules(StrEnum):
     OTHER = "other"
 
 
-_DEFAULT_CONFIG = Config()
-_EVERY_FLAG_ARGV = [
-    "--max-func-len",
-    "5",
-    "--max-file-len",
-    "7",
-    "--max-nest-depth",
-    "3",
-    "--exclude",
-    "funclen",
-]
-_EVERY_FLAG_CONFIG = Config(
-    max_func_len=5,
-    max_file_len=7,
-    max_nest_depth=3,
-    exclude=frozenset({Rule.FUNCLEN}),
-)
+def _every_flag_argv() -> list[str]:
+    return [
+        "--max-func-len",
+        "5",
+        "--max-file-len",
+        "7",
+        "--max-nest-depth",
+        "3",
+        "--exclude",
+        "funclen",
+    ]
+
+
+def _every_flag_config() -> Config:
+    return Config(
+        max_func_len=5,
+        max_file_len=7,
+        max_nest_depth=3,
+        exclude=frozenset({Rule.FUNCLEN}),
+    )
 
 
 def _parse(argv: list[str]) -> argparse.Namespace:
@@ -149,7 +152,7 @@ def test_lint_handler_runs_lint(lint_calls: list[LintOptions]) -> None:
     args = _parse(["--paths", "src,tests", "--no-fix"])
     args.handler(args)
     assert lint_calls == [
-        LintOptions(paths=["src", "tests"], fix=False, linter_config=_DEFAULT_CONFIG)
+        LintOptions(paths=["src", "tests"], fix=False, linter_config=Config())
     ]
 
 
@@ -164,8 +167,8 @@ def test_lint_handler_exits_on_lint_error(monkeypatch: pytest.MonkeyPatch) -> No
 @pytest.mark.parametrize(
     ("argv", "expected"),
     [
-        ([], _DEFAULT_CONFIG),
-        (_EVERY_FLAG_ARGV, _EVERY_FLAG_CONFIG),
+        ([], Config()),
+        (_every_flag_argv(), _every_flag_config()),
     ],
 )
 def test_lint_options_builds_linter_config(argv: list[str], expected: Config) -> None:
@@ -173,11 +176,11 @@ def test_lint_options_builds_linter_config(argv: list[str], expected: Config) ->
 
 
 def test_lint_options_sets_every_config_field() -> None:
-    config = lint._lint_options(_parse(_EVERY_FLAG_ARGV)).linter_config
+    config = lint._lint_options(_parse(_every_flag_argv())).linter_config
     unset = [
         field.name
         for field in dataclasses.fields(Config)
-        if getattr(config, field.name) == getattr(_DEFAULT_CONFIG, field.name)
+        if getattr(config, field.name) == getattr(Config(), field.name)
     ]
     assert unset == []
 
