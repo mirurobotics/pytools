@@ -12,7 +12,7 @@ from pytools.services.lint.linter.funcorder.order import arrange
 
 def check(file: CheckInput) -> list[Diagnostic]:
     """Report defs out of control-flow order in the module and each class."""
-    scopes = [file.tree, *_classes(file.tree)]
+    scopes: list[ast.Module | ast.ClassDef] = [file.tree, *_classes(file.tree)]
     diags = [diag for scope in scopes for diag in _check_scope(file, scope)]
     return sorted(diags, key=lambda diag: diag.line)
 
