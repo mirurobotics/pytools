@@ -24,13 +24,6 @@ _NOT_CODE: Final = (ast.Pass, ast.Break, ast.Continue, ast.Global, ast.Nonlocal)
 _ENCODING: Final = r"#.*?coding[:=]\s*[-\w.]+"
 
 
-@dataclass(frozen=True)
-class _Line:
-    number: int
-    text: str
-    is_indented: bool
-
-
 def check(file: CheckInput) -> list[Diagnostic]:
     """Report comment groups that hold Python code which has been commented out."""
     numbers = sorted(file.comments)
@@ -52,6 +45,13 @@ def _find_code(file: CheckInput, group: list[int]) -> int | None:
         if line is not None:
             return line
     return None
+
+
+@dataclass(frozen=True)
+class _Line:
+    number: int
+    text: str
+    is_indented: bool
 
 
 def _runs(file: CheckInput, group: list[int]) -> list[list[_Line]]:

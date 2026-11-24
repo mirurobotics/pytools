@@ -21,13 +21,6 @@ class LintOptions:
     linter_config: Config
 
 
-@dataclass(frozen=True)
-class _StepResult:
-    name: str
-    seconds: float
-    failed: bool
-
-
 def run_lint(opts: LintOptions) -> None:
     """Run every lint step, raising LintError if any fails."""
     start = time.monotonic()
@@ -37,6 +30,13 @@ def run_lint(opts: LintOptions) -> None:
     if failures:
         raise LintError(f"lint failed: {', '.join(failures)}")
     _write("Lint complete")
+
+
+@dataclass(frozen=True)
+class _StepResult:
+    name: str
+    seconds: float
+    failed: bool
 
 
 def _run_steps(opts: LintOptions) -> list[_StepResult]:

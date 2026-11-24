@@ -27,16 +27,6 @@ class Rule(StrEnum):
 
 
 @dataclass(frozen=True)
-class CheckInput:
-    """One parsed file for the rule checks."""
-
-    path: str
-    tree: ast.Module
-    lines: list[str]
-    comments: dict[int, Comment]
-
-
-@dataclass(frozen=True)
 class Diagnostic:
     """A single lint violation."""
 
@@ -58,6 +48,16 @@ def walk_outside(
         yield node
         if not isinstance(node, stop):
             pending.extend(reversed(list(ast.iter_child_nodes(node))))
+
+
+@dataclass(frozen=True)
+class CheckInput:
+    """One parsed file for the rule checks."""
+
+    path: str
+    tree: ast.Module
+    lines: list[str]
+    comments: dict[int, Comment]
 
 
 def function_body_lines(file: CheckInput) -> set[int]:
