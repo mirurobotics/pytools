@@ -11,7 +11,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
 from pytools.services.lint.linter.fieldassert.scope import (
     Bindings,
-    Scope,
+    FuncScope,
     changed_names,
     import_names,
     name_set,
@@ -38,7 +38,7 @@ def _blocks(file: CheckInput) -> list[_Block]:
     """Return each list of statements in file, with where its names are bound."""
     imports = import_names(file.tree)
     blocks: list[_Block] = []
-    pending: list[tuple[ast.AST, tuple[Scope, ...]]] = [(file.tree, ())]
+    pending: list[tuple[ast.AST, tuple[FuncScope, ...]]] = [(file.tree, ())]
     while pending:
         node, scopes = pending.pop()
         if isinstance(node, DEFS):

@@ -15,7 +15,7 @@ _PURE_BUILTINS: Final = frozenset(
 
 
 @dataclass(frozen=True)
-class Scope:
+class FuncScope:
     """A def, the names that bind in it and which of them are its parameters."""
 
     func: Function
@@ -27,7 +27,7 @@ class Scope:
 class Bindings:
     """Where the names in one block of statements are bound."""
 
-    scopes: tuple[Scope, ...]  # the defs around the block, innermost last
+    scopes: tuple[FuncScope, ...]  # the defs around the block, innermost last
     imports: frozenset[str]
 
     def is_helper_param(self, name: str | None) -> bool:
@@ -48,16 +48,16 @@ class Bindings:
             return False
         return expr.id in self.imports and self._owner(expr.id) is None
 
-    def _owner(self, name: str) -> Scope | None:
+    def _owner(self, name: str) -> FuncScope | None:
         owners = (scope for scope in reversed(self.scopes) if name in scope.bound)
         return next(owners, None)
 
 
-def new_scope(file: CheckInput, func: Function) -> Scope:
+def new_scope(file: CheckInput, func: Function) -> FuncScope:
     """Return the names that bind in func, its parameters among them."""
     names = first_bindings(file, func)
     params = [name.text for name in names if isinstance(name.node, ast.arg)]
-    return Scope(func, frozenset(name.text for name in names), frozenset(params))
+    return FuncScope(func, frozenset(name.text for name in names), frozenset(params))
 
 
 def import_names(tree: ast.Module) -> frozenset[str]:
