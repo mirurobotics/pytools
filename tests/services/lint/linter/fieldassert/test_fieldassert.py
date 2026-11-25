@@ -240,6 +240,7 @@ def test_check_reports_swapped_args(parse: Parse, asserts: tuple[str, ...]) -> N
         ),
         pytest.param("got.stop()", [], id="method-call"),
         pytest.param("assert got.start()", [], id="call-in-assert"),
+        pytest.param("assert other.x == got.reset()", [], id="call-in-field-assert"),
     ],
 )
 def test_check_splits_run_where_value_may_change(

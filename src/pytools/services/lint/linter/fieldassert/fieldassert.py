@@ -71,8 +71,8 @@ def _check_block(
     open_groups: dict[str, _Group] = {}
     for stmt in stmts:
         attr = _field(stmt, bindings)
+        open_groups = _close_changed(open_groups, stmt, attr)
         if attr is None:
-            open_groups = _close_changed(open_groups, stmt)
             continue
         base = ast.unparse(attr.value)
         group = open_groups.get(base)
@@ -149,14 +149,26 @@ def _constant_parts(expr: ast.expr, bindings: Bindings) -> list[ast.expr] | None
     return None
 
 
-def _close_changed(open_groups: dict[str, _Group], stmt: ast.stmt) -> dict[str, _Group]:
-    """Return the groups that stay open: those whose value stmt can't change."""
-    changed = changed_names(stmt)
+def _close_changed(
+    open_groups: dict[str, _Group], stmt: ast.stmt, attr: ast.Attribute | None
+) -> dict[str, _Group]:
+    """Return the groups that stay open: those whose value stmt can't change.
+
+    The field attr an assert checks is left out, so build().a keeps its group.
+    """
+    changed = {name for part in _unchecked(stmt, attr) for name in changed_names(part)}
     return {
         base: group
         for base, group in open_groups.items()
         if group.deps.isdisjoint(changed)
     }
+
+
+def _unchecked(stmt: ast.stmt, attr: ast.Attribute | None) -> list[ast.AST]:
+    if attr is None or not isinstance(stmt, ast.Assert):
+        return [stmt]
+    parts = [*ast.iter_child_nodes(stmt.test), stmt.msg]
+    return [part for part in parts if part is not None and part is not attr]
 
 
 def _report(file: CheckInput, group: _Group) -> Diagnostic | None:

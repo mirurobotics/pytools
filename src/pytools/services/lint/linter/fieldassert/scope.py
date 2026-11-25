@@ -71,18 +71,18 @@ def import_names(tree: ast.Module) -> frozenset[str]:
     return frozenset(alias.asname or alias.name.split(".")[0] for alias in aliases)
 
 
-def changed_names(stmt: ast.stmt) -> frozenset[str]:
-    """Return the names stmt may change.
+def changed_names(node: ast.AST) -> frozenset[str]:
+    """Return the names node may change.
 
-    An assert changes only the names under a call, lambda or walrus in it,
-    except a call to a pure builtin; any other statement may change every name
-    it uses.
+    An assert or expression changes only the names under a call, lambda or
+    walrus in it, except a call to a pure builtin; any other statement may
+    change every name it uses.
     """
-    if isinstance(stmt, ast.Assert):
-        changing = [node for node in ast.walk(stmt) if _may_change(node)]
+    if isinstance(node, ast.stmt) and not isinstance(node, ast.Assert):
+        changing = [node]
     else:
-        changing = [stmt]
-    return frozenset(name for node in changing for name in name_set(node))
+        changing = [child for child in ast.walk(node) if _may_change(child)]
+    return frozenset(name for child in changing for name in name_set(child))
 
 
 def _may_change(node: ast.AST) -> bool:
