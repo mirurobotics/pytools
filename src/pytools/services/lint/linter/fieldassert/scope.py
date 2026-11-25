@@ -44,7 +44,7 @@ class Bindings:
     """Where the names in one block of statements are bound."""
 
     scopes: tuple[FuncScope, ...]  # the defs around the block, innermost last
-    imports: frozenset[str]  # the module's, or the class body's around the block
+    imports: frozenset[str]  # the module's, plus a class body's in that body
     pure_builtins: frozenset[str]  # those no name in the file rebinds
 
     def is_helper_param(self, name: str | None) -> bool:
