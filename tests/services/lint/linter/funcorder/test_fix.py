@@ -68,6 +68,12 @@ x: int
 def _g(): pass
 def run(p: __annotations__["x"]): _h(); _g()
 """
+_ALIASED_READER: Final = """\
+from builtins import globals as namespace
+def _allow_guest(user): return True
+def admin(user): return _allow_guest(user)
+POLICIES = [rule for rule in namespace().values() if callable(rule)]
+"""
 _MANGLED: Final = """\
 class T:
     def __h(self): return 1
@@ -157,6 +163,7 @@ class T:
         pytest.param(_NAMESPACE_ORDER, id="module-walks-its-namespace"),
         pytest.param(_CLASS_DICT, id="module-reads-a-dict-attribute"),
         pytest.param(_ANNOTATIONS, id="module-reads-its-annotations"),
+        pytest.param(_ALIASED_READER, id="module-imports-a-namespace-reader"),
         pytest.param(_MANGLED, id="private-name-bound-again"),
     ],
 )

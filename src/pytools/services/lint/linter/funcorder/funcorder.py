@@ -8,10 +8,13 @@ from pytools.services.lint.linter.funcorder.order import arrange
 from pytools.services.lint.linter.funcorder.plain import place, plain_violations
 from pytools.services.lint.linter.funcorder.render import has_shared_lines, render
 
-_NAMESPACE_READERS: Final = frozenset({"globals", "locals", "vars", "dir"})
+_NAMESPACE_READERS: Final = frozenset(
+    {"globals", "locals", "vars", "dir", "__builtins__"}
+)
 _NAMESPACES: Final = frozenset(
     {"__dict__", "__annotations__", "__annotate__", "__static_attributes__"}
 )
+_READER_MODULES: Final = frozenset({"builtins", "inspect", "sys"})
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
@@ -42,13 +45,21 @@ def fix(file: CheckInput) -> str | None:
 
 
 def _reads_namespace(tree: ast.Module) -> bool:
-    """Report whether tree names a namespace or a function that returns one."""
+    """Report whether tree names a namespace or a function that returns one.
+
+    Importing a module that can hand out such a function counts too.
+    """
     return any(_is_namespace_read(node) for node in ast.walk(tree))
 
 
 def _is_namespace_read(node: ast.AST) -> bool:
     if isinstance(node, ast.Attribute):
         return node.attr in _NAMESPACES
+    if isinstance(node, ast.Import):
+        roots = {alias.name.partition(".")[0] for alias in node.names}
+        return not roots.isdisjoint(_READER_MODULES)
+    if isinstance(node, ast.ImportFrom):
+        return (node.module or "").partition(".")[0] in _READER_MODULES
     names = _NAMESPACE_READERS | _NAMESPACES
     return isinstance(node, ast.Name) and node.id in names
 

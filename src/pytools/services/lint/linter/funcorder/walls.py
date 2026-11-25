@@ -15,7 +15,7 @@ from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.inert import is_inert
 from pytools.services.lint.linter.funcorder.refs import (
     ImportTimeNames,
-    bound_or_declared,
+    bound_names,
     scope_bindings,
 )
 
@@ -210,9 +210,21 @@ def _bound_by(
     """Return the statements that bind each name in scope, in order."""
     found: dict[str, list[int]] = {}
     for idx, stmt in enumerate(scope.body):
-        for name in bound_or_declared(file, stmt):
+        for name in _bound_or_declared(file, stmt):
             found.setdefault(_mangled(scope, name), []).append(idx)
     return found
+
+
+def _bound_or_declared(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:
+    """Return the names stmt binds in its scope or declares global or nonlocal."""
+    nodes = ast.walk(stmt)
+    declared = {
+        name
+        for node in nodes
+        if isinstance(node, (ast.Global, ast.Nonlocal))
+        for name in node.names
+    }
+    return bound_names(file, stmt) | declared
 
 
 def _readers(
