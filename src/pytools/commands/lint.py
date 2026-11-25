@@ -66,6 +66,7 @@ def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
         default=Config.max_nest_depth,
         help="maximum nesting depth within functions",
     )
+    _bind_doc_flags(parser)
     rules = parser.add_mutually_exclusive_group()
     rules.add_argument(
         "--exclude",
@@ -74,6 +75,21 @@ def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
         help="comma-separated rules to exclude",
     )
     rules.add_argument("--rule", type=_parse_rule, help="only run a specific rule")
+
+
+def _bind_doc_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--max-doc-lines",
+        type=_parse_limit,
+        default=Config.max_doc_lines,
+        help="maximum lines in a docstring",
+    )
+    parser.add_argument(
+        "--max-package-doc-lines",
+        type=_parse_limit,
+        default=Config.max_package_doc_lines,
+        help="maximum lines in a package's __init__.py module docstring",
+    )
 
 
 def _parse_limit(raw: str) -> int:
@@ -112,6 +128,8 @@ def _lint_options(args: argparse.Namespace) -> LintOptions:
         max_func_len=args.max_func_len,
         max_file_len=args.max_file_len,
         max_nest_depth=args.max_nest_depth,
+        max_doc_lines=args.max_doc_lines,
+        max_package_doc_lines=args.max_package_doc_lines,
         exclude=exclude,
     )
     return LintOptions(paths=args.paths, fix=args.fix, linter_config=config)
