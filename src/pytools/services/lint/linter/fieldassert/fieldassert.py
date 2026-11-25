@@ -78,9 +78,14 @@ def _check_block(
     for stmt in stmts:
         attr = _field(stmt, bindings)
         base = None if attr is None else _base_text(attr)
-        rest = _unchecked_changes(stmt, attr, pure)
-        open_groups = _close_changed(open_groups, stmt, base, rest, pure)
-        if attr is None or base is None or not name_set(attr.value).isdisjoint(rest):
+        changed = changed_names(stmt, pure)
+        unchecked = changed if attr is None else _unchecked_changes(stmt, attr, pure)
+        open_groups = _close_changed(open_groups, base, unchecked, changed)
+        if (
+            attr is None
+            or base is None
+            or not name_set(attr.value).isdisjoint(unchecked)
+        ):
             continue
         group = open_groups.get(base)
         if group is None:
@@ -165,10 +170,10 @@ def _base_text(attr: ast.Attribute) -> str | None:
 
 
 def _unchecked_changes(
-    stmt: ast.stmt, attr: ast.Attribute | None, pure: frozenset[str]
+    stmt: ast.stmt, attr: ast.Attribute, pure: frozenset[str]
 ) -> frozenset[str]:
-    """Return the names stmt may change outside the field attr it checks."""
-    if attr is None or not isinstance(stmt, ast.Assert):
+    """Return the names a field assert may change outside the field attr it checks."""
+    if not isinstance(stmt, ast.Assert):
         return changed_names(stmt, pure)
     parts = [part for part in ast.iter_child_nodes(stmt.test) if part is not attr]
     return frozenset(name for part in parts for name in changed_names(part, pure))
@@ -176,16 +181,14 @@ def _unchecked_changes(
 
 def _close_changed(
     open_groups: dict[str, _Group],
-    stmt: ast.stmt,
     base: str | None,
     unchecked: frozenset[str],
-    pure: frozenset[str],
+    changed: frozenset[str],
 ) -> dict[str, _Group]:
-    """Return the groups that stay open: those whose value stmt can't change.
+    """Return the groups that stay open: those that share no name with changed.
 
     A field's own base group closes only on unchecked, so build().a keeps its group.
     """
-    changed = changed_names(stmt, pure)
     return {
         key: group
         for key, group in open_groups.items()
