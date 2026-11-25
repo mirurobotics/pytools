@@ -74,11 +74,13 @@ def _check_block(
 ) -> list[Diagnostic]:
     groups: list[_Group] = []
     open_groups: dict[str, _Group] = {}
+    pure = bindings.pure_builtins
     for stmt in stmts:
         attr = _field(stmt, bindings)
         base = None if attr is None else _base_text(attr)
-        open_groups = _close_changed(open_groups, stmt, attr, base, bindings)
-        if attr is None or base is None or _is_self_changing(stmt, attr, bindings):
+        rest = _unchecked_changes(stmt, attr, pure)
+        open_groups = _close_changed(open_groups, stmt, base, rest, pure)
+        if attr is None or base is None or not name_set(attr.value).isdisjoint(rest):
             continue
         group = open_groups.get(base)
         if group is None:
@@ -162,41 +164,33 @@ def _base_text(attr: ast.Attribute) -> str | None:
         return None
 
 
+def _unchecked_changes(
+    stmt: ast.stmt, attr: ast.Attribute | None, pure: frozenset[str]
+) -> frozenset[str]:
+    """Return the names stmt may change outside the field attr it checks."""
+    if attr is None or not isinstance(stmt, ast.Assert):
+        return changed_names(stmt, pure)
+    parts = [part for part in ast.iter_child_nodes(stmt.test) if part is not attr]
+    return frozenset(name for part in parts for name in changed_names(part, pure))
+
+
 def _close_changed(
     open_groups: dict[str, _Group],
     stmt: ast.stmt,
-    attr: ast.Attribute | None,
     base: str | None,
-    bindings: Bindings,
+    unchecked: frozenset[str],
+    pure: frozenset[str],
 ) -> dict[str, _Group]:
     """Return the groups that stay open: those whose value stmt can't change.
 
-    A call in a field's own base, as in build().a, doesn't close that base's group.
+    A field's own base group closes only on unchecked, so build().a keeps its group.
     """
-    pure = bindings.pure_builtins
     changed = changed_names(stmt, pure)
-    unchecked = {
-        name for part in _unchecked(stmt, attr) for name in changed_names(part, pure)
-    }
     return {
         key: group
         for key, group in open_groups.items()
         if group.deps.isdisjoint(unchecked if key == base else changed)
     }
-
-
-def _is_self_changing(stmt: ast.stmt, attr: ast.Attribute, bindings: Bindings) -> bool:
-    """Report whether the rest of a field assert may change the value it checks."""
-    pure = bindings.pure_builtins
-    parts = _unchecked(stmt, attr)
-    changed = {name for part in parts for name in changed_names(part, pure)}
-    return not name_set(attr.value).isdisjoint(changed)
-
-
-def _unchecked(stmt: ast.stmt, attr: ast.Attribute | None) -> list[ast.AST]:
-    if attr is None or not isinstance(stmt, ast.Assert):
-        return [stmt]
-    return [part for part in ast.iter_child_nodes(stmt.test) if part is not attr]
 
 
 def _report(file: CheckInput, group: _Group) -> Diagnostic | None:
