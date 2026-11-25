@@ -9,7 +9,7 @@ from pytools.services.lint.linter.privdoc import privdoc
 type Parse = Callable[[str], CheckInput]
 
 _PRIVATE_OWNERS: Final = """\
-def _run():
+async def _run():
     '''Run.'''
 
 class _Client:
@@ -94,6 +94,14 @@ def run():
     # Above helper.
     def _helper():
         pass
+    # Tail.
+def _stop():
+    pass
+"""
+_CODE_ABOVE: Final = """\
+import os
+LIMIT = 1  # The limit.
+_TIMEOUT = 2
 """
 _HEADER: Final = """\
 #!/usr/bin/env python3
@@ -107,12 +115,15 @@ _DECORATED: Final = """\
 import os
 
 # Above.
-@cache
+@cache  # Memoize.
 # Between.
 @other
 # Last.
 def _run():
     pass
+"""
+_ONE_LINE_DEF: Final = """\
+def _run(): '''Run.'''  # Note.
 """
 _DECORATED_FIRST: Final = """\
 @cache
@@ -172,6 +183,7 @@ def test_check_reports_docstrings_nested_in_a_function(parse: Parse) -> None:
         pytest.param(_PUBLIC, id="public"),
         pytest.param(_NOT_DOCSTRINGS, id="not-docstrings"),
         pytest.param(_FUNCTION_BODY, id="function-body"),
+        pytest.param(_CODE_ABOVE, id="code-above"),
     ],
 )
 def test_check_skips_docs_outside_its_scope(parse: Parse, source: str) -> None:
@@ -184,8 +196,9 @@ def test_check_skips_docs_outside_its_scope(parse: Parse, source: str) -> None:
         pytest.param(_COMMENTS, [3, 7, 9, 10], id="above-and-trailing"),
         pytest.param(_DIRECTIVES, [7], id="directives"),
         pytest.param(_HEADER, [5], id="module-header"),
-        pytest.param(_DECORATED, [3, 5, 7], id="decorator-gaps"),
+        pytest.param(_DECORATED, [3, 4, 5, 7], id="decorators"),
         pytest.param(_DECORATED_FIRST, [2], id="decorated-first-statement"),
+        pytest.param(_ONE_LINE_DEF, [1], id="docstring-and-comment-on-one-line"),
     ],
 )
 def test_check_reports_attached_comment_groups(
