@@ -8,6 +8,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     DEFS,
     CheckInput,
     header_end,
+    is_test_func,
     walk_outside,
 )
 
@@ -63,11 +64,12 @@ def declared_names(file: CheckInput) -> list[DeclaredName]:
     """Return the first binding of each name in every scope of file, in line order."""
     scopes: list[_Scope] = [file.tree]
     scopes += [node for node in ast.walk(file.tree) if isinstance(node, SCOPES)]
-    names = [name for scope in scopes for name in _first_bindings(file, scope)]
+    names = [name for scope in scopes for name in first_bindings(file, scope)]
     return sorted(names, key=lambda name: name.line)
 
 
-def _first_bindings(file: CheckInput, scope: _Scope) -> list[DeclaredName]:
+def first_bindings(file: CheckInput, scope: _Scope) -> list[DeclaredName]:
+    """Return the first binding of each name that binds in scope itself."""
     var_kind = _var_kind(scope)
     nodes = list(_scope_nodes(own_parts(scope)))
     declared = {
@@ -157,8 +159,7 @@ def _params(args: ast.arguments) -> list[ast.arg]:
 def binding(file: CheckInput, node: ast.AST, var_kind: NameKind) -> DeclaredName | None:
     """Return the name node binds, if any, as a var_kind when it is a variable."""
     if isinstance(node, DEFS):
-        is_test = node.name.startswith("test_")
-        func_kind = NameKind.TEST_FUNC if is_test else NameKind.FUNC
+        func_kind = NameKind.TEST_FUNC if is_test_func(node) else NameKind.FUNC
         return DeclaredName(node.name, node.lineno, node.lineno, func_kind, node)
     if isinstance(node, ast.ClassDef):
         return DeclaredName(node.name, node.lineno, node.lineno, NameKind.CLASS, node)

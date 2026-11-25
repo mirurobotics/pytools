@@ -20,6 +20,10 @@ total = 0
 
 def _g():
     f()
+
+assert x.a == 1
+assert x.b == 2
+assert x.c == 3
 """
 
 
@@ -39,7 +43,7 @@ def test_run_checks_honors_exclude(parse: Parse, exclude: frozenset[Rule]) -> No
 def _diagnostics() -> dict[Rule, Diagnostic]:
     return {
         Rule.FUNCLEN: Diagnostic("a.py", 1, "function f is 3 lines (limit 1)"),
-        Rule.FILELEN: Diagnostic("a.py", 1, "file is 7 lines (limit 1)"),
+        Rule.FILELEN: Diagnostic("a.py", 1, "file is 10 lines (limit 1)"),
         Rule.NESTDEPTH: Diagnostic(
             "a.py",
             3,
@@ -74,5 +78,11 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
         ),
         Rule.FUNCORDER: Diagnostic(
             "a.py", 1, '"f" should be below its last caller "_g"'
+        ),
+        Rule.FIELDASSERT: Diagnostic(
+            "a.py",
+            13,
+            "3 asserts compare fields of x one at a time; compare the whole value"
+            " in one assert, or move the checks into a helper that takes x",
         ),
     }

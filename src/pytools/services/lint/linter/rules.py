@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
 from pytools.services.lint.linter.commentedcode import commentedcode
+from pytools.services.lint.linter.fieldassert import fieldassert
 from pytools.services.lint.linter.filelen import filelen
 from pytools.services.lint.linter.funccomment import funccomment
 from pytools.services.lint.linter.funclen import funclen
@@ -47,4 +48,5 @@ def _rule_checkers(
         Rule.COMMENTEDCODE: commentedcode.check,
         Rule.MUTABLEGLOBAL: mutableglobal.check,
         Rule.FUNCORDER: funcorder.check,
+        Rule.FIELDASSERT: fieldassert.check,
     }

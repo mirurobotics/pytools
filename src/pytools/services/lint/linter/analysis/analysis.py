@@ -25,6 +25,7 @@ class Rule(StrEnum):
     COMMENTEDCODE = "commentedcode"
     MUTABLEGLOBAL = "mutableglobal"
     FUNCORDER = "funcorder"
+    FIELDASSERT = "fieldassert"
 
 
 @dataclass(frozen=True)
@@ -119,6 +120,11 @@ def functions(tree: ast.Module) -> list[Function]:
     """Return every function in tree, nested ones included, in line order."""
     found = [node for node in ast.walk(tree) if isinstance(node, DEFS)]
     return sorted(found, key=lambda func: func.lineno)
+
+
+def is_test_func(func: Function) -> bool:
+    """Report whether func is a test: a def named test_*."""
+    return func.name.startswith("test_")
 
 
 def module_header_end(file: CheckInput) -> int:
