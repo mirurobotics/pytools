@@ -13,6 +13,7 @@ def test_build():
     got = build()
     assert got.a == 1
     assert got.b == "b"
+    assert got.a == 1
     assert got.c == [3]
 """
 _TABLE_EXPECTED: Final = """\
@@ -37,19 +38,15 @@ def test_build(items, pair):
     assert first.x == 1
     assert second.x == 2
     assert first.y == 3
+    assert second.y == 4
+    assert first.z == 5
     if first:
-        assert first.z == 4
+        assert second.z == 6
     match pair:
         case (left, _):
             assert items[0].a == 1
             assert items[0].b == 2
             assert (items[0]).c == 3
-    try:
-        pass
-    except ValueError:
-        assert pair[0].a == 1
-        assert pair[0].b == 2
-        assert pair[0].c == 3
 """
 _MODULE_AND_CLASS: Final = """\
 got = build()
@@ -115,6 +112,7 @@ def test_request(case):
     assert -code == case.want_kind
     assert [item.id] == case.want_ids
     assert {"x": item.id} == case.want_map
+    assert (item.id,) == case.want_tuple
 """
 _PACKAGE_FIELDS: Final = """\
 from http import HTTPStatus
@@ -173,10 +171,10 @@ def test_build():
 """
 
 
-def _diag(line: int, base: str, root: str | None) -> Diagnostic:
+def _diag(line: int, count: int, base: str, root: str | None) -> Diagnostic:
     message = (
-        f"3 asserts compare fields of {base} one at a time; compare the whole value"
-        " in one assert"
+        f"{count} asserts compare fields of {base} one at a time; compare the whole"
+        " value in one assert"
     )
     if root is not None:
         message += f", or move the checks into a helper that takes {root}"
@@ -186,31 +184,36 @@ def _diag(line: int, base: str, root: str | None) -> Diagnostic:
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
-        pytest.param(_THREE_FIELDS, [_diag(3, "got", "got")], id="three-fields"),
-        pytest.param(_TABLE_EXPECTED, [_diag(4, "got", "got")], id="grouped-by-actual"),
+        pytest.param(_THREE_FIELDS, [_diag(3, 4, "got", "got")], id="three-fields"),
+        pytest.param(
+            _TABLE_EXPECTED, [_diag(4, 3, "got", "got")], id="grouped-by-actual"
+        ),
         pytest.param(
             _BLOCKS,
-            [_diag(10, "items[0]", "items"), _diag(16, "pair[0]", "pair")],
+            [
+                _diag(3, 3, "first", "first"),
+                _diag(12, 3, "items[0]", "items"),
+            ],
             id="blocks",
         ),
         pytest.param(
             _MODULE_AND_CLASS,
             [
-                _diag(2, "got", "got"),
-                _diag(8, "made", "made"),
-                _diag(13, "self.got", "self"),
+                _diag(2, 3, "got", "got"),
+                _diag(8, 3, "made", "made"),
+                _diag(13, 3, "self.got", "self"),
             ],
             id="module-and-class-bodies",
         ),
         pytest.param(
-            _OTHER_DEF_IMPORT, [_diag(5, "config", "config")], id="other-def-import"
+            _OTHER_DEF_IMPORT, [_diag(5, 3, "config", "config")], id="other-def-import"
         ),
         pytest.param(
             _CALL_BASES,
             [
-                _diag(4, "build()", None),
-                _diag(7, "[make()][0]", None),
-                _diag(10, "http.load()", None),
+                _diag(4, 3, "build()", None),
+                _diag(7, 3, "[make()][0]", None),
+                _diag(10, 3, "http.load()", None),
             ],
             id="call-bases",
         ),
@@ -244,17 +247,17 @@ def test_check_reports_field_runs(
 )
 def test_check_reports_swapped_args(parse: Parse, asserts: tuple[str, ...]) -> None:
     source = _SWAPPED_HEADER + "".join(f"    assert {line}\n" for line in asserts)
-    assert fieldassert.check(parse(source)) == [_diag(6, "got", "got")]
+    assert fieldassert.check(parse(source)) == [_diag(6, 3, "got", "got")]
 
 
 @pytest.mark.parametrize(
     ("between", "expected"),
     [
-        pytest.param("_ = other.meta", [_diag(3, "got.meta", "got")], id="other"),
-        pytest.param("err = other()", [_diag(3, "got.meta", "got")], id="unrelated"),
+        pytest.param("_ = other.meta", [_diag(3, 3, "got.meta", "got")], id="other"),
+        pytest.param("err = other()", [_diag(3, 3, "got.meta", "got")], id="unrelated"),
         pytest.param(
             "assert len(got.items) == max(1, int(got.size))",
-            [_diag(3, "got.meta", "got")],
+            [_diag(3, 3, "got.meta", "got")],
             id="pure-builtins",
         ),
         pytest.param("got.stop()", [], id="method-call"),
@@ -314,4 +317,4 @@ def test_check_skips_run_with_nolint(parse: Parse, first: str, last: str) -> Non
 def test_check_reports_run_without_its_nolint(
     parse: Parse, source: str, line: int
 ) -> None:
-    assert fieldassert.check(parse(source)) == [_diag(line, "got", "got")]
+    assert fieldassert.check(parse(source)) == [_diag(line, 3, "got", "got")]
