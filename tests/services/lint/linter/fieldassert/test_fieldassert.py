@@ -23,7 +23,6 @@ def test_build(cases):
         assert got.a == case.want_a
         assert got.b == case.want_b
         assert got.c == case.want_c
-        assert other == case.want_d
 """
 _SWAPPED_HEADER: Final = """\
 import os.path
@@ -55,6 +54,7 @@ assert got.b == 2
 assert got.c == 3
 
 class TestBuild:
+    from http import HTTPStatus
     made = build()
     assert made.a == 1
     assert made.b == 2
@@ -64,6 +64,11 @@ class TestBuild:
         assert self.got.a == 1
         assert self.got.b == 2
         assert self.got.c == 3
+
+    class TestNested:
+        assert HTTPStatus.a == 1
+        assert HTTPStatus.b == 2
+        assert HTTPStatus.c == 3
 """
 _OTHER_DEF_IMPORT: Final = """\
 def unrelated():
@@ -197,8 +202,9 @@ def _diag(line: int, count: int, base: str, root: str | None) -> Diagnostic:
             _MODULE_AND_CLASS,
             [
                 _diag(2, 3, "got", "got"),
-                _diag(8, 3, "made", "made"),
-                _diag(13, 3, "self.got", "self"),
+                _diag(9, 3, "made", "made"),
+                _diag(14, 3, "self.got", "self"),
+                _diag(19, 3, "HTTPStatus", "HTTPStatus"),
             ],
             id="module-and-class-bodies",
         ),
@@ -234,11 +240,7 @@ def test_check_reports_field_runs(
             ("[1] == got.a", '{"k": (1,)} == got.b', "{1} == got.c"), id="literals"
         ),
         pytest.param(
-            (
-                "HTTPStatus.OK == got.a",
-                "os.path.sep == got.b",
-                "-HTTPStatus.OK == got.c",
-            ),
+            ("HTTPStatus.OK == got.a", "os.sep == got.b", "-HTTPStatus.OK == got.c"),
             id="package-constants",
         ),
     ],

@@ -47,7 +47,7 @@ def _blocks(file: CheckInput) -> list[_Block]:
         if isinstance(node, DEFS):
             scopes, imports = (*scopes, new_func_scope(file, node)), module_imports
         elif isinstance(node, ast.ClassDef):
-            imports = scope_imports(file, node, imports)
+            imports = scope_imports(file, node, module_imports)
         lists = [part for _, part in ast.iter_fields(node) if _is_stmt_list(part)]
         blocks.extend((stmts, Bindings(scopes, imports, pure)) for stmts in lists)
         pending.extend((child, scopes, imports) for child in ast.iter_child_nodes(node))
