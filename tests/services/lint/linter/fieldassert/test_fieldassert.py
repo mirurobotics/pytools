@@ -101,8 +101,8 @@ _BETWEEN: Final = """\
 def test_build():
     got = build()
     assert got.meta.a == 1
-    assert got.meta.b == 2
     {between}
+    assert got.meta.b == 2
     assert got.meta.c == 3
 """
 _NOT_FIELDS: Final = """\

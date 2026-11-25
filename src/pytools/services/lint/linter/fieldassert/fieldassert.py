@@ -78,7 +78,7 @@ def _check_block(
         attr = _field(stmt, bindings)
         base = None if attr is None else _base_text(attr)
         open_groups = _close_changed(open_groups, stmt, attr, base, bindings)
-        if attr is None or base is None:
+        if attr is None or base is None or _is_self_changing(stmt, attr, bindings):
             continue
         group = open_groups.get(base)
         if group is None:
@@ -183,6 +183,14 @@ def _close_changed(
         for key, group in open_groups.items()
         if group.deps.isdisjoint(unchecked if key == base else changed)
     }
+
+
+def _is_self_changing(stmt: ast.stmt, attr: ast.Attribute, bindings: Bindings) -> bool:
+    """Report whether the rest of a field assert may change the value it checks."""
+    pure = bindings.pure_builtins
+    parts = _unchecked(stmt, attr)
+    changed = {name for part in parts for name in changed_names(part, pure)}
+    return not name_set(attr.value).isdisjoint(changed)
 
 
 def _unchecked(stmt: ast.stmt, attr: ast.Attribute | None) -> list[ast.AST]:
