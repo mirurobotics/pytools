@@ -27,6 +27,7 @@ class Rule(StrEnum):
     FUNCORDER = "funcorder"
     FIELDASSERT = "fieldassert"
     DOCLEN = "doclen"
+    DOCRESTATE = "docrestate"
 
 
 @dataclass(frozen=True)
