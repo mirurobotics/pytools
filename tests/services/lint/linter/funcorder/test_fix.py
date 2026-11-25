@@ -51,6 +51,17 @@ class T:
     "x"
     def run(self): self._h()
 """
+_NAMESPACE_ORDER: Final = """\
+def _allow_guest(user): return True
+def admin(user): return _allow_guest(user)
+POLICIES = [rule for rule in globals().values() if callable(rule)]
+"""
+_CLASS_DICT: Final = """\
+class Policy:
+    def _allow_guest(self, user): return True
+    def admin(self, user): return self._allow_guest(user)
+RULES = list(Policy.__dict__)
+"""
 _NEAR_USER: Final = """\
 def main(): U()
 class P:
@@ -125,6 +136,8 @@ class T:
         pytest.param(_ANNOTATION_READ, id="annotation-reads-a-class"),
         pytest.param(_STRING, id="string-would-become-docstring"),
         pytest.param(_CLASS_STRING, id="string-would-become-class-docstring"),
+        pytest.param(_NAMESPACE_ORDER, id="module-walks-its-namespace"),
+        pytest.param(_CLASS_DICT, id="module-reads-a-dict-attribute"),
     ],
 )
 def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:

@@ -1,4 +1,5 @@
 import ast
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.funcorder.decl import Decl
@@ -6,6 +7,8 @@ from pytools.services.lint.linter.funcorder.model import Model, build, must_prec
 from pytools.services.lint.linter.funcorder.order import arrange
 from pytools.services.lint.linter.funcorder.plain import place, plain_violations
 from pytools.services.lint.linter.funcorder.render import has_shared_lines, render
+
+_NAMESPACE_READERS: Final = frozenset({"globals", "locals", "vars", "dir"})
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
@@ -18,9 +21,12 @@ def check(file: CheckInput) -> list[Diagnostic]:
 def fix(file: CheckInput) -> str | None:
     """Return the source with each scope check reports on laid out in its order.
 
-    Return None when no scope can move, or when the result would not hold the
-    same statements.
+    Return None when no scope can move, when the result would not hold the same
+    statements, or when the module may walk a namespace, whose order a move
+    changes.
     """
+    if _reads_namespace(file.tree):
+        return None
     orders: dict[ast.Module | ast.ClassDef, list[int]] = {}
     for scope in _scopes(file.tree):
         order = _fixed_order(file, scope)
@@ -30,6 +36,17 @@ def fix(file: CheckInput) -> str | None:
         return None
     fixed = render(file, orders)
     return fixed if _holds_same_statements(file, fixed) else None
+
+
+def _reads_namespace(tree: ast.Module) -> bool:
+    """Report whether tree names globals, locals, vars or dir, or reads __dict__."""
+    return any(_is_namespace_read(node) for node in ast.walk(tree))
+
+
+def _is_namespace_read(node: ast.AST) -> bool:
+    if isinstance(node, ast.Attribute):
+        return node.attr == "__dict__"
+    return isinstance(node, ast.Name) and node.id in _NAMESPACE_READERS
 
 
 def _fixed_order(
