@@ -25,6 +25,7 @@ class Rule(StrEnum):
     COMMENTEDCODE = "commentedcode"
     MUTABLEGLOBAL = "mutableglobal"
     FUNCORDER = "funcorder"
+    FIELDASSERT = "fieldassert"
 
 
 @dataclass(frozen=True)
