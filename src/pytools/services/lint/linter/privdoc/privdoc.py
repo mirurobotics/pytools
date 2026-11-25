@@ -35,7 +35,7 @@ def check(file: CheckInput) -> list[Diagnostic]:
     skipped = header | function_body_lines(file)
     attached = [_comment_groups(file, stmt, skipped) for stmt in private]
     prose = [_prose_line(file, group) for groups in attached for group in groups]
-    lines = sorted(line for line in docs + prose if line is not None)
+    lines = sorted({line for line in docs + prose if line is not None})
     return [Diagnostic(file.path, line, _MESSAGE) for line in lines]
 
 
@@ -101,8 +101,8 @@ def _comment_groups(
     )
     anchors = [dec.lineno for dec in decorators] + [stmt.lineno]
     above = [_group_above(file, anchor, skipped) for anchor in anchors]
-    trailing = [stmt.lineno] if stmt.lineno in file.comments else []
-    return [*above, trailing]
+    trailing = [[anchor] for anchor in anchors if anchor in file.comments]
+    return above + trailing
 
 
 def _group_above(file: CheckInput, anchor: int, skipped: set[int]) -> list[int]:
