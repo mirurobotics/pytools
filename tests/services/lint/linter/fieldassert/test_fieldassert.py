@@ -151,6 +151,13 @@ def test_items():
     index += 1
     assert got[index].c == 3
 """
+_DEEP_SUM: Final = "got + " * 1999 + "got"
+_DEEP_BASE: Final = f"""\
+def test_build():
+    assert ({_DEEP_SUM}).a == 1
+    assert ({_DEEP_SUM}).b == 2
+    assert ({_DEEP_SUM}).c == 3
+"""
 _HELPER: Final = """\
 def check_thing(got):
     assert got.a == 1
@@ -272,6 +279,7 @@ def test_check_splits_run_where_value_may_change(
         pytest.param(_REPEATED_FIELD, id="repeated-field"),
         pytest.param(_INDEX_CHANGE, id="index-change"),
         pytest.param(_HELPER, id="helper-param"),
+        pytest.param(_DEEP_BASE, id="base-too-deep-to-unparse"),
     ],
 )
 def test_check_skips_code_that_is_not_a_field_run(parse: Parse, source: str) -> None:

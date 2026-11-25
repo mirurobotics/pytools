@@ -72,9 +72,9 @@ def _check_block(
     for stmt in stmts:
         attr = _field(stmt, bindings)
         open_groups = _close_changed(open_groups, stmt, attr)
-        if attr is None:
+        base = None if attr is None else _base_text(attr)
+        if attr is None or base is None:
             continue
-        base = ast.unparse(attr.value)
         group = open_groups.get(base)
         if group is None:
             root = root_name(attr.value, bindings)
@@ -169,6 +169,14 @@ def _unchecked(stmt: ast.stmt, attr: ast.Attribute | None) -> list[ast.AST]:
         return [stmt]
     parts = [*ast.iter_child_nodes(stmt.test), stmt.msg]
     return [part for part in parts if part is not None and part is not attr]
+
+
+def _base_text(attr: ast.Attribute) -> str | None:
+    """Return the value attr reads as text, or None if too deep to unparse."""
+    try:
+        return ast.unparse(attr.value)
+    except RecursionError:
+        return None
 
 
 def _report(file: CheckInput, group: _Group) -> Diagnostic | None:
