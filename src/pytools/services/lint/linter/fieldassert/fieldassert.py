@@ -12,11 +12,11 @@ from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
 from pytools.services.lint.linter.fieldassert.scope import (
     Bindings,
     Scope,
+    changed_names,
     import_names,
     name_set,
     new_scope,
     root_name,
-    used_names,
 )
 
 _MIN_FIELD_ASSERTS: Final = 3
@@ -72,7 +72,7 @@ def _check_block(
     for stmt in stmts:
         attr = _field(stmt, bindings)
         if attr is None:
-            open_groups = _close_used(open_groups, stmt)
+            open_groups = _close_changed(open_groups, stmt)
             continue
         base = ast.unparse(attr.value)
         group = open_groups.get(base)
@@ -83,10 +83,11 @@ def _check_block(
             groups.append(group)
         group.asserts.append(stmt)
         group.fields.add(attr.attr)
+    wide = [group for group in groups if len(group.fields) >= _MIN_FIELD_ASSERTS]
     diags = [
         _report(file, group)
-        for group in groups
-        if len(group.fields) >= _MIN_FIELD_ASSERTS and not bindings.is_param(group.root)
+        for group in wide
+        if not bindings.is_helper_param(group.root)
     ]
     return [diag for diag in diags if diag is not None]
 
@@ -148,13 +149,13 @@ def _constant_parts(expr: ast.expr, bindings: Bindings) -> list[ast.expr] | None
     return None
 
 
-def _close_used(open_groups: dict[str, _Group], stmt: ast.stmt) -> dict[str, _Group]:
+def _close_changed(open_groups: dict[str, _Group], stmt: ast.stmt) -> dict[str, _Group]:
     """Return the groups that stay open: those whose value stmt can't change."""
-    used = used_names(stmt)
+    changed = changed_names(stmt)
     return {
         base: group
         for base, group in open_groups.items()
-        if group.deps.isdisjoint(used)
+        if group.deps.isdisjoint(changed)
     }
 
 

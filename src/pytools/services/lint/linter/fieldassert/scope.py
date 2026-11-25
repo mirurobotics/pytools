@@ -26,7 +26,7 @@ class Bindings:
     scopes: tuple[Scope, ...]  # the defs around the block, innermost last
     imports: frozenset[str]
 
-    def is_param(self, name: str | None) -> bool:
+    def is_helper_param(self, name: str | None) -> bool:
         """Report whether name is a parameter of a def that is not a test.
 
         Such a def is a check helper that takes the value.
@@ -67,7 +67,7 @@ def import_names(tree: ast.Module) -> frozenset[str]:
     return frozenset(alias.asname or alias.name.split(".")[0] for alias in aliases)
 
 
-def used_names(stmt: ast.stmt) -> frozenset[str]:
+def changed_names(stmt: ast.stmt) -> frozenset[str]:
     """Return the names stmt may change.
 
     An assert changes only the names under a call, lambda or walrus in it,
