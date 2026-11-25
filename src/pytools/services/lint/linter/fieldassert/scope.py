@@ -130,7 +130,6 @@ def name_set(node: ast.AST) -> frozenset[str]:
 
 
 def _own_names(node: ast.AST) -> list[str]:
-    """Return the names node itself reads or binds, such as an except alias."""
     if isinstance(node, ast.Name):
         return [node.id]
     if isinstance(node, ast.alias):
@@ -157,7 +156,6 @@ def root_name(expr: ast.expr, bindings: Bindings) -> str | None:
 
 
 def _receiver(expr: ast.expr, bindings: Bindings) -> ast.expr | None:
-    """Return the value expr reads from: a base, or a method call's object."""
     if isinstance(expr, ast.Attribute | ast.Subscript):
         return expr.value
     func = expr.func if isinstance(expr, ast.Call) else None

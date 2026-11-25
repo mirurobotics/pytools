@@ -10,7 +10,6 @@ from pytools.services.lint.linter.analysis.nolint import has_name_nolint
 
 _MIN_NAME_LEN: Final = 3
 
-# i for iteration, a and b for comparison, ok, id and db as common shorthands.
 _ALLOWED: Final = frozenset({"_", "i", "a", "b", "ok", "id", "db"})
 _VARIABLES: Final = frozenset({NameKind.MODULE_VAR, NameKind.LOCAL_VAR})
 

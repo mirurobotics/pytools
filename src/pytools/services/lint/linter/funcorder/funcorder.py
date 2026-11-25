@@ -64,7 +64,6 @@ def _rank_order(model: Model, decl: Decl) -> str | None:
 
 
 def _directly_below(model: Model, decl: Decl, order: list[int]) -> list[str]:
-    """Report decl unless it sits right under the def placed above it."""
     pos = order.index(decl.idx)
     while pos > 0 and order[pos - 1] not in model.decls:
         pos -= 1

@@ -86,7 +86,6 @@ def _check_docstring(
 
 
 def _restates(name: str, doc: str) -> bool:
-    """Report whether doc names name and otherwise holds only filler words."""
     if _has_symbols(doc):
         return False
     words = re.findall(r"\w+", doc.lower())
@@ -97,7 +96,6 @@ def _restates(name: str, doc: str) -> bool:
 
 
 def _has_symbols(doc: str) -> bool:
-    """Report whether doc quotes a value or holds a token with no word character."""
     if re.search(_QUOTED, doc):
         return True
     tokens = (token.strip(".,;:!?") for token in doc.split())
@@ -109,7 +107,6 @@ def _is_name_word(word: str, name_words: list[str]) -> bool:
 
 
 def _inflects(word: str, base: str) -> bool:
-    """Report whether word is base or a simple inflection of it."""
     has_base = word.startswith(base)
     suffix = word[len(base) :]
     if has_base and _takes_short_suffix(base, suffix):

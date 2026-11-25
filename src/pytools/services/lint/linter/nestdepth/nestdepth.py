@@ -23,7 +23,6 @@ def check(file: CheckInput, max_depth: int) -> list[Diagnostic]:
 
 
 def _too_deep(body: list[ast.stmt], levels_left: int) -> Iterator[ast.stmt]:
-    """Yield each statement over the limit once, without entering it."""
     for stmt in body:
         blocks = _nested_blocks(stmt)
         if blocks and levels_left == 0:
@@ -49,7 +48,6 @@ def _nested_blocks(stmt: ast.stmt) -> list[list[ast.stmt]]:
 
 
 def _if_chain_blocks(stmt: ast.If) -> list[list[ast.stmt]]:
-    """Return the blocks of stmt and its elif chain, with the final else."""
     blocks = [stmt.body]
     while (branch := elif_branch(stmt)) is not None:
         stmt = branch

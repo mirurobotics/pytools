@@ -46,12 +46,10 @@ def find_walls(
 
 
 def _is_inert_decl(scope: ast.Module | ast.ClassDef, decl: Decl) -> bool:
-    """Report whether defining decl and its stubs surely runs no code."""
     stubs = [scope.body[part] for part in decl.span[:-1]]
     is_calm = all(isinstance(stub, DEFS) and is_inert(stub) for stub in stubs)
     return is_calm and is_inert(decl.stmt)
 
 
 def _reads(effects: list[ImportTimeNames], decl: Decl) -> set[str]:
-    """Return the names decl and its stubs read when defined."""
     return {name for part in decl.span for name in effects[part].reads}
