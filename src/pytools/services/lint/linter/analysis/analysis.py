@@ -122,6 +122,11 @@ def functions(tree: ast.Module) -> list[Function]:
     return sorted(found, key=lambda func: func.lineno)
 
 
+def is_test_func(func: Function) -> bool:
+    """Report whether func is a test: a def named test_*."""
+    return func.name.startswith("test_")
+
+
 def module_header_end(file: CheckInput) -> int:
     """Return the first statement's line, or the last line of a module without one.
 

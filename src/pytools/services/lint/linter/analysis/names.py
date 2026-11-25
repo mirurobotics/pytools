@@ -8,6 +8,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     DEFS,
     CheckInput,
     header_end,
+    is_test_func,
     walk_outside,
 )
 
@@ -158,8 +159,7 @@ def _params(args: ast.arguments) -> list[ast.arg]:
 def binding(file: CheckInput, node: ast.AST, var_kind: NameKind) -> DeclaredName | None:
     """Return the name node binds, if any, as a var_kind when it is a variable."""
     if isinstance(node, DEFS):
-        is_test = node.name.startswith("test_")
-        func_kind = NameKind.TEST_FUNC if is_test else NameKind.FUNC
+        func_kind = NameKind.TEST_FUNC if is_test_func(node) else NameKind.FUNC
         return DeclaredName(node.name, node.lineno, node.lineno, func_kind, node)
     if isinstance(node, ast.ClassDef):
         return DeclaredName(node.name, node.lineno, node.lineno, NameKind.CLASS, node)
