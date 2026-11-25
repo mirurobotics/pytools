@@ -28,6 +28,7 @@ class Rule(StrEnum):
     FIELDASSERT = "fieldassert"
     DOCLEN = "doclen"
     DOCRESTATE = "docrestate"
+    PRIVDOC = "privdoc"
 
 
 @dataclass(frozen=True)
