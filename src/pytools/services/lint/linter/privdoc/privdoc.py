@@ -10,7 +10,7 @@ from pytools.services.lint.linter.analysis.analysis import (
     function_body_lines,
     functions,
     is_code_line,
-    start_line,
+    module_header_end,
 )
 from pytools.services.lint.linter.analysis.comments import is_directive
 from pytools.services.lint.linter.analysis.nolint import has_nolint_on_lines
@@ -31,9 +31,10 @@ def check(file: CheckInput) -> list[Diagnostic]:
     ]
     owners += _nested_owners(file.tree)
     docs = [_docstring_line(file, owner) for owner in owners]
-    inside = function_body_lines(file)
-    groups = [_comment_groups(file, stmt, inside) for stmt in private]
-    prose = [_prose_line(file, group) for pair in groups for group in pair]
+    header = set(range(1, module_header_end(file) + 1))
+    skipped = header | function_body_lines(file)
+    attached = [_comment_groups(file, stmt, skipped) for stmt in private]
+    prose = [_prose_line(file, group) for groups in attached for group in groups]
     lines = sorted(line for line in docs + prose if line is not None)
     return [Diagnostic(file.path, line, _MESSAGE) for line in lines]
 
@@ -91,17 +92,28 @@ def _docstring_line(file: CheckInput, owner: Function | ast.ClassDef) -> int | N
 
 
 def _comment_groups(
-    file: CheckInput, stmt: ast.stmt, inside: set[int]
-) -> tuple[list[int], list[int]]:
-    above: list[int] = []
-    line = start_line(stmt) - 1
-    while line in file.comments and line not in inside:
+    file: CheckInput, stmt: ast.stmt, skipped: set[int]
+) -> list[list[int]]:
+    decorators = (
+        stmt.decorator_list
+        if isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+        else []
+    )
+    anchors = [dec.lineno for dec in decorators] + [stmt.lineno]
+    above = [_group_above(file, anchor, skipped) for anchor in anchors]
+    trailing = [stmt.lineno] if stmt.lineno in file.comments else []
+    return [*above, trailing]
+
+
+def _group_above(file: CheckInput, anchor: int, skipped: set[int]) -> list[int]:
+    group: list[int] = []
+    line = anchor - 1
+    while line in file.comments and line not in skipped:
         if is_code_line(file, line):
             break
-        above.insert(0, line)
+        group.insert(0, line)
         line -= 1
-    trailing = [stmt.lineno] if stmt.lineno in file.comments else []
-    return above, trailing
+    return group
 
 
 def _prose_line(file: CheckInput, group: list[int]) -> int | None:
