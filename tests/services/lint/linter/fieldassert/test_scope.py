@@ -138,11 +138,12 @@ def test_root_name_returns_variable_expr_reads(
     assert root_name(_expr(expr), _bindings(parse, source)) == expected
 
 
+def _expr(text: str) -> ast.expr:
+    return ast.parse(text, mode="eval").body
+
+
 def _bindings(parse: Parse, source: str) -> Bindings:
     file = parse(source)
     scopes = tuple(new_func_scope(file, func) for func in functions(file.tree))
     return Bindings(scopes, import_names(file.tree))
 
-
-def _expr(text: str) -> ast.expr:
-    return ast.parse(text, mode="eval").body
