@@ -108,6 +108,12 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
             "docstring for _documented only restates its name; say what it does"
             " or remove it",
         ),
+        Rule.PRIVDOC: Diagnostic(
+            "a.py",
+            18,
+            "comment on identifier outside the exported API; only the exported API"
+            " may be documented",
+        ),
     }
 
 

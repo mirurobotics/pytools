@@ -13,6 +13,7 @@ from pytools.services.lint.linter.funcorder import funcorder
 from pytools.services.lint.linter.mutableglobal import mutableglobal
 from pytools.services.lint.linter.namelen import namelen
 from pytools.services.lint.linter.nestdepth import nestdepth
+from pytools.services.lint.linter.privdoc import privdoc
 from pytools.services.lint.linter.straycomment import straycomment
 from pytools.services.lint.linter.varname import varname
 
@@ -57,4 +58,5 @@ def _rule_checkers(
             file, config.max_doc_lines, config.max_package_doc_lines
         ),
         Rule.DOCRESTATE: docrestate.check,
+        Rule.PRIVDOC: privdoc.check,
     }

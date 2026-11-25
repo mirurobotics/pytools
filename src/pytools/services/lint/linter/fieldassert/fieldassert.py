@@ -37,7 +37,6 @@ def check(file: CheckInput) -> list[Diagnostic]:
 
 
 def _blocks(file: CheckInput) -> list[_Block]:
-    """Return each list of statements in file, with where its names are bound."""
     module_imports = scope_imports(file, file.tree, frozenset())
     pure = pure_builtins(file)
     blocks: list[_Block] = []
@@ -60,8 +59,6 @@ def _is_stmt_list(value: object) -> bool:
 
 @dataclass
 class _Group:
-    """Asserts in one block on fields of one value, with no change between them."""
-
     base: str
     root: str | None
     deps: frozenset[str]
@@ -105,7 +102,6 @@ def _check_block(
 
 
 def _field(stmt: ast.stmt, bindings: Bindings) -> tuple[ast.Attribute, ast.expr] | None:
-    """Return the field an assert a == b checks and the value it is compared to."""
     compared = _compared(stmt)
     if compared is None:
         return None
@@ -133,7 +129,6 @@ def _as_field(expr: ast.expr, bindings: Bindings) -> ast.Attribute | None:
 
 
 def _is_constant(expr: ast.expr, bindings: Bindings) -> bool:
-    """Report whether expr is a literal or a constant from an import."""
     pending = [expr]
     while pending:
         parts = _constant_parts(pending.pop(), bindings)
@@ -144,7 +139,6 @@ def _is_constant(expr: ast.expr, bindings: Bindings) -> bool:
 
 
 def _constant_parts(expr: ast.expr, bindings: Bindings) -> list[ast.expr] | None:
-    """Return the subexpressions expr is constant through, or None if it never is."""
     if isinstance(expr, ast.Constant):
         return []
     if isinstance(expr, ast.Attribute):
@@ -165,7 +159,6 @@ def _close_changed(
     unchecked: frozenset[str],
     changed: frozenset[str],
 ) -> dict[str, _Group]:
-    """Return the groups that stay open: those that share no name with changed."""
     return {
         key: group
         for key, group in open_groups.items()
@@ -174,7 +167,6 @@ def _close_changed(
 
 
 def _base_text(attr: ast.Attribute) -> str | None:
-    """Return the value attr reads as text, or None if too deep to unparse."""
     try:
         return ast.unparse(attr.value)
     except RecursionError:

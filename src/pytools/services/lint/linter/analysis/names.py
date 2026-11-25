@@ -97,7 +97,6 @@ def _var_kind(scope: _Scope) -> NameKind:
 
 
 def _scope_nodes(nodes: list[ast.AST]) -> Iterator[ast.AST]:
-    """Yield nodes and the nodes under them that bind in the scope holding them."""
     for node in walk_outside(nodes, (*SCOPES, ast.arg)):
         yield node
         if isinstance(node, SCOPES):
@@ -168,7 +167,6 @@ def binding(file: CheckInput, node: ast.AST, var_kind: NameKind) -> DeclaredName
 def _clause_binding(
     file: CheckInput, node: ast.AST, var_kind: NameKind
 ) -> DeclaredName | None:
-    """Return the name an except alias or match pattern binds, if any."""
     if isinstance(node, ast.ExceptHandler) and node.name:
         line = header_end(file, node)
         return DeclaredName(node.name, line, line, var_kind, node)
@@ -182,7 +180,6 @@ def _clause_binding(
 
 
 def _scope_key(name: DeclaredName, declared: set[str]) -> ast.AST | str | None:
-    """Return name's key in its scope, or None if global or nonlocal moves it."""
     if isinstance(name.node, _TYPE_PARAMS):
         return name.node
     return None if name.text in declared else name.text

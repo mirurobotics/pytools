@@ -60,7 +60,6 @@ def _receiver(func: Function) -> str | None:
 
 
 def _free_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
-    """Return the names stmt refers to in code that runs only when called."""
     loads = [
         name
         for root, params in _roots(file, stmt)
@@ -70,7 +69,6 @@ def _free_calls(file: CheckInput, stmt: ast.stmt) -> list[str]:
 
 
 def _roots(file: CheckInput, stmt: ast.stmt) -> list[tuple[_Root, frozenset[str]]]:
-    """Return stmt's defs and lambdas outside def bodies, and the names hidden there."""
     pending: list[tuple[ast.AST, frozenset[str]]] = [(stmt, frozenset())]
     found: list[tuple[_Root, frozenset[str]]] = []
     while pending:
@@ -118,7 +116,6 @@ def import_time_names(
 def _import_time_walk(
     file: CheckInput, stmt: ast.stmt, own: str, *, is_class: bool
 ) -> tuple[list[ast.AST], set[str]]:
-    """Return the nodes of stmt that run when it does, and the names they load."""
     pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0, frozenset()))]
     nodes: list[ast.AST] = []
     loads: set[str] = set()
@@ -153,7 +150,6 @@ def _root_free_loads(
 def _scoped_nodes(
     file: CheckInput, root: _Root, params: frozenset[str]
 ) -> list[tuple[ast.AST, frozenset[str]]]:
-    """Return the nodes that run when root is called, with the names bound there."""
     body: list[ast.AST] = [root.body] if isinstance(root, ast.Lambda) else [*root.body]
     todo: list[tuple[list[ast.AST], frozenset[str], ast.AST]] = [(body, params, root)]
     found: list[tuple[ast.AST, frozenset[str]]] = []
@@ -171,7 +167,6 @@ def _scoped_nodes(
 
 
 def _typed_outer_nodes(nodes: list[ast.AST]) -> dict[ast.AST, frozenset[str]]:
-    """Return the nodes of the scopes' outer parts that see their type parameters."""
     typed: dict[ast.AST, frozenset[str]] = {}
     for scope in nodes:
         if isinstance(scope, (*DEFS, ast.ClassDef)):
@@ -183,7 +178,6 @@ def _typed_outer_nodes(nodes: list[ast.AST]) -> dict[ast.AST, frozenset[str]]:
 def _import_time_parts(
     file: CheckInput, node: ast.AST, hidden: _Hidden, *, is_class: bool
 ) -> list[tuple[ast.AST, _Hidden]]:
-    """Return the parts of node that run when it does, with the names they hide."""
     bound, idx, local = hidden
     parts = _scope_parts(file, node, local)
     if isinstance(node, _COMPS):
@@ -206,7 +200,6 @@ def _import_time_parts(
 def _scope_parts(
     file: CheckInput, node: ast.AST, local: frozenset[str]
 ) -> list[tuple[ast.AST, frozenset[str]]]:
-    """Return node's parts outside def bodies, with the names hidden in each."""
     if isinstance(node, _COMPS):
         targets = local | _bound_names(file, _run_nodes(own_parts(node)))
         first = node.generators[0].iter
@@ -221,7 +214,6 @@ def _scope_parts(
 
 
 def _inner_parts(scope: _Root | ast.ClassDef | _Comp) -> list[ast.AST]:
-    """Return scope's parts that run in it, but a comprehension's first iterable."""
     if not isinstance(scope, _COMPS):
         return own_parts(scope)
     first = scope.generators[0].iter
@@ -237,14 +229,12 @@ def _type_params(node: _Root | ast.ClassDef) -> frozenset[str]:
 
 
 def _outside_type_params(node: _Root | ast.ClassDef) -> list[ast.AST]:
-    """Return node's decorators and defaults, which run outside its type parameters."""
     defaults = [] if isinstance(node, ast.ClassDef) else param_defaults(node.args)
     decorators = [] if isinstance(node, ast.Lambda) else node.decorator_list
     return [*decorators, *defaults]
 
 
 def _class_bindings(file: CheckInput, cls: ast.ClassDef) -> dict[str, int]:
-    """Return where cls's body first surely binds each name it never deletes."""
     deleted = _deleted(_run_nodes(list(cls.body)))
     body = list(enumerate(cls.body))
     return {
@@ -256,7 +246,6 @@ def _class_bindings(file: CheckInput, cls: ast.ClassDef) -> dict[str, int]:
 
 
 def _is_definite(stmt: ast.stmt) -> bool:
-    """Report whether stmt surely binds; a bare annotation, branch or walrus may not."""
     is_annotation = isinstance(stmt, ast.AnnAssign) and stmt.value is None
     nested = _run_nodes([stmt])[1:]
     is_unsure = any(isinstance(node, (ast.NamedExpr, ast.stmt)) for node in nested)
@@ -264,7 +253,6 @@ def _is_definite(stmt: ast.stmt) -> bool:
 
 
 def _called(nodes: list[ast.AST], loaded: set[ast.AST]) -> set[str]:
-    """Return the names nodes use other than by only loading them, or a lambda reads."""
     used = [node for node in nodes if node not in loaded]
     return {name for node in [*used, *_in_lambdas(nodes)] for name in _reads(node)}
 
@@ -275,7 +263,6 @@ def _in_lambdas(nodes: list[ast.AST]) -> list[ast.AST]:
 
 
 def _reads(node: ast.AST) -> list[str]:
-    """Return the names node reads, such as an augmented assignment's target."""
     if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
         return [node.target.id]
     return [node.id] if _is_load(node) else []
@@ -299,7 +286,6 @@ def bound_names(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:
 
 
 def _bound_names(file: CheckInput, nodes: list[ast.AST]) -> frozenset[str]:
-    """Return the names nodes bind or delete; global or nonlocal ones bind elsewhere."""
     found = [binding(file, node, NameKind.LOCAL_VAR) for node in nodes]
     aliases = [node for node in nodes if isinstance(node, ast.alias)]
     imported = [alias.asname or alias.name.partition(".")[0] for alias in aliases]
@@ -310,7 +296,6 @@ def _bound_names(file: CheckInput, nodes: list[ast.AST]) -> frozenset[str]:
 
 
 def _deleted(nodes: list[ast.AST]) -> frozenset[str]:
-    """Return the names nodes delete, as `del` and an except alias's end do."""
     names = [node for node in nodes if isinstance(node, ast.Name)]
     handlers = [node for node in nodes if isinstance(node, ast.ExceptHandler)]
     aliases = [handler.name for handler in handlers if handler.name]
@@ -323,7 +308,6 @@ def _declared(nodes: list[ast.AST], kind: type[ast.Global | ast.Nonlocal]) -> se
 
 
 def _run_nodes(parts: list[ast.AST]) -> list[ast.AST]:
-    """Return parts and the nodes under them that run in the same scope."""
     pending = list(parts)
     nodes: list[ast.AST] = []
     while pending:

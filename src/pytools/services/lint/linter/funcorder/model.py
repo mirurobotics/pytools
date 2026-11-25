@@ -73,7 +73,6 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
 
 
 def _stubs(stmts: list[ast.stmt]) -> frozenset[int]:
-    """Return the defs directly followed by a def of the same name."""
     pairs = enumerate(pairwise(stmts))
     return frozenset(idx for idx, pair in pairs if _is_redefined(*pair))
 
@@ -113,13 +112,11 @@ def _decl(
 def _is_exempt(
     file: CheckInput, stmt: Function | ast.ClassDef, merged: list[ast.stmt]
 ) -> bool:
-    """Report whether a funcorder nolint sits on stmt or a def merged into it."""
     defs = [stmt, *(stub for stub in merged if isinstance(stub, DEFS))]
     return any(has_def_nolint(file, func, Rule.FUNCORDER) for func in defs)
 
 
 def _kind(stmt: Function | ast.ClassDef) -> DeclKind:
-    """Return stmt's kind; a dunder is Python's entry point, so it is public."""
     if isinstance(stmt, ast.ClassDef):
         return DeclKind.CLASS
     is_dunder = stmt.name.startswith("__") and stmt.name.endswith("__")
@@ -134,7 +131,6 @@ def _refs(
     decl: Decl,
     names: dict[str, int],
 ) -> list[int]:
-    """Return the decls decl calls or refers to, in the order it first does."""
     found = [
         names[name]
         for part in decl.span
@@ -157,7 +153,6 @@ def _waiting(
     cycle_callers: dict[int, list[int]],
     comps: dict[int, int],
 ) -> frozenset[int]:
-    """Return the cycle members that only cycle calls reach, except the opener."""
     openers = _openers(decls, callers, comps)
     return frozenset(
         idx
@@ -186,7 +181,6 @@ def _binders(
     decls: dict[int, Decl],
     loads: list[set[str]],
 ) -> dict[int, frozenset[int]]:
-    """Return the statements that bind or delete a name each decl uses when defined."""
     binds = [bound_names(file, stmt) for stmt in stmts]
     defined = {
         idx: {name for part in decl.span for name in loads[part]}

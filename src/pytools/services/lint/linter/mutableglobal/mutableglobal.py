@@ -34,7 +34,6 @@ def _constant_names(tree: ast.Module) -> set[ast.expr]:
 
 
 def _is_constant(stmt: ast.AnnAssign) -> bool:
-    """Report whether stmt declares a Final set to a constant expression."""
     if stmt.value is None or not _is_final(stmt.annotation):
         return False
     return _is_constant_expr(stmt.value)
@@ -49,7 +48,6 @@ def _is_final(annotation: ast.expr) -> bool:
 
 
 def _is_constant_expr(expr: ast.expr) -> bool:
-    """Report whether expr is written only in syntax that builds no mutable value."""
     pending = [expr]
     while pending:
         parts = _parts(pending.pop())
@@ -60,7 +58,6 @@ def _is_constant_expr(expr: ast.expr) -> bool:
 
 
 def _parts(expr: ast.expr) -> list[ast.expr] | None:
-    """Return the subexpressions expr is constant through, or None if it never is."""
     if isinstance(expr, ast.Constant | ast.Name):
         return []
     if isinstance(expr, ast.Attribute):
@@ -87,7 +84,6 @@ def _parts(expr: ast.expr) -> list[ast.expr] | None:
 
 
 def _frozenset_items(call: ast.Call) -> list[ast.expr] | None:
-    """Return the items a frozenset call is built from, or None for any other call."""
     is_frozenset = isinstance(call.func, ast.Name) and call.func.id == "frozenset"
     if not is_frozenset or call.keywords or len(call.args) > 1:
         return None

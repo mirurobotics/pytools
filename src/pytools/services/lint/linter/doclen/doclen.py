@@ -41,7 +41,6 @@ def _check_docstring(
 
 
 def _count_lines(file: CheckInput, doc: ast.expr) -> int:
-    """Count doc's source lines, so an escaped newline is not a line break."""
     lines = file.lines[doc.lineno - 1 : doc.end_lineno or doc.lineno]
     lines[-1] = lines[-1].encode()[: doc.end_col_offset].decode()
     lines[0] = lines[0].encode()[doc.col_offset :].decode()

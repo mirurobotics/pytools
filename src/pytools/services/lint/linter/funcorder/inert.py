@@ -73,12 +73,10 @@ def _is_inert_def(func: Function) -> bool:
 
 
 def _is_plain(hint: ast.AST) -> bool:
-    """Report whether evaluating annotation hint runs no call or other code."""
     return not any(isinstance(node, _RUNS) for node in ast.walk(hint))
 
 
 def _are_pure(decorators: list[ast.expr]) -> bool:
-    """Report whether each of decorators is, by name, a stdlib one that runs no code."""
     return all(_is_pure(decorator) for decorator in decorators)
 
 

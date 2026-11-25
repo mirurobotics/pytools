@@ -46,7 +46,6 @@ def _arrange(
 
 
 def _units(model: Model, *, settled: bool) -> list[list[int]]:
-    """Split the scope into each def or class with the statements it carries."""
     first = min(model.decls, default=0)
     anchored = _anchored(model)
     units: list[list[int]] = []
@@ -68,7 +67,6 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
 
 
 def _anchored(model: Model) -> set[int]:
-    """Return the statements a decl below the one that would carry them uses."""
     return {
         stmt
         for idx, needed in model.needs.items()
@@ -78,13 +76,11 @@ def _anchored(model: Model) -> set[int]:
 
 
 def _inherited_needs(model: Model, unit: list[int]) -> set[int]:
-    """Return what the classes without methods unit uses need when defined."""
     inherited = model.classes.inherited
     return {need for idx in unit for need in inherited.get(idx, frozenset())}
 
 
 def _placed(model: Model, needs: set[int]) -> set[int]:
-    """Return where needs end up: a class that moves goes above its first user."""
     uses = model.classes.uses
     return {uses[need].at if need in uses else need for need in needs}
 
@@ -96,7 +92,6 @@ def _pick(
     done: set[int],
     waits: dict[int, set[int]],
 ) -> tuple[int, bool]:
-    """Return the next unit, and whether it goes directly under a caller."""
     while stack:
         calls = model.calls.get(stack[-1], [])
         found = [
@@ -112,7 +107,6 @@ def _pick(
 def _is_ready(
     model: Model, idx: int, done: set[int], waits: dict[int, set[int]]
 ) -> bool:
-    """Report whether the unit ending at idx can be placed next."""
     decl = model.decls.get(idx)
     if decl is None or decl.exempt:
         return True
