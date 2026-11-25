@@ -2,7 +2,11 @@ import ast
 from dataclasses import dataclass
 from typing import Final
 
-from pytools.services.lint.linter.analysis.analysis import CheckInput, Function
+from pytools.services.lint.linter.analysis.analysis import (
+    CheckInput,
+    Function,
+    is_test_func,
+)
 from pytools.services.lint.linter.analysis.names import first_bindings
 
 _PURE_BUILTINS: Final = frozenset(
@@ -34,7 +38,7 @@ class Bindings:
         scope = None if name is None else self._owner(name)
         if scope is None or name not in scope.params:
             return False
-        return not scope.func.name.startswith("test_")
+        return not is_test_func(scope.func)
 
     def is_pkg(self, expr: ast.expr) -> bool:
         """Report whether expr is an imported name or a dotted path into one."""
