@@ -123,10 +123,16 @@ def _holds_same_statements(file: CheckInput, fixed: str) -> bool:
 
 
 def _sorted_dump(tree: ast.Module) -> str:
-    """Return tree dumped with each scope's statements sorted, innermost first."""
+    """Return tree dumped with each scope's statements sorted, innermost first.
+
+    Each scope's docstring leads its sorted statements, so a move that changes
+    it shows.
+    """
     scopes = _scopes(tree)
     for scope in reversed(scopes):
+        doc = ast.Expr(ast.Constant(ast.get_docstring(scope, clean=False)))
         scope.body.sort(key=ast.dump)
+        scope.body.insert(0, doc)
     return ast.dump(tree)
 
 

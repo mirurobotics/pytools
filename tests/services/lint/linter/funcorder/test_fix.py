@@ -44,6 +44,13 @@ class Node:
 DEFAULT: Node | None = None
 def _make(): return DEFAULT
 """
+_STRING: Final = 'def _h(): pass\n"x"\ndef run(): _h()\n'
+_CLASS_STRING: Final = """\
+class T:
+    def _h(self): pass
+    "x"
+    def run(self): self._h()
+"""
 _NEAR_USER: Final = """\
 def main(): U()
 class P:
@@ -116,6 +123,8 @@ class T:
         pytest.param(_REDEFINED, id="def-defined-again"),
         pytest.param(_DECORATED_METHOD, id="class-with-decorated-method"),
         pytest.param(_ANNOTATION_READ, id="annotation-reads-a-class"),
+        pytest.param(_STRING, id="string-would-become-docstring"),
+        pytest.param(_CLASS_STRING, id="string-would-become-class-docstring"),
     ],
 )
 def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
