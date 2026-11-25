@@ -2,8 +2,6 @@ from pytools.services.lint.linter.funcorder.model import Model, must_precede
 from pytools.services.lint.linter.funcorder.tuck import tuck
 
 
-# A statement above a def or class moves with it unless that would reorder
-# statements, which run in order at import time.
 def arrange(model: Model) -> tuple[list[int], set[int]]:
     """Return the scope's statements in order, and those placed under a caller."""
     decls = model.decls
@@ -47,7 +45,6 @@ def _arrange(
     return [idx for tree in trees for idx in tree], below
 
 
-# Statements above the first def or class are the header, which never moves.
 def _units(model: Model, *, settled: bool) -> list[list[int]]:
     """Split the scope into each def or class with the statements it carries."""
     first = min(model.decls, default=0)
@@ -70,7 +67,6 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
     return units
 
 
-# Carrying such a statement could move it past that use, so it stays put.
 def _anchored(model: Model) -> set[int]:
     """Return the statements a decl below the one that would carry them uses."""
     return {

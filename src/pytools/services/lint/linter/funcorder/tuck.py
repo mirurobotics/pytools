@@ -2,7 +2,7 @@ from pytools.services.lint.linter.funcorder.model import Model
 
 
 def tuck(model: Model, trees: list[list[int]], waits: dict[int, set[int]]) -> set[int]:
-    """Move each class with methods under its last user's tree; return those moved."""
+    """Move classes with methods under their last user above, in place; return them."""
     moved: set[int] = set()
     while (found := _next_tuck(model, trees, waits)) is not None:
         start, last = found
@@ -33,7 +33,6 @@ def _last_user_tree(model: Model, trees: list[list[int]], cls: int) -> int | Non
     return max(found, default=None)
 
 
-# Statements run in order at import time, so a tree holding one never moves.
 def _is_tuckable(
     model: Model,
     trees: list[list[int]],

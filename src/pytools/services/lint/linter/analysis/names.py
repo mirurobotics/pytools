@@ -129,7 +129,6 @@ def param_defaults(args: ast.arguments) -> list[ast.AST]:
     return [default for default in (*args.defaults, *args.kw_defaults) if default]
 
 
-# A walrus in a comprehension binds in the scope around it.
 def own_parts(scope: _Scope) -> list[ast.AST]:
     """Return the parts of scope whose names bind in it."""
     if isinstance(scope, ast.Module):
@@ -166,8 +165,6 @@ def binding(file: CheckInput, node: ast.AST, var_kind: NameKind) -> DeclaredName
     return _clause_binding(file, node, var_kind)
 
 
-# An except alias and a mapping rest have no position of their own, so the name
-# takes the clause header's end or the whole pattern's lines.
 def _clause_binding(
     file: CheckInput, node: ast.AST, var_kind: NameKind
 ) -> DeclaredName | None:
@@ -184,7 +181,6 @@ def _clause_binding(
     return None
 
 
-# Each type parameter has an annotation scope that global and nonlocal don't reach.
 def _scope_key(name: DeclaredName, declared: set[str]) -> ast.AST | str | None:
     """Return name's key in its scope, or None if global or nonlocal moves it."""
     if isinstance(name.node, _TYPE_PARAMS):

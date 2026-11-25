@@ -84,9 +84,8 @@ def _first_non_blank(run: list[_Line]) -> int:
     return next(lines, run[-1].number)
 
 
-# A lone line was already checked as its run; indented lines are examples under prose.
 def _code_line(run: list[_Line]) -> int | None:
-    """Return the first unindented line that is code on its own."""
+    """Return the first unindented line of a multi-line run that is code on its own."""
     if len(run) == 1:
         return None
     lines = (line for line in run if not line.is_indented)
@@ -106,7 +105,6 @@ def _is_code(text: str) -> bool:
     return any(_is_code_stmt(stmt) for stmt in stmts)
 
 
-# Prose that parses can raise warnings, such as invalid escapes, the user can't fix.
 def _parse(source: str) -> ast.Module | None:
     """Parse source, or return None if it is not Python or nests too deeply."""
     try:
@@ -124,7 +122,6 @@ def _has_spaced_dot(source: str, tree: ast.Module) -> bool:
     return any(_is_spaced(lines, attribute) for attribute in attributes)
 
 
-# A gap that spans lines is a wrapped call chain.
 def _is_spaced(lines: list[bytes], attribute: ast.Attribute) -> bool:
     """Report whether a space sits between attribute's value and name on one line."""
     end_line = attribute.end_lineno
@@ -141,7 +138,6 @@ def _has_non_ascii_name(source: str) -> bool:
     return not all(name.isascii() for name in names)
 
 
-# Each reads as prose but is code where it sits.
 def _docstrings(tree: ast.Module) -> set[ast.stmt]:
     """Return the function and class docstrings in tree."""
     scopes: list[Function | ast.ClassDef] = [
@@ -157,9 +153,8 @@ def _is_plausible(stmt: ast.stmt) -> bool:
     return not isinstance(stmt, ast.Expr) or isinstance(stmt.value, _CODE_EXPRS)
 
 
-# A bare annotation alone reads as a "Note: text" label.
 def _is_code_stmt(stmt: ast.stmt) -> bool:
-    """Report whether stmt is code on its own."""
+    """Report whether stmt is code on its own; a bare annotation reads as a label."""
     if isinstance(stmt, ast.AnnAssign):
         return stmt.value is not None
     return not isinstance(stmt, _NOT_CODE)

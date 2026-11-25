@@ -133,7 +133,6 @@ def start_line(node: ast.stmt) -> int:
     return node.lineno
 
 
-# An elif sits at its if's column; an if under else is indented.
 def elif_branch(stmt: ast.If) -> ast.If | None:
     """Return the if an elif after stmt parses to, or None if stmt has none."""
     branch = stmt.orelse[0] if stmt.orelse else None

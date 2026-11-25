@@ -77,9 +77,8 @@ def _is_plain(hint: ast.AST) -> bool:
     return not any(isinstance(node, _RUNS) for node in ast.walk(hint))
 
 
-# Matched by name, not by what the file imports.
 def _are_pure(decorators: list[ast.expr]) -> bool:
-    """Report whether each of decorators is a stdlib one known to run no code."""
+    """Report whether each of decorators is, by name, a stdlib one that runs no code."""
     return all(_is_pure(decorator) for decorator in decorators)
 
 

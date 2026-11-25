@@ -72,7 +72,6 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     )
 
 
-# Overloads and property getters are one function with the def they precede.
 def _stubs(stmts: list[ast.stmt]) -> frozenset[int]:
     """Return the defs directly followed by a def of the same name."""
     pairs = enumerate(pairwise(stmts))
@@ -200,7 +199,7 @@ def _binders(
 
 
 def must_precede(model: Model, decl: Decl, other: Decl) -> bool:
-    """Report whether decl, a public def nothing uses, must sit above a private one."""
+    """Report whether unused public decl must sit above other, an unused private def."""
     is_unused = decl.idx not in model.used and other.idx not in model.used
     is_ranked = not (decl.exempt or other.exempt) and is_unused
     return (decl.kind, other.kind) == (DeclKind.PUBLIC, DeclKind.PRIVATE) and is_ranked

@@ -96,7 +96,6 @@ class ImportTimeNames:
     reads: set[str]  # read where it runs or in its lambdas, wherever they resolve
 
 
-# A def's own name in its outer parts is the def it replaces.
 def import_time_names(
     file: CheckInput, scope: ast.Module | ast.ClassDef, stmt: ast.stmt
 ) -> ImportTimeNames:

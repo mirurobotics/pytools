@@ -1,4 +1,3 @@
-# Following every reference may pin more than needed, but never too little.
 def import_time_reach(
     loads: set[str], names: dict[str, int], refs: dict[int, list[int]]
 ) -> set[int]:
@@ -18,8 +17,6 @@ def reachable(callees: dict[int, list[int]], start: int) -> set[int]:
     return seen
 
 
-# The rule would move such a decl below that caller, past the use. A def counts as
-# below its own decorators and defaults.
 def pinned(import_time: list[set[int]], reach: dict[int, set[int]]) -> set[int]:
     """Return the decls an import-time use needs that a caller below it reaches."""
     last = {idx: caller for caller in sorted(reach) for idx in reach[caller]}

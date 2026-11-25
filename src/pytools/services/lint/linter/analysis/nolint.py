@@ -25,12 +25,12 @@ def has_name_nolint(file: CheckInput, name: DeclaredName, rule: Rule) -> bool:
 
 
 def has_def_nolint(file: CheckInput, node: Function | ast.ClassDef, rule: Rule) -> bool:
-    """Report whether a nolint for rule is on node's decorators, signature or above."""
+    """Report whether a rule nolint is on node's decorators, signature or just above."""
     return has_nolint_at_or_above(file, rule, start_line(node), header_end(file, node))
 
 
 def has_nolint_at_or_above(file: CheckInput, rule: Rule, first: int, last: int) -> bool:
-    """Report whether a nolint for rule is in [first, last] or a comment line above."""
+    """Report whether a nolint for rule sits in [first, last] or just above first."""
     if first > 1 and not is_code_line(file, first - 1):
         first -= 1
     return has_nolint_on_lines(file.comments, rule, first, last)

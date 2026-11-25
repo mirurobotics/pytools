@@ -107,9 +107,8 @@ def import_names(nodes: Iterable[ast.AST]) -> frozenset[str]:
     return frozenset(_alias_name(alias) for alias in aliases)
 
 
-# An assert's message runs only when it fails.
 def changed_names(node: ast.AST, pure: frozenset[str]) -> frozenset[str]:
-    """Return the names node may change."""
+    """Return the names under node's calls, or all a non-assert statement uses."""
     test = node.test if isinstance(node, ast.Assert) else node
     if not isinstance(test, ast.stmt):
         changing = [child for child in ast.walk(test) if _may_change(child, pure)]

@@ -132,7 +132,6 @@ def _as_field(expr: ast.expr, bindings: Bindings) -> ast.Attribute | None:
     return expr
 
 
-# A stack, not recursion, so deep nesting doesn't overflow.
 def _is_constant(expr: ast.expr, bindings: Bindings) -> bool:
     """Report whether expr is a literal or a constant from an import."""
     pending = [expr]
@@ -160,8 +159,6 @@ def _constant_parts(expr: ast.expr, bindings: Bindings) -> list[ast.expr] | None
     return None
 
 
-# A field's own base group closes only on what its compared value may change, so
-# build().a keeps its group.
 def _close_changed(
     open_groups: dict[str, _Group],
     base: str | None,

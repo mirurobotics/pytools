@@ -96,7 +96,6 @@ def _users(
     }
 
 
-# A use of that name may mean another binding, so such a class never moves.
 def _shadowed_classes(decls: dict[int, Decl], bindings: Counter[str]) -> frozenset[int]:
     """Return the classes whose name another statement may bind or delete."""
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
@@ -105,7 +104,6 @@ def _shadowed_classes(decls: dict[int, Decl], bindings: Counter[str]) -> frozens
     return frozenset(cls for cls in classes if bindings[decls[cls].stmt.name] > 1)
 
 
-# That code may read a statement a move would pass, so such a decl never moves.
 def _runs_code(
     decls: dict[int, Decl], effects: list[ImportTimeNames], bindings: Counter[str]
 ) -> frozenset[int]:
@@ -131,7 +129,6 @@ def _bare_def_names(decls: dict[int, Decl], bindings: Counter[str]) -> set[str]:
     }
 
 
-# A walrus in the body binds only in the class namespace.
 def _writes_outer(decls: dict[int, Decl]) -> frozenset[int]:
     """Return the classes whose header has a walrus, or body a global or nonlocal."""
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
@@ -148,7 +145,6 @@ def _has_outer_write(stmt: Function | ast.ClassDef) -> bool:
     return is_walrus or is_declared
 
 
-# Classes that use each other in a cycle have no first user to go above.
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
     """Return the users of each class without methods, leaving out cycles of them."""
     plain = {cls: found for cls, found in users.items() if not _has_methods(decls[cls])}
@@ -179,7 +175,6 @@ def _place(
         staying |= stuck
 
 
-# A moving user counts where it goes, one deeper, so the deeper class sits above it.
 def _first_uses(
     decls: dict[int, Decl], plain: _Users, staying: frozenset[int]
 ) -> dict[int, Use]:
@@ -190,7 +185,6 @@ def _first_uses(
     return uses
 
 
-# A stack, not recursion, so a long chain of such classes doesn't overflow.
 def _resolve(
     decls: dict[int, Decl],
     plain: _Users,
@@ -227,7 +221,6 @@ def _use(
     return Use(user, place, -depth)
 
 
-# A class may pass a deeper class moving to the same place, so deeper ones go first.
 def _movable(
     walls: Walls, uses: dict[int, Use], staying: frozenset[int]
 ) -> frozenset[int]:
@@ -249,7 +242,6 @@ def _moves_with(uses: dict[int, Use], movable: set[int], use: Use, idx: int) -> 
     return is_deeper and idx in movable
 
 
-# Those classes and the ones they use go above the user, so it waits for their needs.
 def _inherited(
     plain: _Users, uses: dict[int, Use], needs: dict[int, frozenset[int]]
 ) -> dict[int, frozenset[int]]:
