@@ -25,7 +25,6 @@ class Walls:
         return found
 
 
-# Any statement but an inert decl that runs no scope code may run code or bind a name.
 def find_walls(
     scope: ast.Module | ast.ClassDef,
     decls: dict[int, Decl],

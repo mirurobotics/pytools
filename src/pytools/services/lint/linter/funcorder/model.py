@@ -22,7 +22,6 @@ from pytools.services.lint.linter.funcorder.refs import (
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
-# A class counts as one caller, through its methods' calls.
 @dataclass(frozen=True)
 class Model:
     """The calls between the defs and classes directly in a scope."""
