@@ -79,10 +79,7 @@ def _users(
     refs: dict[int, list[int]],
     loads: list[set[str]],
 ) -> _Users:
-    """Return the statements that refer to each class, when run or when called.
-
-    The stubs merged into a decl refer for it.
-    """
+    """Return the statements that refer to each class, when run or when called."""
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
     merged = {stub: idx for idx, decl in decls.items() for stub in decl.span[:-1]}
     referred = [set(refs.get(idx, [])) for idx in range(len(scope.body))]
@@ -100,11 +97,7 @@ def _users(
 
 
 def _shadowed_classes(decls: dict[int, Decl], bindings: Counter[str]) -> frozenset[int]:
-    """Return the classes whose name another statement may bind or delete.
-
-    A use of that name may mean another binding, so such a class never moves. A
-    global declaration may bind it too, and a star import may bind any name.
-    """
+    """Return the classes whose name another statement may bind or delete."""
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     if bindings["*"]:
         return frozenset(classes)
@@ -114,12 +107,7 @@ def _shadowed_classes(decls: dict[int, Decl], bindings: Counter[str]) -> frozens
 def _runs_code(
     decls: dict[int, Decl], effects: list[ImportTimeNames], bindings: Counter[str]
 ) -> frozenset[int]:
-    """Return the decls whose definition may run code from the scope.
-
-    That code may read a statement a move would pass, so such a decl never
-    moves. It may run when a name bound in the scope is used other than by only
-    loading it, but a class body's value may name a bare def.
-    """
+    """Return the decls whose definition may run code from the scope."""
     local = {name for found in effects for name in found.binds}
     risky = local - _bare_def_names(decls, bindings)
     return frozenset(
@@ -142,10 +130,7 @@ def _bare_def_names(decls: dict[int, Decl], bindings: Counter[str]) -> set[str]:
 
 
 def _writes_outer(decls: dict[int, Decl]) -> frozenset[int]:
-    """Return the classes whose header has a walrus, or body a global or nonlocal.
-
-    A walrus in the body binds only in the class namespace.
-    """
+    """Return the classes whose header has a walrus, or body a global or nonlocal."""
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     return frozenset(idx for idx in classes if _has_outer_write(decls[idx].stmt))
 
@@ -161,11 +146,7 @@ def _has_outer_write(stmt: Function | ast.ClassDef) -> bool:
 
 
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
-    """Return the users of each class without methods.
-
-    Such classes that use each other in a cycle are left out, since none of
-    them has a first user to go above.
-    """
+    """Return the users of each class without methods, leaving out cycles of them."""
     plain = {cls: found for cls, found in users.items() if not _has_methods(decls[cls])}
     within = {
         cls: [user for user in found if user in plain] for cls, found in plain.items()
@@ -183,11 +164,7 @@ def _place(
     walls: Walls,
     fixed: frozenset[int],
 ) -> dict[int, Use]:
-    """Return where each class without methods that can move goes.
-
-    One that can't move stays put, so the classes it uses go above it where it
-    is. Each round fixes the classes the round before couldn't move.
-    """
+    """Return where each class without methods that can move goes."""
     staying = fixed & plain.keys()
     while True:
         uses = _first_uses(decls, plain, staying)
@@ -201,11 +178,7 @@ def _place(
 def _first_uses(
     decls: dict[int, Decl], plain: _Users, staying: frozenset[int]
 ) -> dict[int, Use]:
-    """Return where each class without methods goes, above its first user.
-
-    A user that is such a class and can move counts where that class goes, one
-    deeper, so the deeper class sits above it.
-    """
+    """Return where each class without methods goes, above its first user."""
     uses: dict[int, Use] = {}
     for cls in plain:
         _resolve(decls, plain, staying, uses, cls)
@@ -219,10 +192,7 @@ def _resolve(
     uses: dict[int, Use],
     root: int,
 ) -> None:
-    """Add root's use to uses, after those of the classes that use it.
-
-    A stack, not recursion, so a long chain of such classes doesn't overflow.
-    """
+    """Add root's use to uses, after those of the classes that use it."""
     pending = [root]
     while pending:
         cls = pending[-1]
@@ -240,11 +210,7 @@ def _use(
     uses: dict[int, Use],
     staying: frozenset[int],
 ) -> Use:
-    """Return the first of users.
-
-    A use through such a class comes before a direct use at the same place. A
-    decl's place is that of its first stub.
-    """
+    """Return the first of users."""
     keys = [
         (uses[user].at, 0, -uses[user].depth - 1, user)
         if user in uses and user not in staying
@@ -258,11 +224,7 @@ def _use(
 def _movable(
     walls: Walls, uses: dict[int, Use], staying: frozenset[int]
 ) -> frozenset[int]:
-    """Return the classes that can move to their first user.
-
-    One must not pass a statement its walls forbid, unless that is a deeper
-    class moving to the same place, so deeper classes are decided first.
-    """
+    """Return the classes that can move to their first user."""
     movable: set[int] = set()
     for cls in sorted(uses, key=lambda idx: -uses[idx].depth):
         use = uses[cls]
@@ -283,11 +245,7 @@ def _moves_with(uses: dict[int, Use], movable: set[int], use: Use, idx: int) -> 
 def _inherited(
     plain: _Users, uses: dict[int, Use], needs: dict[int, frozenset[int]]
 ) -> dict[int, frozenset[int]]:
-    """Return what each user of classes without methods that can move waits for.
-
-    Such a class goes above its first user, so a user waits for what it needs
-    when defined, and for what the classes it uses need, since they go above it.
-    """
+    """Return what each user of classes without methods that can move waits for."""
     inner = {cls: [other for other in uses if cls in plain[other]] for cls in uses}
     chained = {
         cls: needs[cls].union(*(needs[other] for other in graph.reachable(inner, cls)))
@@ -314,10 +272,7 @@ def _tucked(decls: dict[int, Decl], users: _Users) -> _Users:
 
 
 def _has_methods(decl: Decl) -> bool:
-    """Report whether decl has a def with more than a docstring or `...`.
-
-    A def under a compound statement in the class body counts too.
-    """
+    """Report whether decl has a def with more than a docstring or `...`."""
     nodes = walk_outside(decl.stmt.body, (*DEFS, ast.ClassDef))
     return any(isinstance(node, DEFS) and _has_body(node) for node in nodes)
 

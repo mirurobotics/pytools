@@ -97,12 +97,7 @@ def _var_kind(scope: _Scope) -> NameKind:
 
 
 def _scope_nodes(nodes: list[ast.AST]) -> Iterator[ast.AST]:
-    """Yield nodes and the nodes under them that bind in the scope holding them.
-
-    A nested scope's name binds in the scope around it, and so do names in its
-    defaults, annotations, decorators and bases and a walrus in a comprehension.
-    A parameter is entered only through its outer parts.
-    """
+    """Yield nodes and the nodes under them that bind in the scope holding them."""
     for node in walk_outside(nodes, (*SCOPES, ast.arg)):
         yield node
         if isinstance(node, SCOPES):
@@ -135,11 +130,7 @@ def param_defaults(args: ast.arguments) -> list[ast.AST]:
 
 
 def own_parts(scope: _Scope) -> list[ast.AST]:
-    """Return the parts of scope whose names bind in it.
-
-    Only a comprehension's loop targets are its own; a walrus in it binds in
-    the scope around it.
-    """
+    """Return the parts of scope whose names bind in it."""
     if isinstance(scope, ast.Module):
         return list(scope.body)
     if isinstance(scope, ast.ClassDef):
@@ -177,12 +168,7 @@ def binding(file: CheckInput, node: ast.AST, var_kind: NameKind) -> DeclaredName
 def _clause_binding(
     file: CheckInput, node: ast.AST, var_kind: NameKind
 ) -> DeclaredName | None:
-    """Return the name an except alias or match pattern binds, if any.
-
-    An except alias has no position of its own; it ends the clause header. A
-    capture name ends its pattern, which can span lines. A mapping rest has no
-    position of its own either, so a nolint may sit on any line of the pattern.
-    """
+    """Return the name an except alias or match pattern binds, if any."""
     if isinstance(node, ast.ExceptHandler) and node.name:
         line = header_end(file, node)
         return DeclaredName(node.name, line, line, var_kind, node)
@@ -196,11 +182,7 @@ def _clause_binding(
 
 
 def _scope_key(name: DeclaredName, declared: set[str]) -> ast.AST | str | None:
-    """Return name's key in its scope, or None if global or nonlocal moves it.
-
-    Each type parameter has an annotation scope of its own, which the body's
-    global and nonlocal statements don't reach.
-    """
+    """Return name's key in its scope, or None if global or nonlocal moves it."""
     if isinstance(name.node, _TYPE_PARAMS):
         return name.node
     return None if name.text in declared else name.text

@@ -49,13 +49,7 @@ def _is_final(annotation: ast.expr) -> bool:
 
 
 def _is_constant_expr(expr: ast.expr) -> bool:
-    """Report whether expr is written only in syntax that builds no mutable value.
-
-    Its leaves are literals, names and dotted references such as re.IGNORECASE,
-    which Final keeps from being rebound; operators, conditionals, tuples,
-    frozensets and f-strings combine them. A stack, not recursion, so long
-    chains don't overflow.
-    """
+    """Report whether expr is written only in syntax that builds no mutable value."""
     pending = [expr]
     while pending:
         parts = _parts(pending.pop())
@@ -93,10 +87,7 @@ def _parts(expr: ast.expr) -> list[ast.expr] | None:
 
 
 def _frozenset_items(call: ast.Call) -> list[ast.expr] | None:
-    """Return the items a frozenset call is built from, or None for any other call.
-
-    The frozenset copies a list or set display, so its items are what count.
-    """
+    """Return the items a frozenset call is built from, or None for any other call."""
     is_frozenset = isinstance(call.func, ast.Name) and call.func.id == "frozenset"
     if not is_frozenset or call.keywords or len(call.args) > 1:
         return None

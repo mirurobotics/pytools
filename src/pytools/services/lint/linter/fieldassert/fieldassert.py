@@ -105,10 +105,7 @@ def _check_block(
 
 
 def _field(stmt: ast.stmt, bindings: Bindings) -> tuple[ast.Attribute, ast.expr] | None:
-    """Return the field an assert a == b checks and the value it is compared to.
-
-    The field is a, or b when a is a constant.
-    """
+    """Return the field an assert a == b checks and the value it is compared to."""
     compared = _compared(stmt)
     if compared is None:
         return None
@@ -136,10 +133,7 @@ def _as_field(expr: ast.expr, bindings: Bindings) -> ast.Attribute | None:
 
 
 def _is_constant(expr: ast.expr, bindings: Bindings) -> bool:
-    """Report whether expr is a literal or a constant from an import.
-
-    A stack, not recursion, so deep nesting doesn't overflow.
-    """
+    """Report whether expr is a literal or a constant from an import."""
     pending = [expr]
     while pending:
         parts = _constant_parts(pending.pop(), bindings)
@@ -171,10 +165,7 @@ def _close_changed(
     unchecked: frozenset[str],
     changed: frozenset[str],
 ) -> dict[str, _Group]:
-    """Return the groups that stay open: those that share no name with changed.
-
-    A field's own base group closes only on unchecked, so build().a keeps its group.
-    """
+    """Return the groups that stay open: those that share no name with changed."""
     return {
         key: group
         for key, group in open_groups.items()

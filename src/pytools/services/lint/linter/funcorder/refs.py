@@ -99,11 +99,7 @@ class ImportTimeNames:
 def import_time_names(
     file: CheckInput, scope: ast.Module | ast.ClassDef, stmt: ast.stmt
 ) -> ImportTimeNames:
-    """Return the names stmt uses outside function and lambda bodies.
-
-    A def's own name in its outer parts is the def it replaces. In a class scope,
-    parts that can't see the scope's names are left out, but for reads and calls.
-    """
+    """Return the names stmt uses outside function and lambda bodies."""
     own = stmt.name if isinstance(stmt, DEFS) else ""
     is_class = isinstance(scope, ast.ClassDef)
     nodes, loads = _import_time_walk(file, stmt, own, is_class=is_class)
@@ -122,10 +118,7 @@ def import_time_names(
 def _import_time_walk(
     file: CheckInput, stmt: ast.stmt, own: str, *, is_class: bool
 ) -> tuple[list[ast.AST], set[str]]:
-    """Return the nodes of stmt that run when it does, and the names they load.
-
-    A lambda called right away loads its free names there too.
-    """
+    """Return the nodes of stmt that run when it does, and the names they load."""
     pending: list[tuple[ast.AST, _Hidden]] = [(stmt, ({}, 0, frozenset()))]
     nodes: list[ast.AST] = []
     loads: set[str] = set()
@@ -160,11 +153,7 @@ def _root_free_loads(
 def _scoped_nodes(
     file: CheckInput, root: _Root, params: frozenset[str]
 ) -> list[tuple[ast.AST, frozenset[str]]]:
-    """Return the nodes that run when root is called, with the names bound there.
-
-    A scope's names hide those in its nested scopes, but a class body passes on
-    only its type parameters, and a global name hides nothing.
-    """
+    """Return the nodes that run when root is called, with the names bound there."""
     body: list[ast.AST] = [root.body] if isinstance(root, ast.Lambda) else [*root.body]
     todo: list[tuple[list[ast.AST], frozenset[str], ast.AST]] = [(body, params, root)]
     found: list[tuple[ast.AST, frozenset[str]]] = []
@@ -194,11 +183,7 @@ def _typed_outer_nodes(nodes: list[ast.AST]) -> dict[ast.AST, frozenset[str]]:
 def _import_time_parts(
     file: CheckInput, node: ast.AST, hidden: _Hidden, *, is_class: bool
 ) -> list[tuple[ast.AST, _Hidden]]:
-    """Return the parts of node that run when it does, with the names they hide.
-
-    A name a class body binds hides the module's in its later statements, but not
-    past a comprehension's first iterable there.
-    """
+    """Return the parts of node that run when it does, with the names they hide."""
     bound, idx, local = hidden
     parts = _scope_parts(file, node, local)
     if isinstance(node, _COMPS):
@@ -221,11 +206,7 @@ def _import_time_parts(
 def _scope_parts(
     file: CheckInput, node: ast.AST, local: frozenset[str]
 ) -> list[tuple[ast.AST, frozenset[str]]]:
-    """Return node's parts outside def bodies, with the names hidden in each.
-
-    A comprehension's targets hide names past its first iterable, and a class's
-    or def's type parameters hide names past its decorators and defaults.
-    """
+    """Return node's parts outside def bodies, with the names hidden in each."""
     if isinstance(node, _COMPS):
         targets = local | _bound_names(file, _run_nodes(own_parts(node)))
         first = node.generators[0].iter
@@ -342,11 +323,7 @@ def _declared(nodes: list[ast.AST], kind: type[ast.Global | ast.Nonlocal]) -> se
 
 
 def _run_nodes(parts: list[ast.AST]) -> list[ast.AST]:
-    """Return parts and the nodes under them that run in the same scope.
-
-    A nested scope adds only its outer parts, and a comprehension its first
-    iterable and its walrus targets, which bind in the scope around it.
-    """
+    """Return parts and the nodes under them that run in the same scope."""
     pending = list(parts)
     nodes: list[ast.AST] = []
     while pending:

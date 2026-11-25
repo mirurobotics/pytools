@@ -40,13 +40,7 @@ _PURE: Final = frozenset(
 
 
 def is_inert(decl: Function | ast.ClassDef) -> bool:
-    """Report whether defining decl surely runs no code.
-
-    A def's decorators are pure stdlib ones, its defaults are literals, and its
-    annotations run no call or other code. A class has such decorators, no bases
-    or keywords, and its body holds only docstrings, `pass`, such defs, and
-    literals bound to names.
-    """
+    """Report whether defining decl surely runs no code."""
     if not isinstance(decl, ast.ClassDef):
         return _is_inert_def(decl)
     if decl.bases or decl.keywords or not _are_pure(decl.decorator_list):
@@ -84,11 +78,7 @@ def _is_plain(hint: ast.AST) -> bool:
 
 
 def _are_pure(decorators: list[ast.expr]) -> bool:
-    """Report whether each of decorators is a stdlib one known to run no code.
-
-    It is named by itself or by its module, and called with only literals or
-    names, if at all. It is matched by name, not by what the file imports.
-    """
+    """Report whether each of decorators is, by name, a stdlib one that runs no code."""
     return all(_is_pure(decorator) for decorator in decorators)
 
 

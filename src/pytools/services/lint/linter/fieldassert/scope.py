@@ -48,10 +48,7 @@ class Bindings:
     pure_builtins: frozenset[str]  # those no name in the file rebinds
 
     def is_helper_param(self, name: str | None) -> bool:
-        """Report whether name is a parameter of a def that is not a test.
-
-        Such a def is a check helper that takes the value.
-        """
+        """Report whether name is a parameter of a def that is not a test."""
         scope = None if name is None else self._owner(name)
         if scope is None or name not in scope.params:
             return False
@@ -83,10 +80,7 @@ def new_func_scope(file: CheckInput, func: Function) -> FuncScope:
 def scope_imports(
     file: CheckInput, scope: ast.Module | ast.ClassDef, outer: frozenset[str]
 ) -> frozenset[str]:
-    """Return the imports scope's body sees: outer and its own, less names it rebinds.
-
-    Any other binding of an imported name in the scope makes it a value.
-    """
+    """Return outer and scope's own imports, less the names scope rebinds."""
     bound = frozenset(name.text for name in first_bindings(file, scope))
     return (outer | import_names(own_parts(scope))) - bound
 
@@ -114,12 +108,7 @@ def import_names(nodes: Iterable[ast.AST]) -> frozenset[str]:
 
 
 def changed_names(node: ast.AST, pure: frozenset[str]) -> frozenset[str]:
-    """Return the names node may change.
-
-    An assert or expression changes only the names under a call, lambda or
-    walrus in it, except a call to a pure builtin; any other statement may
-    change every name it uses. An assert's message runs only when it fails.
-    """
+    """Return the names under node's calls, or all a non-assert statement uses."""
     test = node.test if isinstance(node, ast.Assert) else node
     if not isinstance(test, ast.stmt):
         changing = [child for child in ast.walk(test) if _may_change(child, pure)]

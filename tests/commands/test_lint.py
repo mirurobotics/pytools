@@ -52,7 +52,7 @@ def test_add_lint_command_defaults() -> None:
         args.exclude,
         args.rule,
     )
-    assert defaults == (["."], True, 30, 300, 2, 8, 20, frozenset(), None)
+    assert defaults == (["."], True, 30, 300, 2, 1, 20, frozenset(), None)
 
 
 @pytest.mark.parametrize(
