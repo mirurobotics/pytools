@@ -144,8 +144,20 @@ def test_pure_builtins_drops_rebound_names(
         ),
         pytest.param("_ = other.meta", {"_", "other"}, id="attribute-not-a-name"),
         pytest.param(
-            "def run():\n    got = other()", {"got", "other"}, id="nested-def"
+            "def run():\n    got = other()", {"run", "got", "other"}, id="nested-def"
         ),
+        pytest.param(
+            "match other:\n    case got:\n        pass", {"other", "got"}, id="capture"
+        ),
+        pytest.param(
+            "match other:\n    case {**got}:\n        pass",
+            {"other", "got"},
+            id="mapping-rest",
+        ),
+        pytest.param(
+            "try:\n    pass\nexcept E as got:\n    pass", {"E", "got"}, id="except"
+        ),
+        pytest.param("import app.got as got", {"got"}, id="import"),
         pytest.param("assert got.start()", {"got"}, id="assert-method-call"),
         pytest.param("assert mutate(got)", {"mutate", "got"}, id="assert-call"),
         pytest.param("assert sorted(got.items)", {"sorted", "got"}, id="assert-sorted"),

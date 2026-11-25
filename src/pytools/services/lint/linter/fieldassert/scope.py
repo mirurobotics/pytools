@@ -19,6 +19,14 @@ from pytools.services.lint.linter.analysis.names import (
 _PURE_BUILTINS: Final = frozenset(
     {"len", "min", "max", "bool", "int", "float", "complex", "str", "bytes"}
 )
+_NAMED: Final = (
+    ast.FunctionDef,
+    ast.AsyncFunctionDef,
+    ast.ClassDef,
+    ast.ExceptHandler,
+    ast.MatchAs,
+    ast.MatchStar,
+)
 
 
 @dataclass(frozen=True)
@@ -99,7 +107,7 @@ def import_names(nodes: Iterable[ast.AST]) -> frozenset[str]:
         if isinstance(node, ast.Import | ast.ImportFrom)
         for alias in node.names
     ]
-    return frozenset(alias.asname or alias.name.split(".")[0] for alias in aliases)
+    return frozenset(_alias_name(alias) for alias in aliases)
 
 
 def changed_names(node: ast.AST, pure: frozenset[str]) -> frozenset[str]:
@@ -126,9 +134,24 @@ def _may_change(node: ast.AST, pure: frozenset[str]) -> bool:
 
 def name_set(node: ast.AST) -> frozenset[str]:
     """Return the names node reads or binds; attribute names are not names."""
-    return frozenset(
-        child.id for child in ast.walk(node) if isinstance(child, ast.Name)
-    )
+    return frozenset(name for child in ast.walk(node) for name in _own_names(child))
+
+
+def _own_names(node: ast.AST) -> list[str]:
+    """Return the names node itself reads or binds, such as an except alias."""
+    if isinstance(node, ast.Name):
+        return [node.id]
+    if isinstance(node, ast.alias):
+        return [_alias_name(node)]
+    if isinstance(node, _NAMED) and node.name:
+        return [node.name]
+    if isinstance(node, ast.MatchMapping) and node.rest:
+        return [node.rest]
+    return []
+
+
+def _alias_name(alias: ast.alias) -> str:
+    return alias.asname or alias.name.split(".")[0]
 
 
 def root_name(expr: ast.expr, bindings: Bindings) -> str | None:
