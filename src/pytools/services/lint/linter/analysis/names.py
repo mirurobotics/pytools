@@ -63,11 +63,12 @@ def declared_names(file: CheckInput) -> list[DeclaredName]:
     """Return the first binding of each name in every scope of file, in line order."""
     scopes: list[_Scope] = [file.tree]
     scopes += [node for node in ast.walk(file.tree) if isinstance(node, SCOPES)]
-    names = [name for scope in scopes for name in _first_bindings(file, scope)]
+    names = [name for scope in scopes for name in first_bindings(file, scope)]
     return sorted(names, key=lambda name: name.line)
 
 
-def _first_bindings(file: CheckInput, scope: _Scope) -> list[DeclaredName]:
+def first_bindings(file: CheckInput, scope: _Scope) -> list[DeclaredName]:
+    """Return the first binding of each name that binds in scope itself."""
     var_kind = _var_kind(scope)
     nodes = list(_scope_nodes(own_parts(scope)))
     declared = {
