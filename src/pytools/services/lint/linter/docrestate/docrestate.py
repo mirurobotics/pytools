@@ -68,18 +68,21 @@ def check(file: CheckInput) -> list[Diagnostic]:
 def _check_docstring(
     file: CheckInput, owner: Function | ast.ClassDef
 ) -> Diagnostic | None:
-    doc = ast.get_docstring(owner)
-    if doc is None or not _restates(owner.name, doc):
-        return None
     first = owner.body[0]
-    end = first.end_lineno or first.lineno
-    if has_nolint_on_lines(file.comments, Rule.DOCRESTATE, first.lineno, end):
+    doc = ast.get_docstring(owner)
+    if not isinstance(first, ast.Expr) or doc is None:
+        return None
+    if not _restates(owner.name, doc):
+        return None
+    string = first.value
+    end = string.end_lineno or string.lineno
+    if has_nolint_on_lines(file.comments, Rule.DOCRESTATE, string.lineno, end):
         return None
     message = (
         f"docstring for {owner.name} only restates its name; "
         "say what it does or remove it"
     )
-    return Diagnostic(file.path, first.lineno, message)
+    return Diagnostic(file.path, string.lineno, message)
 
 
 def _restates(name: str, doc: str) -> bool:
