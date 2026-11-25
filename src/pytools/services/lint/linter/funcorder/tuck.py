@@ -2,7 +2,7 @@ from pytools.services.lint.linter.funcorder.model import Model
 
 
 def tuck(model: Model, trees: list[list[int]], waits: dict[int, set[int]]) -> set[int]:
-    """Move classes with methods under their last user above, in place; return them."""
+    """Move classes with methods in place below their last user's tree; return those."""
     moved: set[int] = set()
     while (found := _next_tuck(model, trees, waits)) is not None:
         start, last = found
