@@ -169,9 +169,15 @@ def test_check_reads_quotes_and_symbols_as_meaning(parse: Parse, doc: str) -> No
     assert docrestate.check(parse(_source("run", doc))) == []
 
 
-def test_check_reads_an_unclosed_quote_as_a_word(parse: Parse) -> None:
-    source = _source("run", "Run is 'run.")
-    assert docrestate.check(parse(source)) == [_diag(2, "run")]
+@pytest.mark.parametrize(
+    "doc",
+    [
+        pytest.param("Run is 'run.", id="unclosed-quote"),
+        pytest.param("Run runs ...", id="ellipsis"),
+    ],
+)
+def test_check_reads_stray_punctuation_as_text(parse: Parse, doc: str) -> None:
+    assert docrestate.check(parse(_source("run", doc))) == [_diag(2, "run")]
 
 
 @pytest.mark.parametrize(
@@ -182,6 +188,8 @@ def test_check_reads_an_unclosed_quote_as_a_word(parse: Parse) -> None:
         pytest.param("car", "Card.", id="d-without-e"),
         pytest.param("y", "Yes.", id="es-without-sibilant"),
         pytest.param("use", "User.", id="other-suffix"),
+        pytest.param("use", "Using.", id="short-stem-e-ing"),
+        pytest.param("cry", "Cries.", id="short-stem-y-ies"),
         pytest.param("configuration", "Config.", id="abbreviation"),
     ],
 )
@@ -202,6 +210,9 @@ def test_check_skips_other_word_forms(parse: Parse, name: str, doc: str) -> None
         pytest.param("copy", "Copied.", id="copied"),
         pytest.param("match", "Matches.", id="matches"),
         pytest.param("box", "Boxes.", id="boxes"),
+        pytest.param("pass", "Passes.", id="passes"),
+        pytest.param("buzz", "Buzzes.", id="buzzes"),
+        pytest.param("push", "Pushes.", id="pushes"),
         pytest.param("use", "Used.", id="used"),
         pytest.param("settings", "Return the setting.", id="singular"),
     ],
