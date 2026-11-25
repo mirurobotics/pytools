@@ -27,8 +27,8 @@ assert x.b == 2
 assert x.c == 3
 
 def _documented():
-    '''Doc.
-    More.
+    '''Documented.
+    It is documented.
     '''
 """
 _PACKAGE_DOC: Final = """\
@@ -102,6 +102,12 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
             " in one assert, or move the checks into a helper that takes x",
         ),
         Rule.DOCLEN: Diagnostic("a.py", 18, "docstring is 2 lines (limit 1)"),
+        Rule.DOCRESTATE: Diagnostic(
+            "a.py",
+            18,
+            "docstring for _documented only restates its name; say what it does"
+            " or remove it",
+        ),
     }
 
 
