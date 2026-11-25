@@ -35,7 +35,7 @@ class Bindings:
     """Where the names in one block of statements are bound."""
 
     scopes: tuple[FuncScope, ...]  # the defs around the block, innermost last
-    imports: frozenset[str]  # the module's own
+    imports: frozenset[str]  # the module's, or the class body's around the block
 
     def is_helper_param(self, name: str | None) -> bool:
         """Report whether name is a parameter of a def that is not a test.
@@ -68,6 +68,14 @@ def new_func_scope(file: CheckInput, func: Function) -> FuncScope:
     imports = import_names(own_parts(func))
     bound = frozenset(name.text for name in names) | imports
     return FuncScope(func, bound, params, imports)
+
+
+def class_imports(
+    file: CheckInput, cls: ast.ClassDef, outer: frozenset[str]
+) -> frozenset[str]:
+    """Return the imports cls's body sees: its own, and outer ones it doesn't bind."""
+    bound = frozenset(name.text for name in first_bindings(file, cls))
+    return (outer - bound) | import_names(cls.body)
 
 
 def import_names(nodes: Iterable[ast.AST]) -> frozenset[str]:

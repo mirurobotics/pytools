@@ -7,6 +7,7 @@ from pytools.services.lint.linter.analysis.analysis import CheckInput, functions
 from pytools.services.lint.linter.fieldassert.scope import (
     Bindings,
     changed_names,
+    class_imports,
     import_names,
     new_func_scope,
     root_name,
@@ -80,6 +81,33 @@ def test_is_pkg_accepts_imported_paths(parse: Parse, source: str, expr: str) -> 
 )
 def test_is_pkg_rejects_other_values(parse: Parse, source: str, expr: str) -> None:
     assert not _bindings(parse, source).is_pkg(_expr(expr))
+
+
+@pytest.mark.parametrize(
+    ("source", "outer", "expected"),
+    [
+        pytest.param(
+            "class T:\n    from http import HTTPStatus\n",
+            {"json"},
+            {"json", "HTTPStatus"},
+            id="own-import",
+        ),
+        pytest.param("class T:\n    json = load()\n", {"json"}, set(), id="rebound"),
+        pytest.param(
+            "class T:\n    def run(self):\n        import os\n",
+            set(),
+            set(),
+            id="method-import",
+        ),
+    ],
+)
+def test_class_imports_returns_imports_body_sees(
+    parse: Parse, source: str, outer: set[str], expected: set[str]
+) -> None:
+    file = parse(source)
+    cls = file.tree.body[0]
+    assert isinstance(cls, ast.ClassDef)
+    assert class_imports(file, cls, frozenset(outer)) == frozenset(expected)
 
 
 @pytest.mark.parametrize(

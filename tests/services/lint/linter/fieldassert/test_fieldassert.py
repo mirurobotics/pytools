@@ -113,9 +113,8 @@ def test_request(case):
     assert (item.id,) == case.want_tuple
 """
 _PACKAGE_FIELDS: Final = """\
-from http import HTTPStatus
-
-def test_status():
+class TestStatus:
+    from http import HTTPStatus
     assert HTTPStatus.OK == 200
     assert HTTPStatus.NOT_FOUND == 404
     assert HTTPStatus.INTERNAL_SERVER_ERROR == 500

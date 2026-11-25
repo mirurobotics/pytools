@@ -13,6 +13,7 @@ from pytools.services.lint.linter.fieldassert.scope import (
     Bindings,
     FuncScope,
     changed_names,
+    class_imports,
     import_names,
     name_set,
     new_func_scope,
@@ -22,6 +23,7 @@ from pytools.services.lint.linter.fieldassert.scope import (
 _MIN_FIELD_ASSERTS: Final = 3
 
 type _Block = tuple[list[ast.stmt], Bindings]
+type _Pending = tuple[ast.AST, tuple[FuncScope, ...], frozenset[str]]
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
@@ -36,16 +38,18 @@ def check(file: CheckInput) -> list[Diagnostic]:
 
 def _blocks(file: CheckInput) -> list[_Block]:
     """Return each list of statements in file, with where its names are bound."""
-    imports = import_names(file.tree.body)
+    module_imports = import_names(file.tree.body)
     blocks: list[_Block] = []
-    pending: list[tuple[ast.AST, tuple[FuncScope, ...]]] = [(file.tree, ())]
+    pending: list[_Pending] = [(file.tree, (), module_imports)]
     while pending:
-        node, scopes = pending.pop()
+        node, scopes, imports = pending.pop()
         if isinstance(node, DEFS):
-            scopes = (*scopes, new_func_scope(file, node))
+            scopes, imports = (*scopes, new_func_scope(file, node)), module_imports
+        elif isinstance(node, ast.ClassDef):
+            imports = class_imports(file, node, imports)
         lists = [part for _, part in ast.iter_fields(node) if _is_stmt_list(part)]
         blocks.extend((stmts, Bindings(scopes, imports)) for stmts in lists)
-        pending.extend((child, scopes) for child in ast.iter_child_nodes(node))
+        pending.extend((child, scopes, imports) for child in ast.iter_child_nodes(node))
     return blocks
 
 
