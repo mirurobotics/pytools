@@ -1,11 +1,15 @@
 import ast
+import re
 from pathlib import Path
+from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Diagnostic,
     Function,
 )
+
+_DELIMITERS: Final = r"^[A-Za-z]*(\"\"\"|'''|\"|')|(\"\"\"|'''|\"|')$"
 
 
 def check(file: CheckInput, max_lines: int, max_package_lines: int) -> list[Diagnostic]:
@@ -26,11 +30,21 @@ def check(file: CheckInput, max_lines: int, max_package_lines: int) -> list[Diag
 def _check_docstring(
     file: CheckInput, owner: ast.Module | Function | ast.ClassDef, limit: int
 ) -> Diagnostic | None:
-    doc = ast.get_docstring(owner)
-    if doc is None:
+    if ast.get_docstring(owner) is None:
         return None
-    count = len(doc.splitlines())
+    doc = owner.body[0]
+    count = _count_lines(file, doc)
     if count <= limit:
         return None
     message = f"docstring is {count} lines (limit {limit})"
-    return Diagnostic(file.path, owner.body[0].lineno, message)
+    return Diagnostic(file.path, doc.lineno, message)
+
+
+def _count_lines(file: CheckInput, doc: ast.stmt) -> int:
+    """Count doc's source lines, so an escaped newline is not a line break."""
+    lines = file.lines[doc.lineno - 1 : doc.end_lineno or doc.lineno]
+    lines[-1] = lines[-1].encode()[: doc.end_col_offset].decode()
+    lines[0] = lines[0].encode()[doc.col_offset :].decode()
+    text = re.sub(_DELIMITERS, "", "\n".join(lines))
+    prose = [index for index, line in enumerate(text.split("\n")) if line.strip()]
+    return prose[-1] - prose[0] + 1 if prose else 0

@@ -56,6 +56,11 @@ def f():
 
     '''
 """
+_ESCAPED_LINE_BREAKS: Final = """\
+def f():
+    '''Split on "\\n" or "\\x0c".
+    More.'''
+"""
 _NOT_DOCSTRINGS: Final = """\
 x = 1
 '''Not a
@@ -118,9 +123,10 @@ def test_check_reports_every_docstring_in_line_order(parse: Parse) -> None:
     [
         pytest.param(_INNER_BLANK_LINE, 3, id="inner-blank-line"),
         pytest.param(_OUTER_BLANK_LINES, 2, id="outer-blank-lines"),
+        pytest.param(_ESCAPED_LINE_BREAKS, 2, id="escaped-line-breaks"),
     ],
 )
-def test_check_counts_cleaned_lines(parse: Parse, source: str, count: int) -> None:
+def test_check_counts_source_lines(parse: Parse, source: str, count: int) -> None:
     diags = doclen.check(parse(source), 1, 20)
     assert diags == [Diagnostic("a.py", 2, f"docstring is {count} lines (limit 1)")]
 
