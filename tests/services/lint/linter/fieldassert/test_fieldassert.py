@@ -252,6 +252,7 @@ def test_check_reports_swapped_args(parse: Parse, asserts: tuple[str, ...]) -> N
     ("between", "expected"),
     [
         pytest.param("_ = other.meta", [_diag(3, 3, "got.meta", "got")], id="other"),
+        pytest.param("err = other()", [_diag(3, 3, "got.meta", "got")], id="unrelated"),
         pytest.param(
             "assert ok, show(got)", [_diag(3, 3, "got.meta", "got")], id="message"
         ),
@@ -264,6 +265,7 @@ def test_check_reports_swapped_args(parse: Parse, asserts: tuple[str, ...]) -> N
         pytest.param("assert got.start()", [], id="call-in-assert"),
         pytest.param("assert other.x == got.reset()", [], id="call-in-field-assert"),
         pytest.param("assert got.meta.reset().x == 0", [], id="call-in-field-base"),
+        pytest.param("assert got.meta.x == got.reset()", [], id="call-beside-field"),
     ],
 )
 def test_check_splits_run_where_value_may_change(
