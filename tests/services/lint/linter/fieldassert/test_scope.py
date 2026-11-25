@@ -8,7 +8,7 @@ from pytools.services.lint.linter.fieldassert.scope import (
     Bindings,
     changed_names,
     import_names,
-    new_scope,
+    new_func_scope,
     root_name,
 )
 
@@ -140,7 +140,7 @@ def test_root_name_returns_variable_expr_reads(
 
 def _bindings(parse: Parse, source: str) -> Bindings:
     file = parse(source)
-    scopes = tuple(new_scope(file, func) for func in functions(file.tree))
+    scopes = tuple(new_func_scope(file, func) for func in functions(file.tree))
     return Bindings(scopes, import_names(file.tree))
 
 

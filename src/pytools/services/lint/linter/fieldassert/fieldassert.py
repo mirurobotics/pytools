@@ -15,7 +15,7 @@ from pytools.services.lint.linter.fieldassert.scope import (
     changed_names,
     import_names,
     name_set,
-    new_scope,
+    new_func_scope,
     root_name,
 )
 
@@ -42,7 +42,7 @@ def _blocks(file: CheckInput) -> list[_Block]:
     while pending:
         node, scopes = pending.pop()
         if isinstance(node, DEFS):
-            scopes = (*scopes, new_scope(file, node))
+            scopes = (*scopes, new_func_scope(file, node))
         lists = [part for _, part in ast.iter_fields(node) if _is_stmt_list(part)]
         blocks.extend((stmts, Bindings(scopes, imports)) for stmts in lists)
         pending.extend((child, scopes) for child in ast.iter_child_nodes(node))

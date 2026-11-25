@@ -53,7 +53,7 @@ class Bindings:
         return next(owners, None)
 
 
-def new_scope(file: CheckInput, func: Function) -> FuncScope:
+def new_func_scope(file: CheckInput, func: Function) -> FuncScope:
     """Return the names that bind in func, its parameters among them."""
     names = first_bindings(file, func)
     params = [name.text for name in names if isinstance(name.node, ast.arg)]
