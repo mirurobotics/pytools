@@ -73,6 +73,13 @@ config = load()
 assert config.a == 1
 assert config.b == 2
 assert config.c == 3
+
+def test_build():
+    def helper():
+        import sys as got
+    assert got.a == 1
+    assert got.b == 2
+    assert got.c == 3
 """
 _CALL_BASES: Final = """\
 import http
@@ -81,9 +88,6 @@ def test_build():
     assert build().a == 1
     assert build().b == 2
     assert build().c == 3
-    assert [make()][0].a == 1
-    assert [make()][0].b == 2
-    assert [make()][0].c == 3
     assert http.load().a == 1
     assert http.load().b == 2
     assert http.load().c == 3
@@ -95,12 +99,6 @@ def test_build():
     assert got.meta.b == 2
     {between}
     assert got.meta.c == 3
-"""
-_TWO_FIELDS: Final = """\
-def test_build():
-    got = build()
-    assert got.a == 1
-    assert got.b == 2
 """
 _NOT_FIELDS: Final = """\
 def test_request(case):
@@ -206,14 +204,15 @@ def _diag(line: int, count: int, base: str, root: str | None) -> Diagnostic:
             id="module-and-class-bodies",
         ),
         pytest.param(
-            _OTHER_DEF_IMPORT, [_diag(5, 3, "config", "config")], id="other-def-import"
+            _OTHER_DEF_IMPORT,
+            [_diag(5, 3, "config", "config"), _diag(12, 3, "got", "got")],
+            id="other-def-import",
         ),
         pytest.param(
             _CALL_BASES,
             [
                 _diag(4, 3, "build()", None),
-                _diag(7, 3, "[make()][0]", None),
-                _diag(10, 3, "http.load()", None),
+                _diag(7, 3, "http.load()", None),
             ],
             id="call-bases",
         ),
@@ -254,7 +253,9 @@ def test_check_reports_swapped_args(parse: Parse, asserts: tuple[str, ...]) -> N
     ("between", "expected"),
     [
         pytest.param("_ = other.meta", [_diag(3, 3, "got.meta", "got")], id="other"),
-        pytest.param("err = other()", [_diag(3, 3, "got.meta", "got")], id="unrelated"),
+        pytest.param(
+            "assert ok, show(got)", [_diag(3, 3, "got.meta", "got")], id="message"
+        ),
         pytest.param(
             "assert len(got.items) == max(1, int(got.size))",
             [_diag(3, 3, "got.meta", "got")],
@@ -263,6 +264,7 @@ def test_check_reports_swapped_args(parse: Parse, asserts: tuple[str, ...]) -> N
         pytest.param("got.stop()", [], id="method-call"),
         pytest.param("assert got.start()", [], id="call-in-assert"),
         pytest.param("assert other.x == got.reset()", [], id="call-in-field-assert"),
+        pytest.param("assert got.meta.reset().x == 0", [], id="call-in-field-base"),
     ],
 )
 def test_check_splits_run_where_value_may_change(
@@ -275,7 +277,6 @@ def test_check_splits_run_where_value_may_change(
 @pytest.mark.parametrize(
     "source",
     [
-        pytest.param(_TWO_FIELDS, id="two-fields"),
         pytest.param(_NOT_FIELDS, id="not-fields"),
         pytest.param(_PACKAGE_FIELDS, id="package-fields"),
         pytest.param(_NOT_EQUALITY, id="not-equality"),

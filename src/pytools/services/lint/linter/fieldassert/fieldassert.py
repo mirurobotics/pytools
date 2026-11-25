@@ -71,8 +71,8 @@ def _check_block(
     open_groups: dict[str, _Group] = {}
     for stmt in stmts:
         attr = _field(stmt, bindings)
-        open_groups = _close_changed(open_groups, stmt, attr)
         base = None if attr is None else _base_text(attr)
+        open_groups = _close_changed(open_groups, stmt, attr, base)
         if attr is None or base is None:
             continue
         group = open_groups.get(base)
@@ -149,34 +149,39 @@ def _constant_parts(expr: ast.expr, bindings: Bindings) -> list[ast.expr] | None
     return None
 
 
-def _close_changed(
-    open_groups: dict[str, _Group], stmt: ast.stmt, attr: ast.Attribute | None
-) -> dict[str, _Group]:
-    """Return the groups that stay open: those whose value stmt can't change.
-
-    The field attr an assert checks is left out, so build().a keeps its group.
-    """
-    changed = {name for part in _unchecked(stmt, attr) for name in changed_names(part)}
-    return {
-        base: group
-        for base, group in open_groups.items()
-        if group.deps.isdisjoint(changed)
-    }
-
-
-def _unchecked(stmt: ast.stmt, attr: ast.Attribute | None) -> list[ast.AST]:
-    if attr is None or not isinstance(stmt, ast.Assert):
-        return [stmt]
-    parts = [*ast.iter_child_nodes(stmt.test), stmt.msg]
-    return [part for part in parts if part is not None and part is not attr]
-
-
 def _base_text(attr: ast.Attribute) -> str | None:
     """Return the value attr reads as text, or None if too deep to unparse."""
     try:
         return ast.unparse(attr.value)
     except RecursionError:
         return None
+
+
+def _close_changed(
+    open_groups: dict[str, _Group],
+    stmt: ast.stmt,
+    attr: ast.Attribute | None,
+    base: str | None,
+) -> dict[str, _Group]:
+    """Return the groups that stay open: those whose value stmt can't change.
+
+    A call in a field's own base, as in build().a, doesn't close that base's group.
+    """
+    changed = changed_names(stmt)
+    unchecked = {
+        name for part in _unchecked(stmt, attr) for name in changed_names(part)
+    }
+    return {
+        key: group
+        for key, group in open_groups.items()
+        if group.deps.isdisjoint(unchecked if key == base else changed)
+    }
+
+
+def _unchecked(stmt: ast.stmt, attr: ast.Attribute | None) -> list[ast.AST]:
+    if attr is None or not isinstance(stmt, ast.Assert):
+        return [stmt]
+    return [part for part in ast.iter_child_nodes(stmt.test) if part is not attr]
 
 
 def _report(file: CheckInput, group: _Group) -> Diagnostic | None:
