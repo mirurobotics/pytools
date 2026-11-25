@@ -111,6 +111,7 @@ def test_is_pkg_rejects_other_values(parse: Parse, source: str, expr: str) -> No
             id="assert-pure-builtins",
         ),
         pytest.param("assert -got.count < other", set(), id="assert-read-only"),
+        pytest.param("assert ok, show(got)", set(), id="assert-message"),
     ],
 )
 def test_changed_names_returns_names_stmt_may_change(
@@ -146,4 +147,3 @@ def _bindings(parse: Parse, source: str) -> Bindings:
     file = parse(source)
     scopes = tuple(new_func_scope(file, func) for func in functions(file.tree))
     return Bindings(scopes, import_names(file.tree.body))
-

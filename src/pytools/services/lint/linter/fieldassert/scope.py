@@ -86,12 +86,13 @@ def changed_names(node: ast.AST) -> frozenset[str]:
 
     An assert or expression changes only the names under a call, lambda or
     walrus in it, except a call to a pure builtin; any other statement may
-    change every name it uses.
+    change every name it uses. An assert's message runs only when it fails.
     """
-    if isinstance(node, ast.stmt) and not isinstance(node, ast.Assert):
-        changing = [node]
+    test = node.test if isinstance(node, ast.Assert) else node
+    if not isinstance(test, ast.stmt):
+        changing = [child for child in ast.walk(test) if _may_change(child)]
     else:
-        changing = [child for child in ast.walk(node) if _may_change(child)]
+        changing = [test]
     return frozenset(name for child in changing for name in name_set(child))
 
 
