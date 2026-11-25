@@ -68,6 +68,15 @@ class TestBuild:
         assert self.got.b == 2
         assert self.got.c == 3
 """
+_OTHER_DEF_IMPORT: Final = """\
+def unrelated():
+    import sys as config
+
+config = load()
+assert config.a == 1
+assert config.b == 2
+assert config.c == 3
+"""
 _CALL_BASES: Final = """\
 import http
 
@@ -185,6 +194,9 @@ def _diag(line: int, base: str, root: str | None) -> Diagnostic:
                 _diag(13, "self.got", "self"),
             ],
             id="module-and-class-bodies",
+        ),
+        pytest.param(
+            _OTHER_DEF_IMPORT, [_diag(5, "config", "config")], id="other-def-import"
         ),
         pytest.param(
             _CALL_BASES,

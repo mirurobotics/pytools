@@ -36,7 +36,7 @@ def check(file: CheckInput) -> list[Diagnostic]:
 
 def _blocks(file: CheckInput) -> list[_Block]:
     """Return each list of statements in file, with where its names are bound."""
-    imports = import_names(file.tree)
+    imports = import_names(file.tree.body)
     blocks: list[_Block] = []
     pending: list[tuple[ast.AST, tuple[FuncScope, ...]]] = [(file.tree, ())]
     while pending:

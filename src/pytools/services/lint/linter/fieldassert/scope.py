@@ -1,4 +1,5 @@
 import ast
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Final
 
@@ -6,8 +7,13 @@ from pytools.services.lint.linter.analysis.analysis import (
     CheckInput,
     Function,
     is_test_func,
+    walk_outside,
 )
-from pytools.services.lint.linter.analysis.names import first_bindings
+from pytools.services.lint.linter.analysis.names import (
+    SCOPES,
+    first_bindings,
+    own_parts,
+)
 
 _PURE_BUILTINS: Final = frozenset(
     {"len", "min", "max", "bool", "int", "float", "complex", "str", "bytes"}
@@ -16,11 +22,12 @@ _PURE_BUILTINS: Final = frozenset(
 
 @dataclass(frozen=True)
 class FuncScope:
-    """A def, the names that bind in it and which of them are its parameters."""
+    """A def, the names that bind in it and which are parameters or imports."""
 
     func: Function
     bound: frozenset[str]
     params: frozenset[str]
+    imports: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -28,7 +35,7 @@ class Bindings:
     """Where the names in one block of statements are bound."""
 
     scopes: tuple[FuncScope, ...]  # the defs around the block, innermost last
-    imports: frozenset[str]
+    imports: frozenset[str]  # the module's own
 
     def is_helper_param(self, name: str | None) -> bool:
         """Report whether name is a parameter of a def that is not a test.
@@ -46,7 +53,8 @@ class Bindings:
             expr = expr.value
         if not isinstance(expr, ast.Name):
             return False
-        return expr.id in self.imports and self._owner(expr.id) is None
+        owner = self._owner(expr.id)
+        return expr.id in (self.imports if owner is None else owner.imports)
 
     def _owner(self, name: str) -> FuncScope | None:
         owners = (scope for scope in reversed(self.scopes) if name in scope.bound)
@@ -54,17 +62,19 @@ class Bindings:
 
 
 def new_func_scope(file: CheckInput, func: Function) -> FuncScope:
-    """Return the names that bind in func, its parameters among them."""
+    """Return the names that bind in func, its parameters and imports among them."""
     names = first_bindings(file, func)
-    params = [name.text for name in names if isinstance(name.node, ast.arg)]
-    return FuncScope(func, frozenset(name.text for name in names), frozenset(params))
+    params = frozenset(name.text for name in names if isinstance(name.node, ast.arg))
+    imports = import_names(own_parts(func))
+    bound = frozenset(name.text for name in names) | imports
+    return FuncScope(func, bound, params, imports)
 
 
-def import_names(tree: ast.Module) -> frozenset[str]:
-    """Return the names any import in tree binds."""
+def import_names(nodes: Iterable[ast.AST]) -> frozenset[str]:
+    """Return the names imports among nodes bind, outside nested scopes."""
     aliases = [
         alias
-        for node in ast.walk(tree)
+        for node in walk_outside(nodes, SCOPES)
         if isinstance(node, ast.Import | ast.ImportFrom)
         for alias in node.names
     ]
