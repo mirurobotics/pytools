@@ -177,6 +177,21 @@ def test_check_reads_an_unclosed_quote_as_a_word(parse: Parse) -> None:
 @pytest.mark.parametrize(
     ("name", "doc"),
     [
+        pytest.param("Str", "Str returns the string.", id="short-stem-ing"),
+        pytest.param("string", "Str.", id="prefix"),
+        pytest.param("car", "Card.", id="d-without-e"),
+        pytest.param("y", "Yes.", id="es-without-sibilant"),
+        pytest.param("use", "User.", id="other-suffix"),
+        pytest.param("configuration", "Config.", id="abbreviation"),
+    ],
+)
+def test_check_skips_other_word_forms(parse: Parse, name: str, doc: str) -> None:
+    assert docrestate.check(parse(_source(name, doc))) == []
+
+
+@pytest.mark.parametrize(
+    ("name", "doc"),
+    [
         pytest.param("run", "Runs.", id="runs"),
         pytest.param("close", "Closes.", id="closes"),
         pytest.param("close", "Closing.", id="closing"),
@@ -195,28 +210,12 @@ def test_check_matches_inflected_name_words(parse: Parse, name: str, doc: str) -
     assert docrestate.check(parse(_source(name, doc))) == [_diag(2, name)]
 
 
-@pytest.mark.parametrize(
-    ("name", "doc"),
-    [
-        pytest.param("Str", "Str returns the string.", id="short-stem-ing"),
-        pytest.param("string", "Str.", id="prefix"),
-        pytest.param("car", "Card.", id="d-without-e"),
-        pytest.param("y", "Yes.", id="es-without-sibilant"),
-        pytest.param("use", "User.", id="other-suffix"),
-        pytest.param("configuration", "Config.", id="abbreviation"),
-    ],
-)
-def test_check_skips_other_word_forms(parse: Parse, name: str, doc: str) -> None:
-    assert docrestate.check(parse(_source(name, doc))) == []
-
-
 def _source(name: str, doc: str) -> str:
     return f"def {name}():\n    '''{doc}'''\n"
 
 
 def _diag(line: int, name: str) -> Diagnostic:
     message = (
-        f"docstring for {name} only restates its name; "
-        "say what it does or remove it"
+        f"docstring for {name} only restates its name; say what it does or remove it"
     )
     return Diagnostic("a.py", line, message)
