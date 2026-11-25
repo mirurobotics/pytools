@@ -75,17 +75,20 @@ def new_func_scope(file: CheckInput, func: Function) -> FuncScope:
     """Return the names that bind in func, its parameters and imports among them."""
     names = first_bindings(file, func)
     params = frozenset(name.text for name in names if isinstance(name.node, ast.arg))
-    imports = import_names(own_parts(func))
-    bound = frozenset(name.text for name in names) | imports
-    return FuncScope(func, bound, params, imports)
+    bound = frozenset(name.text for name in names)
+    imports = import_names(own_parts(func)) - bound
+    return FuncScope(func, bound | imports, params, imports)
 
 
-def class_imports(
-    file: CheckInput, cls: ast.ClassDef, outer: frozenset[str]
+def scope_imports(
+    file: CheckInput, scope: ast.Module | ast.ClassDef, outer: frozenset[str]
 ) -> frozenset[str]:
-    """Return the imports cls's body sees: its own, and outer ones it doesn't bind."""
-    bound = frozenset(name.text for name in first_bindings(file, cls))
-    return (outer - bound) | import_names(cls.body)
+    """Return the imports scope's body sees: outer and its own, less names it rebinds.
+
+    Any other binding of an imported name in the scope makes it a value.
+    """
+    bound = frozenset(name.text for name in first_bindings(file, scope))
+    return (outer | import_names(own_parts(scope))) - bound
 
 
 def pure_builtins(file: CheckInput) -> frozenset[str]:

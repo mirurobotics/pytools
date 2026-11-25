@@ -8,11 +8,10 @@ from pytools.services.lint.linter.analysis.analysis import CheckInput, functions
 from pytools.services.lint.linter.fieldassert.scope import (
     Bindings,
     changed_names,
-    class_imports,
-    import_names,
     new_func_scope,
     pure_builtins,
     root_name,
+    scope_imports,
 )
 
 type Parse = Callable[[str], CheckInput]
@@ -81,6 +80,16 @@ def test_is_pkg_accepts_imported_paths(parse: Parse, source: str, expr: str) -> 
         ),
         pytest.param("import http\n", "http.load().value", id="call-base"),
         pytest.param("", "got.value", id="not-imported"),
+        pytest.param(
+            "from types import SimpleNamespace as got\ngot = got()\n",
+            "got.value",
+            id="rebound-import",
+        ),
+        pytest.param(
+            "def run():\n    import http\n    http = build()\n",
+            "http.HTTPStatus",
+            id="rebound-local-import",
+        ),
     ],
 )
 def test_is_pkg_rejects_other_values(parse: Parse, source: str, expr: str) -> None:
@@ -105,13 +114,13 @@ def test_is_pkg_rejects_other_values(parse: Parse, source: str, expr: str) -> No
         ),
     ],
 )
-def test_class_imports_returns_imports_body_sees(
+def test_scope_imports_returns_imports_body_sees(
     parse: Parse, source: str, outer: set[str], expected: set[str]
 ) -> None:
     file = parse(source)
     cls = file.tree.body[0]
     assert isinstance(cls, ast.ClassDef)
-    assert class_imports(file, cls, frozenset(outer)) == frozenset(expected)
+    assert scope_imports(file, cls, frozenset(outer)) == frozenset(expected)
 
 
 @pytest.mark.parametrize(
@@ -207,4 +216,5 @@ def _expr(text: str) -> ast.expr:
 def _bindings(parse: Parse, source: str) -> Bindings:
     file = parse(source)
     scopes = tuple(new_func_scope(file, func) for func in functions(file.tree))
-    return Bindings(scopes, import_names(file.tree.body), pure_builtins(file))
+    imports = scope_imports(file, file.tree, frozenset())
+    return Bindings(scopes, imports, pure_builtins(file))

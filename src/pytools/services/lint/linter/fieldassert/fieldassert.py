@@ -13,12 +13,11 @@ from pytools.services.lint.linter.fieldassert.scope import (
     Bindings,
     FuncScope,
     changed_names,
-    class_imports,
-    import_names,
     name_set,
     new_func_scope,
     pure_builtins,
     root_name,
+    scope_imports,
 )
 
 _MIN_FIELD_ASSERTS: Final = 3
@@ -39,7 +38,7 @@ def check(file: CheckInput) -> list[Diagnostic]:
 
 def _blocks(file: CheckInput) -> list[_Block]:
     """Return each list of statements in file, with where its names are bound."""
-    module_imports = import_names(file.tree.body)
+    module_imports = scope_imports(file, file.tree, frozenset())
     pure = pure_builtins(file)
     blocks: list[_Block] = []
     pending: list[_Pending] = [(file.tree, (), module_imports)]
@@ -48,7 +47,7 @@ def _blocks(file: CheckInput) -> list[_Block]:
         if isinstance(node, DEFS):
             scopes, imports = (*scopes, new_func_scope(file, node)), module_imports
         elif isinstance(node, ast.ClassDef):
-            imports = class_imports(file, node, imports)
+            imports = scope_imports(file, node, imports)
         lists = [part for _, part in ast.iter_fields(node) if _is_stmt_list(part)]
         blocks.extend((stmts, Bindings(scopes, imports, pure)) for stmts in lists)
         pending.extend((child, scopes, imports) for child in ast.iter_child_nodes(node))
