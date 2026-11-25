@@ -17,6 +17,7 @@ from pytools.services.lint.linter.fieldassert.scope import (
     import_names,
     name_set,
     new_func_scope,
+    pure_builtins,
     root_name,
 )
 
@@ -39,6 +40,7 @@ def check(file: CheckInput) -> list[Diagnostic]:
 def _blocks(file: CheckInput) -> list[_Block]:
     """Return each list of statements in file, with where its names are bound."""
     module_imports = import_names(file.tree.body)
+    pure = pure_builtins(file)
     blocks: list[_Block] = []
     pending: list[_Pending] = [(file.tree, (), module_imports)]
     while pending:
@@ -48,7 +50,7 @@ def _blocks(file: CheckInput) -> list[_Block]:
         elif isinstance(node, ast.ClassDef):
             imports = class_imports(file, node, imports)
         lists = [part for _, part in ast.iter_fields(node) if _is_stmt_list(part)]
-        blocks.extend((stmts, Bindings(scopes, imports)) for stmts in lists)
+        blocks.extend((stmts, Bindings(scopes, imports, pure)) for stmts in lists)
         pending.extend((child, scopes, imports) for child in ast.iter_child_nodes(node))
     return blocks
 
@@ -76,7 +78,7 @@ def _check_block(
     for stmt in stmts:
         attr = _field(stmt, bindings)
         base = None if attr is None else _base_text(attr)
-        open_groups = _close_changed(open_groups, stmt, attr, base)
+        open_groups = _close_changed(open_groups, stmt, attr, base, bindings)
         if attr is None or base is None:
             continue
         group = open_groups.get(base)
@@ -166,14 +168,16 @@ def _close_changed(
     stmt: ast.stmt,
     attr: ast.Attribute | None,
     base: str | None,
+    bindings: Bindings,
 ) -> dict[str, _Group]:
     """Return the groups that stay open: those whose value stmt can't change.
 
     A call in a field's own base, as in build().a, doesn't close that base's group.
     """
-    changed = changed_names(stmt)
+    pure = bindings.pure_builtins
+    changed = changed_names(stmt, pure)
     unchecked = {
-        name for part in _unchecked(stmt, attr) for name in changed_names(part)
+        name for part in _unchecked(stmt, attr) for name in changed_names(part, pure)
     }
     return {
         key: group

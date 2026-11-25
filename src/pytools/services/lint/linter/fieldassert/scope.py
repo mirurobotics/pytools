@@ -11,6 +11,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.analysis.names import (
     SCOPES,
+    declared_names,
     first_bindings,
     own_parts,
 )
@@ -36,6 +37,7 @@ class Bindings:
 
     scopes: tuple[FuncScope, ...]  # the defs around the block, innermost last
     imports: frozenset[str]  # the module's, or the class body's around the block
+    pure_builtins: frozenset[str]  # those no name in the file rebinds
 
     def is_helper_param(self, name: str | None) -> bool:
         """Report whether name is a parameter of a def that is not a test.
@@ -78,6 +80,17 @@ def class_imports(
     return (outer - bound) | import_names(cls.body)
 
 
+def pure_builtins(file: CheckInput) -> frozenset[str]:
+    """Return the pure builtins, such as len, that no name in file rebinds."""
+    imports = [
+        node
+        for node in ast.walk(file.tree)
+        if isinstance(node, ast.Import | ast.ImportFrom)
+    ]
+    bound = {name.text for name in declared_names(file)} | import_names(imports)
+    return _PURE_BUILTINS - bound
+
+
 def import_names(nodes: Iterable[ast.AST]) -> frozenset[str]:
     """Return the names imports among nodes bind, outside nested scopes."""
     aliases = [
@@ -89,7 +102,7 @@ def import_names(nodes: Iterable[ast.AST]) -> frozenset[str]:
     return frozenset(alias.asname or alias.name.split(".")[0] for alias in aliases)
 
 
-def changed_names(node: ast.AST) -> frozenset[str]:
+def changed_names(node: ast.AST, pure: frozenset[str]) -> frozenset[str]:
     """Return the names node may change.
 
     An assert or expression changes only the names under a call, lambda or
@@ -98,16 +111,16 @@ def changed_names(node: ast.AST) -> frozenset[str]:
     """
     test = node.test if isinstance(node, ast.Assert) else node
     if not isinstance(test, ast.stmt):
-        changing = [child for child in ast.walk(test) if _may_change(child)]
+        changing = [child for child in ast.walk(test) if _may_change(child, pure)]
     else:
         changing = [test]
     return frozenset(name for child in changing for name in name_set(child))
 
 
-def _may_change(node: ast.AST) -> bool:
+def _may_change(node: ast.AST, pure: frozenset[str]) -> bool:
     if isinstance(node, ast.Call):
         func = node.func
-        return not (isinstance(func, ast.Name) and func.id in _PURE_BUILTINS)
+        return not (isinstance(func, ast.Name) and func.id in pure)
     return isinstance(node, ast.Lambda | ast.NamedExpr)
 
 

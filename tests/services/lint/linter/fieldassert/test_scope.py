@@ -1,5 +1,6 @@
 import ast
 from collections.abc import Callable
+from typing import Final
 
 import pytest
 
@@ -10,10 +11,13 @@ from pytools.services.lint.linter.fieldassert.scope import (
     class_imports,
     import_names,
     new_func_scope,
+    pure_builtins,
     root_name,
 )
 
 type Parse = Callable[[str], CheckInput]
+
+_PURE: Final = frozenset({"len", "min", "max", "int", "str"})
 
 
 @pytest.mark.parametrize(
@@ -111,6 +115,22 @@ def test_class_imports_returns_imports_body_sees(
 
 
 @pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param("", True, id="unbound"),
+        pytest.param("def len(value): pass\n", False, id="def"),
+        pytest.param("len = count\n", False, id="assignment"),
+        pytest.param("def run(len): pass\n", False, id="parameter"),
+        pytest.param("from sizes import len\n", False, id="import"),
+    ],
+)
+def test_pure_builtins_drops_rebound_names(
+    parse: Parse, source: str, expected: bool
+) -> None:
+    assert ("len" in pure_builtins(parse(source))) == expected
+
+
+@pytest.mark.parametrize(
     ("stmt", "expected"),
     [
         pytest.param("got.stop()", {"got"}, id="method-call"),
@@ -140,12 +160,13 @@ def test_class_imports_returns_imports_body_sees(
         ),
         pytest.param("assert -got.count < other", set(), id="assert-read-only"),
         pytest.param("assert ok, show(got)", set(), id="assert-message"),
+        pytest.param("assert bool(got)", {"bool", "got"}, id="assert-not-pure"),
     ],
 )
 def test_changed_names_returns_names_stmt_may_change(
     stmt: str, expected: set[str]
 ) -> None:
-    assert changed_names(ast.parse(stmt).body[0]) == frozenset(expected)
+    assert changed_names(ast.parse(stmt).body[0], _PURE) == frozenset(expected)
 
 
 @pytest.mark.parametrize(
@@ -174,4 +195,4 @@ def _expr(text: str) -> ast.expr:
 def _bindings(parse: Parse, source: str) -> Bindings:
     file = parse(source)
     scopes = tuple(new_func_scope(file, func) for func in functions(file.tree))
-    return Bindings(scopes, import_names(file.tree.body))
+    return Bindings(scopes, import_names(file.tree.body), pure_builtins(file))
