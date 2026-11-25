@@ -1,11 +1,10 @@
-import stat
 from pathlib import Path
 from typing import Final
 
 import pytest
 
 from pytools.services.lint.linter.rules import Config
-from pytools.services.lint.linter.run import run_fixer, run_linter
+from pytools.services.lint.linter.run import run_linter
 
 _TWO_LONG_FUNCTIONS: Final = """\
 def f():
@@ -21,8 +20,6 @@ _SHORT_FUNCTION: Final = """\
 def h():
     return 1
 """
-_MISPLACED: Final = "def _h(): pass\ndef run(): _h()\n"
-_ORDERED: Final = "def run(): _h()\ndef _h(): pass\n"
 
 
 def test_run_linter_prints_and_counts_diagnostics(
@@ -69,52 +66,3 @@ def test_run_linter_warns_and_skips_unparsable_file(
 
 def _config() -> Config:
     return Config(max_func_len=1)
-
-
-def test_run_fixer_rewrites_misplaced_file(tmp_path: Path) -> None:
-    misplaced = tmp_path / "misplaced.py"
-    misplaced.write_text(_MISPLACED, encoding="utf-8")
-    misplaced.chmod(0o640)
-    ordered = tmp_path / "ordered.py"
-    ordered_bytes = _ORDERED.replace("\n", "\r\n").encode("utf-8-sig")
-    ordered.write_bytes(ordered_bytes)
-    run_fixer([str(misplaced), str(ordered)], Config())
-    assert misplaced.read_text(encoding="utf-8") == _ORDERED
-    assert stat.S_IMODE(misplaced.stat().st_mode) == 0o640
-    assert ordered.read_bytes() == ordered_bytes
-
-
-def test_run_fixer_rewrites_file_a_symlink_points_at(tmp_path: Path) -> None:
-    misplaced = tmp_path / "misplaced.py"
-    misplaced.write_text(_MISPLACED, encoding="utf-8")
-    link = tmp_path / "link.py"
-    link.symlink_to(misplaced)
-    run_fixer([str(link)], Config())
-    assert link.is_symlink()
-    assert misplaced.read_text(encoding="utf-8") == _ORDERED
-
-
-def test_run_fixer_warns_and_skips_unparsable_file(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    bad_file = tmp_path / "bad.py"
-    bad_file.write_bytes(b"def f(:\n")
-    run_fixer([str(bad_file)], Config())
-    assert bad_file.read_bytes() == b"def f(:\n"
-    assert capsys.readouterr().err.startswith(f"warning: {bad_file}: ")
-
-
-def test_run_fixer_warns_and_keeps_unwritable_file(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    misplaced = tmp_path / "misplaced.py"
-    misplaced.write_text(_MISPLACED, encoding="utf-8")
-    monkeypatch.setattr(Path, "replace", _refuse)
-    run_fixer([str(misplaced)], Config())
-    assert list(tmp_path.iterdir()) == [misplaced]
-    assert misplaced.read_text(encoding="utf-8") == _MISPLACED
-    assert capsys.readouterr().err.startswith(f"warning: {misplaced}: ")
-
-
-def _refuse(path: Path, target: Path) -> Path:
-    raise PermissionError(path, target)

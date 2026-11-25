@@ -11,18 +11,13 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 from pytools.services.lint.linter.funcorder import graph
-from pytools.services.lint.linter.funcorder.classes import (
-    Classes,
-    find_classes,
-    find_users,
-)
+from pytools.services.lint.linter.funcorder.classes import Classes, find_classes
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.refs import (
     bound_names,
     called_names,
     import_time_names,
 )
-from pytools.services.lint.linter.funcorder.walls import Walls, find_walls
 
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
@@ -45,14 +40,12 @@ class Model:
     used: frozenset[int]  # defs referenced anywhere in the scope
     waiting: frozenset[int]  # cycle members placed only after a cycle caller
     needs: dict[int, frozenset[int]]  # statements a decl uses when defined
-    walls: Walls  # what each decl must not move past
     classes: Classes  # where the classes go
 
 
 def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     """Return the calls between the defs and classes directly in scope."""
-    body = scope.body
-    stubs = _stubs(body)
+    stubs = _stubs(scope.body)
     decls = _decls(file, scope, stubs)
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
     refs = {idx: _refs(file, scope, decl, names) for idx, decl in decls.items()}
@@ -61,11 +54,14 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         for idx, found in refs.items()
     }
     reach = {idx: graph.reachable(callees, idx) for idx in callees}
-    effects = [import_time_names(file, scope, stmt) for stmt in body]
+    effects = [import_time_names(file, scope, stmt) for stmt in scope.body]
     loads = [found.loads for found in effects]
     import_time = [graph.import_time_reach(found, names, refs) for found in loads]
     pinned = graph.pinned(import_time, reach)
-    calls = _enforced_calls(decls, callees, pinned)
+    calls = {
+        idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
+        for idx, found in callees.items()
+    }
     comps = graph.components(reach)
     callers = {
         idx: graph.callers_of(calls, comps, idx, in_cycle=False) for idx in decls
@@ -73,13 +69,11 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    binders = _binders(file, body, decls, loads)
+    binders = _binders(file, scope.body, decls, loads)
     needs = graph.above(binders)
-    walls = find_walls(file, scope, decls, effects, binders)
-    users = find_users(file, scope, decls, refs, loads)
-    classes = find_classes(decls, users, needs, walls)
+    classes = find_classes(file, scope, decls, refs, effects, binders)
     return Model(
-        body, decls, stubs, calls, callers, cycles, used, waiting, needs, walls, classes
+        scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
     )
 
 
@@ -159,16 +153,6 @@ def _refs(
         if name in names
     ]
     return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
-
-
-def _enforced_calls(
-    decls: dict[int, Decl], callees: dict[int, list[int]], pinned: set[int]
-) -> dict[int, list[int]]:
-    """Return each decl's callees, without the calls the rule doesn't enforce."""
-    return {
-        idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
-        for idx, found in callees.items()
-    }
 
 
 def _is_enforced(

@@ -1,82 +1,21 @@
 import ast
-from typing import Final
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic
 from pytools.services.lint.linter.funcorder.decl import Decl
 from pytools.services.lint.linter.funcorder.model import Model, build, must_precede
 from pytools.services.lint.linter.funcorder.order import arrange
-from pytools.services.lint.linter.funcorder.plain import place, plain_violations
-from pytools.services.lint.linter.funcorder.render import has_shared_lines, render
-
-_NAMESPACE_READERS: Final = frozenset(
-    {"globals", "locals", "vars", "dir", "__builtins__"}
-)
-_NAMESPACES: Final = frozenset(
-    {"__dict__", "__annotations__", "__annotate__", "__static_attributes__"}
-)
-_READER_MODULES: Final = frozenset({"builtins", "inspect", "sys"})
+from pytools.services.lint.linter.funcorder.plain import plain_violations
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
     """Report defs and classes out of order in the module and each class."""
-    scopes = _scopes(file.tree)
+    scopes: list[ast.Module | ast.ClassDef] = [file.tree, *_classes(file.tree)]
     diags = [diag for scope in scopes for diag in _check_scope(file, scope)]
     return sorted(diags, key=lambda diag: diag.line)
 
 
-def fix(file: CheckInput) -> str | None:
-    """Return the source with each scope check reports on laid out in its order.
-
-    Return None when no scope can move, when the result would not hold the same
-    statements, or when the module may read a namespace, whose order a move
-    changes.
-    """
-    if _reads_namespace(file.tree):
-        return None
-    orders: dict[ast.Module | ast.ClassDef, list[int]] = {}
-    for scope in _scopes(file.tree):
-        order = _fixed_order(file, scope)
-        if order is not None:
-            orders[scope] = order
-    if not orders:
-        return None
-    fixed = render(file, orders)
-    return fixed if _holds_same_statements(file, fixed) else None
-
-
-def _reads_namespace(tree: ast.Module) -> bool:
-    """Report whether tree names a namespace or a function that returns one.
-
-    Importing a module that can hand out such a function counts too.
-    """
-    return any(_is_namespace_read(node) for node in ast.walk(tree))
-
-
-def _is_namespace_read(node: ast.AST) -> bool:
-    if isinstance(node, ast.Attribute):
-        return node.attr in _NAMESPACES
-    if isinstance(node, ast.Import):
-        roots = {alias.name.partition(".")[0] for alias in node.names}
-        return not roots.isdisjoint(_READER_MODULES)
-    if isinstance(node, ast.ImportFrom):
-        return (node.module or "").partition(".")[0] in _READER_MODULES
-    names = _NAMESPACE_READERS | _NAMESPACES
-    return isinstance(node, ast.Name) and node.id in names
-
-
-def _fixed_order(
-    file: CheckInput, scope: ast.Module | ast.ClassDef
-) -> list[int] | None:
-    """Return the order to lay scope out in, or None to leave it as it is.
-
-    A scope stays when check reports nothing on it, its statements share a
-    line, or the order would change what runs when it is defined.
-    """
-    if not _check_scope(file, scope) or has_shared_lines(file, scope):
-        return None
-    model = build(file, scope)
-    order = place(model, arrange(model)[0])
-    return order if model.walls.keeps(order) else None
+def _classes(tree: ast.Module) -> list[ast.ClassDef]:
+    return [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
 
 
 def _check_scope(
@@ -140,34 +79,3 @@ def _directly_below(model: Model, decl: Decl, order: list[int]) -> list[str]:
         return []
     above = model.decls[order[pos - 1]].name
     return [f'"{decl.name}" should be directly below "{above}"']
-
-
-def _holds_same_statements(file: CheckInput, fixed: str) -> bool:
-    """Report whether fixed parses to file's statements, each scope's in any order.
-
-    Source nested too deeply to compare counts as different.
-    """
-    try:
-        before = _sorted_dump(ast.parse("\n".join(file.lines)))
-        return before == _sorted_dump(ast.parse(fixed))
-    except (SyntaxError, RecursionError, MemoryError):
-        return False
-
-
-def _sorted_dump(tree: ast.Module) -> str:
-    """Return tree dumped with each scope's statements sorted, innermost first.
-
-    Each scope's docstring leads its sorted statements, so a move that changes
-    it shows.
-    """
-    scopes = _scopes(tree)
-    for scope in reversed(scopes):
-        doc = ast.Expr(ast.Constant(ast.get_docstring(scope, clean=False)))
-        scope.body.sort(key=ast.dump)
-        scope.body.insert(0, doc)
-    return ast.dump(tree)
-
-
-def _scopes(tree: ast.Module) -> list[ast.Module | ast.ClassDef]:
-    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
-    return [tree, *classes]

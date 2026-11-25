@@ -48,13 +48,3 @@ def _rule_checkers(
         Rule.MUTABLEGLOBAL: mutableglobal.check,
         Rule.FUNCORDER: funcorder.check,
     }
-
-
-def run_fixes(file: CheckInput, config: Config) -> str | None:
-    """Return file's source with the fixes of each rule the config runs applied.
-
-    Return None when no fix changes it.
-    """
-    if Rule.FUNCORDER in config.exclude:
-        return None
-    return funcorder.fix(file)

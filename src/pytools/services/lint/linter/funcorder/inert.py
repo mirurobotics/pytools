@@ -39,20 +39,19 @@ _PURE: Final = frozenset(
 )
 
 
-def is_inert(stmt: ast.stmt) -> bool:
-    """Report whether running stmt surely runs no code.
+def is_inert(decl: Function | ast.ClassDef) -> bool:
+    """Report whether defining decl surely runs no code.
 
     A def's decorators are pure stdlib ones, its defaults are literals, and its
     annotations run no call or other code. A class has such decorators, no bases
     or keywords, and its body holds only docstrings, `pass`, such defs, and
-    literals bound to names. Any other statement is inert only when it is one of
-    those body statements.
+    literals bound to names.
     """
-    if not isinstance(stmt, ast.ClassDef):
-        return _is_inert_stmt(stmt)
-    if stmt.bases or stmt.keywords or not _are_pure(stmt.decorator_list):
+    if not isinstance(decl, ast.ClassDef):
+        return _is_inert_def(decl)
+    if decl.bases or decl.keywords or not _are_pure(decl.decorator_list):
         return False
-    return all(_is_inert_stmt(part) for part in stmt.body)
+    return all(_is_inert_stmt(stmt) for stmt in decl.body)
 
 
 def _is_inert_stmt(stmt: ast.stmt) -> bool:
