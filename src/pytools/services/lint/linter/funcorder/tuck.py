@@ -55,7 +55,7 @@ def _is_tuckable(
     if any(idx not in model.decls and idx not in model.stubs for idx in tree):
         return False
     passed = {idx for between in trees[last + 1 : start] for idx in between}
-    if not model.classes.may_pass(tree, passed):
+    if not model.walls.may_pass(tree, passed):
         return False
     if not max(model.needs[tree[0]], default=-1) < end < tree[0]:
         return False

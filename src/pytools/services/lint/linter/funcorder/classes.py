@@ -1,6 +1,4 @@
 import ast
-from collections import Counter
-from collections.abc import Collection
 from dataclasses import dataclass
 
 from pytools.services.lint.linter.analysis.analysis import (
@@ -9,15 +7,13 @@ from pytools.services.lint.linter.analysis.analysis import (
     Function,
     walk_outside,
 )
-from pytools.services.lint.linter.analysis.names import outer_parts
 from pytools.services.lint.linter.funcorder import graph
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.refs import (
     ImportTimeNames,
     called_names,
-    scope_bindings,
 )
-from pytools.services.lint.linter.funcorder.walls import Walls, find_walls
+from pytools.services.lint.linter.funcorder.walls import Walls
 
 type _Users = dict[int, list[int]]
 
@@ -38,16 +34,8 @@ class Classes:
     uses: dict[int, Use]  # where each class without methods that can move goes
     inherited: dict[int, frozenset[int]]  # what each user of such classes waits for
     tucked: _Users  # the defs above each class with methods that use it
-    walls: Walls
-    _fixed: frozenset[int]  # the decls that never move, exempt classes included
     _plain: _Users  # the users of each class without methods
     _staying: frozenset[int]  # the classes without methods that can't move
-
-    def may_pass(self, moved: Collection[int], passed: Collection[int]) -> bool:
-        """Report whether the decls moved may move together past those passed."""
-        if not self._fixed.isdisjoint(moved):
-            return False
-        return not any(self.walls.crossed(idx, passed) for idx in moved)
 
     def first_uses(self, places: dict[int, int]) -> dict[int, Use]:
         """Return where each class in uses goes when its users sit at places."""
@@ -61,24 +49,18 @@ def find_classes(
     decls: dict[int, Decl],
     refs: dict[int, list[int]],
     effects: list[ImportTimeNames],
-    binders: dict[int, frozenset[int]],
+    needs: dict[int, frozenset[int]],
+    walls: Walls,
 ) -> Classes:
     """Return where the classes in scope go, from the statements that use them."""
     loads = [found.loads for found in effects]
     users = _users(file, scope, decls, refs, loads)
     used = {cls: found for cls, found in users.items() if found}
-    bindings = scope_bindings(file, scope)
-    shadowed = _shadowed_classes(decls, bindings)
-    kept = _runs_code(decls, effects, bindings) | shadowed | _writes_outer(decls)
     plain = _plain(decls, used)
-    walls = find_walls(scope, decls, effects, binders, kept, bindings)
-    exempt = {idx for idx, decl in decls.items() if decl.exempt}
-    fixed = kept | {idx for idx in exempt if decls[idx].kind is DeclKind.CLASS}
-    uses = _place(decls, plain, walls, fixed)
-    inherited = _inherited(plain, uses, graph.above(binders))
+    uses = _place(decls, plain, walls)
+    inherited = _inherited(plain, uses, needs)
     staying = frozenset(plain.keys() - uses.keys())
-    tucked = _tucked(decls, used)
-    return Classes(uses, inherited, tucked, walls, fixed, plain, staying)
+    return Classes(uses, inherited, _tucked(decls, used), plain, staying)
 
 
 def _users(
@@ -108,67 +90,6 @@ def _users(
     }
 
 
-def _shadowed_classes(decls: dict[int, Decl], bindings: Counter[str]) -> frozenset[int]:
-    """Return the classes whose name another statement may bind or delete.
-
-    A use of that name may mean another binding, so such a class never moves. A
-    global declaration may bind it too, and a star import may bind any name.
-    """
-    classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    if bindings["*"]:
-        return frozenset(classes)
-    return frozenset(cls for cls in classes if bindings[decls[cls].stmt.name] > 1)
-
-
-def _runs_code(
-    decls: dict[int, Decl], effects: list[ImportTimeNames], bindings: Counter[str]
-) -> frozenset[int]:
-    """Return the decls whose definition may run code from the scope.
-
-    That code may read a statement a move would pass, so such a decl never
-    moves. It may run when a name bound in the scope is used other than by only
-    loading it, but a class body's value may name a bare def.
-    """
-    local = {name for found in effects for name in found.binds}
-    risky = local - _bare_def_names(decls, bindings)
-    return frozenset(
-        idx
-        for idx, decl in decls.items()
-        for part in decl.span
-        if effects[part].called & local or effects[part].stored & risky
-    )
-
-
-def _bare_def_names(decls: dict[int, Decl], bindings: Counter[str]) -> set[str]:
-    """Return the names that only an undecorated def binds."""
-    return {
-        decl.stmt.name
-        for decl in decls.values()
-        if isinstance(decl.stmt, DEFS)
-        and not decl.stmt.decorator_list
-        and bindings[decl.stmt.name] == 1
-    }
-
-
-def _writes_outer(decls: dict[int, Decl]) -> frozenset[int]:
-    """Return the classes whose header has a walrus, or body a global or nonlocal.
-
-    A walrus in the body binds only in the class namespace.
-    """
-    classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
-    return frozenset(idx for idx in classes if _has_outer_write(decls[idx].stmt))
-
-
-def _has_outer_write(stmt: Function | ast.ClassDef) -> bool:
-    if not isinstance(stmt, ast.ClassDef):
-        return False
-    in_header = [node for part in outer_parts(stmt) for node in ast.walk(part)]
-    is_walrus = any(isinstance(node, ast.NamedExpr) for node in in_header)
-    nodes = walk_outside(stmt.body, DEFS)
-    is_declared = any(isinstance(node, (ast.Global, ast.Nonlocal)) for node in nodes)
-    return is_walrus or is_declared
-
-
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
     """Return the users of each class without methods.
 
@@ -190,14 +111,13 @@ def _place(
     decls: dict[int, Decl],
     plain: _Users,
     walls: Walls,
-    fixed: frozenset[int],
 ) -> dict[int, Use]:
     """Return where each class without methods that can move goes.
 
     One that can't move stays put, so the classes it uses go above it where it
     is. Each round fixes the classes the round before couldn't move.
     """
-    staying = fixed & plain.keys()
+    staying = walls.fixed & plain.keys()
     starts = {idx: decl.span.start for idx, decl in decls.items()}
     while True:
         uses = _first_uses(plain, staying, starts)

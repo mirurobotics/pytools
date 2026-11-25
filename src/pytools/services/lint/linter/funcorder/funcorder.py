@@ -44,7 +44,7 @@ def _fixed_order(
         return None
     model = build(file, scope)
     order = place(model, arrange(model)[0])
-    return order if model.classes.walls.keeps(order) else None
+    return order if model.walls.keeps(order) else None
 
 
 def _check_scope(

@@ -257,9 +257,10 @@ def test_find_classes_keeps_rebound_classes(parse: Parse) -> None:
 
 
 def _kept(parse: Parse, source: str) -> set[int]:
-    count = len(parse(source).tree.body)
-    classes = _find(parse, source)
-    return {idx for idx in range(count) if not classes.may_pass([idx], [])}
+    file = parse(source)
+    walls = model.build(file, file.tree).walls
+    count = len(file.tree.body)
+    return {idx for idx in range(count) if not walls.may_pass([idx], [])}
 
 
 @pytest.mark.parametrize(

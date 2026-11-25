@@ -28,6 +28,22 @@ def _h(): pass
 def run(): _h()
 """
 _REBOUND: Final = "def _h(): return 1\n_h = 2\ndef run(): return _h\n"
+_REDEFINED: Final = "def _f(): return 1\ndef run(): return _f()\ndef _f(): return 2\n"
+_DECORATED_METHOD: Final = """\
+from framework import route as cache
+def _h(): pass
+class Admin:
+    @cache("/admin")
+    def get(self): pass
+def run(): _h()
+"""
+_ANNOTATION_READ: Final = """\
+def main(): _make()
+class Node:
+    def size(self): return 0
+DEFAULT: Node | None = None
+def _make(): return DEFAULT
+"""
 _NEAR_USER: Final = """\
 def main(): U()
 class P:
@@ -97,6 +113,9 @@ class T:
         pytest.param(_DYNAMIC_USE, id="statement-that-runs-code"),
         pytest.param(_RENAMED_DECORATOR, id="decorated-definition"),
         pytest.param(_REBOUND, id="name-bound-again"),
+        pytest.param(_REDEFINED, id="def-defined-again"),
+        pytest.param(_DECORATED_METHOD, id="class-with-decorated-method"),
+        pytest.param(_ANNOTATION_READ, id="annotation-reads-a-class"),
     ],
 )
 def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:

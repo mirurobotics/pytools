@@ -45,7 +45,8 @@ def is_inert(stmt: ast.stmt) -> bool:
     A def's decorators are pure stdlib ones, its defaults are literals, and its
     annotations run no call or other code. A class has such decorators, no bases
     or keywords, and its body holds only docstrings, `pass`, such defs, and
-    literals bound to names. Any other statement is one of those body statements.
+    literals bound to names. Any other statement is inert only when it is one of
+    those body statements.
     """
     if not isinstance(stmt, ast.ClassDef):
         return _is_inert_stmt(stmt)

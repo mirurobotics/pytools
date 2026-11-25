@@ -18,6 +18,7 @@ from pytools.services.lint.linter.funcorder.refs import (
     called_names,
     import_time_names,
 )
+from pytools.services.lint.linter.funcorder.walls import Walls, find_walls
 
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
@@ -40,6 +41,7 @@ class Model:
     used: frozenset[int]  # defs referenced anywhere in the scope
     waiting: frozenset[int]  # cycle members placed only after a cycle caller
     needs: dict[int, frozenset[int]]  # statements a decl uses when defined
+    walls: Walls  # what each decl must not move past
     classes: Classes  # where the classes go
 
 
@@ -71,9 +73,20 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     waiting = _waiting(decls, callers, cycles, comps)
     binders = _binders(file, scope.body, decls, loads)
     needs = graph.above(binders)
-    classes = find_classes(file, scope, decls, refs, effects, binders)
+    walls = find_walls(file, scope, decls, effects, binders)
+    classes = find_classes(file, scope, decls, refs, effects, needs, walls)
     return Model(
-        scope.body, decls, stubs, calls, callers, cycles, used, waiting, needs, classes
+        scope.body,
+        decls,
+        stubs,
+        calls,
+        callers,
+        cycles,
+        used,
+        waiting,
+        needs,
+        walls,
+        classes,
     )
 
 
