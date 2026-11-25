@@ -47,10 +47,12 @@ def test_add_lint_command_defaults() -> None:
         args.max_func_len,
         args.max_file_len,
         args.max_nest_depth,
+        args.max_doc_lines,
+        args.max_package_doc_lines,
         args.exclude,
         args.rule,
     )
-    assert defaults == (["."], True, 30, 300, 2, frozenset(), None)
+    assert defaults == (["."], True, 30, 300, 2, 8, 20, frozenset(), None)
 
 
 @pytest.mark.parametrize(
@@ -107,6 +109,28 @@ def test_add_lint_command_parses_max_nest_depth() -> None:
 def test_add_lint_command_rejects_bad_max_nest_depth(raw: str) -> None:
     with pytest.raises(SystemExit) as excinfo:
         _parse(["--max-nest-depth", raw])
+    assert excinfo.value.code == 2
+
+
+def test_add_lint_command_parses_max_doc_lines() -> None:
+    assert _parse(["--max-doc-lines", "3"]).max_doc_lines == 3
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "ten"])
+def test_add_lint_command_rejects_bad_max_doc_lines(raw: str) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        _parse(["--max-doc-lines", raw])
+    assert excinfo.value.code == 2
+
+
+def test_add_lint_command_parses_max_package_doc_lines() -> None:
+    assert _parse(["--max-package-doc-lines", "30"]).max_package_doc_lines == 30
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "ten"])
+def test_add_lint_command_rejects_bad_max_package_doc_lines(raw: str) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        _parse(["--max-package-doc-lines", raw])
     assert excinfo.value.code == 2
 
 
