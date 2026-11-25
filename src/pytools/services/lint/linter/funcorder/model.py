@@ -11,7 +11,11 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.analysis.nolint import has_def_nolint
 from pytools.services.lint.linter.funcorder import graph
-from pytools.services.lint.linter.funcorder.classes import Classes, find_classes
+from pytools.services.lint.linter.funcorder.classes import (
+    Classes,
+    find_classes,
+    find_users,
+)
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.refs import (
     bound_names,
@@ -72,7 +76,8 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     binders = _binders(file, body, decls, loads)
     needs = graph.above(binders)
     walls = find_walls(file, scope, decls, effects, binders)
-    classes = find_classes(file, scope, decls, refs, effects, walls)
+    users = find_users(file, scope, decls, refs, loads)
+    classes = find_classes(decls, users, needs, walls)
     return Model(
         body, decls, stubs, calls, callers, cycles, used, waiting, needs, walls, classes
     )

@@ -312,6 +312,13 @@ def scope_bindings(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Counte
     return counts
 
 
+def bound_or_declared(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:
+    """Return the names stmt binds in its scope or declares global or nonlocal."""
+    nodes = list(ast.walk(stmt))
+    declared = _declared(nodes, ast.Global) | _declared(nodes, ast.Nonlocal)
+    return bound_names(file, stmt) | declared
+
+
 def bound_names(file: CheckInput, stmt: ast.stmt) -> frozenset[str]:
     """Return the names stmt binds or deletes in the scope it runs in."""
     return _bound_names(file, _run_nodes([stmt]))

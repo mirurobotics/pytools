@@ -9,6 +9,9 @@ from pytools.services.lint.linter.funcorder.plain import place, plain_violations
 from pytools.services.lint.linter.funcorder.render import has_shared_lines, render
 
 _NAMESPACE_READERS: Final = frozenset({"globals", "locals", "vars", "dir"})
+_NAMESPACES: Final = frozenset(
+    {"__dict__", "__annotations__", "__annotate__", "__static_attributes__"}
+)
 
 
 def check(file: CheckInput) -> list[Diagnostic]:
@@ -22,7 +25,7 @@ def fix(file: CheckInput) -> str | None:
     """Return the source with each scope check reports on laid out in its order.
 
     Return None when no scope can move, when the result would not hold the same
-    statements, or when the module may walk a namespace, whose order a move
+    statements, or when the module may read a namespace, whose order a move
     changes.
     """
     if _reads_namespace(file.tree):
@@ -39,14 +42,15 @@ def fix(file: CheckInput) -> str | None:
 
 
 def _reads_namespace(tree: ast.Module) -> bool:
-    """Report whether tree names globals, locals, vars or dir, or reads __dict__."""
+    """Report whether tree names a namespace or a function that returns one."""
     return any(_is_namespace_read(node) for node in ast.walk(tree))
 
 
 def _is_namespace_read(node: ast.AST) -> bool:
     if isinstance(node, ast.Attribute):
-        return node.attr == "__dict__"
-    return isinstance(node, ast.Name) and node.id in _NAMESPACE_READERS
+        return node.attr in _NAMESPACES
+    names = _NAMESPACE_READERS | _NAMESPACES
+    return isinstance(node, ast.Name) and node.id in names
 
 
 def _fixed_order(

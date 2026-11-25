@@ -9,10 +9,7 @@ from pytools.services.lint.linter.analysis.analysis import (
 )
 from pytools.services.lint.linter.funcorder import graph
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
-from pytools.services.lint.linter.funcorder.refs import (
-    ImportTimeNames,
-    called_names,
-)
+from pytools.services.lint.linter.funcorder.refs import called_names
 from pytools.services.lint.linter.funcorder.walls import Walls
 
 type _Users = dict[int, list[int]]
@@ -44,49 +41,18 @@ class Classes:
 
 
 def find_classes(
-    file: CheckInput,
-    scope: ast.Module | ast.ClassDef,
     decls: dict[int, Decl],
-    refs: dict[int, list[int]],
-    effects: list[ImportTimeNames],
+    users: _Users,
+    needs: dict[int, frozenset[int]],
     walls: Walls,
 ) -> Classes:
     """Return where the classes in scope go, from the statements that use them."""
-    loads = [found.loads for found in effects]
-    users = _users(file, scope, decls, refs, loads)
     used = {cls: found for cls, found in users.items() if found}
     plain = _plain(decls, used)
     uses = _place(decls, plain, walls)
-    inherited = _inherited(plain, uses, graph.above(walls.binders))
+    inherited = _inherited(plain, uses, needs)
     staying = frozenset(plain.keys() - uses.keys())
     return Classes(uses, inherited, _tucked(decls, used), plain, staying)
-
-
-def _users(
-    file: CheckInput,
-    scope: ast.Module | ast.ClassDef,
-    decls: dict[int, Decl],
-    refs: dict[int, list[int]],
-    loads: list[set[str]],
-) -> _Users:
-    """Return the statements that refer to each class, when run or when called.
-
-    The stubs merged into a decl refer for it.
-    """
-    names = {decl.stmt.name: idx for idx, decl in decls.items()}
-    merged = {stub: idx for idx, decl in decls.items() for stub in decl.span[:-1]}
-    referred = [set(refs.get(idx, [])) for idx in range(len(scope.body))]
-    for idx, stmt in enumerate(scope.body):
-        named = set(loads[idx])
-        if idx not in decls and idx not in merged:
-            named.update(called_names(file, scope, stmt))
-        owner = merged.get(idx, idx)
-        referred[owner].update(names[name] for name in named if name in names)
-    return {
-        cls: [idx for idx, found in enumerate(referred) if cls in found and idx != cls]
-        for cls, decl in decls.items()
-        if decl.kind is DeclKind.CLASS
-    }
 
 
 def _plain(decls: dict[int, Decl], users: _Users) -> _Users:
@@ -202,6 +168,33 @@ def _has_body(func: Function) -> bool:
         and stmt.value.value is Ellipsis
         for stmt in body
     )
+
+
+def find_users(
+    file: CheckInput,
+    scope: ast.Module | ast.ClassDef,
+    decls: dict[int, Decl],
+    refs: dict[int, list[int]],
+    loads: list[set[str]],
+) -> _Users:
+    """Return the statements that refer to each class, when run or when called.
+
+    The stubs merged into a decl refer for it.
+    """
+    names = {decl.stmt.name: idx for idx, decl in decls.items()}
+    merged = {stub: idx for idx, decl in decls.items() for stub in decl.span[:-1]}
+    referred = [set(refs.get(idx, [])) for idx in range(len(scope.body))]
+    for idx, stmt in enumerate(scope.body):
+        named = set(loads[idx])
+        if idx not in decls and idx not in merged:
+            named.update(called_names(file, scope, stmt))
+        owner = merged.get(idx, idx)
+        referred[owner].update(names[name] for name in named if name in names)
+    return {
+        cls: [idx for idx, found in enumerate(referred) if cls in found and idx != cls]
+        for cls, decl in decls.items()
+        if decl.kind is DeclKind.CLASS
+    }
 
 
 def _first_uses(

@@ -13,19 +13,28 @@ from pytools.services.lint.linter.analysis.analysis import (
 from pytools.services.lint.linter.analysis.names import outer_parts
 from pytools.services.lint.linter.funcorder.decl import Decl, DeclKind
 from pytools.services.lint.linter.funcorder.inert import is_inert
-from pytools.services.lint.linter.funcorder.refs import ImportTimeNames, scope_bindings
+from pytools.services.lint.linter.funcorder.refs import (
+    ImportTimeNames,
+    bound_or_declared,
+    scope_bindings,
+)
 
 
 @dataclass(frozen=True)
 class Walls:
-    """The statements each decl in a scope must not move past."""
+    """What the statements in a scope must not move past.
 
-    binders: dict[int, frozenset[int]]  # bind a name each statement reads when run
+    Check moves decls within binders, barriers, walled and fixed; a fix also
+    keeps runs, rivals and reads in order.
+    """
+
+    binders: dict[int, frozenset[int]]  # bind a name each decl reads when defined
     barriers: frozenset[int]  # may run code or bind a name
     walled: frozenset[int]  # the decls that must not move past a barrier
+    fixed: frozenset[int]  # the decls that never move, exempt classes included
     runs: frozenset[int]  # may run code, which may use any name the scope binds
     rivals: list[list[int]]  # bind the same name, so the last one wins
-    fixed: frozenset[int]  # the decls that never move, exempt classes included
+    reads: dict[int, frozenset[int]]  # bind a name each statement reads when run
 
     def may_pass(self, moved: Collection[int], passed: Collection[int]) -> bool:
         """Report whether the decls moved may move together past those passed."""
@@ -54,9 +63,10 @@ class Walls:
         )
         groups = [[rank[idx] for idx in group] for group in self.rivals]
         is_bound = all(group == sorted(group) for group in groups)
+        pairs = [*self.binders.items(), *self.reads.items()]
         is_below = not any(
             (idx < other) != (rank[idx] < rank[other])
-            for idx, found in self.binders.items()
+            for idx, found in pairs
             for other in found
         )
         return is_ordered and is_bound and is_below
@@ -69,13 +79,11 @@ def find_walls(
     effects: list[ImportTimeNames],
     binders: dict[int, frozenset[int]],
 ) -> Walls:
-    """Return the statements each decl in a scope must not move past.
+    """Return what the statements in a scope must not move past.
 
-    Its binders bind a name it reads when defined. Any statement but an inert
-    decl that runs no scope code may run code or bind a name, so a decl whose
-    definition may run code must not pass one, nor may one that reads a name the
-    scope may bind, nor, in a class scope, a class that reads a name its body
-    doesn't bind. A decl's stubs, such as overloads, count as part of it.
+    A decl must not pass its binders, nor a barrier when it may run code when
+    defined or reads a name the scope may bind. A decl's stubs count as part of
+    it. A fix also keeps runs, rivals and the binders of every read in order.
     """
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     bindings = scope_bindings(file, scope)
@@ -89,11 +97,12 @@ def find_walls(
     walled = active | {idx for idx in decls if reads[idx] & bindings.keys()}
     if isinstance(scope, ast.ClassDef):
         walled |= {cls for cls in classes if effects[cls].reads - effects[cls].binds}
+    fixed = kept | exempt
     runs = _runs(scope, decls, active)
-    bound = _bound_by(effects)
+    bound = _bound_by(file, scope)
     rivals = [group for group in bound.values() if len(group) > 1]
-    readers = _readers(effects, bound) | binders
-    return Walls(readers, barriers, frozenset(walled), runs, rivals, kept | exempt)
+    reached = _readers(scope, effects, bound)
+    return Walls(binders, barriers, frozenset(walled), fixed, runs, rivals, reached)
 
 
 def _shadowed_classes(decls: dict[int, Decl], bindings: Counter[str]) -> frozenset[int]:
@@ -195,20 +204,35 @@ def _is_decorated(stmt: ast.stmt) -> bool:
     )
 
 
-def _bound_by(effects: list[ImportTimeNames]) -> dict[str, list[int]]:
-    """Return the statements that bind each name, in order."""
+def _bound_by(
+    file: CheckInput, scope: ast.Module | ast.ClassDef
+) -> dict[str, list[int]]:
+    """Return the statements that bind each name in scope, in order."""
     found: dict[str, list[int]] = {}
-    for idx, effect in enumerate(effects):
-        for name in effect.binds:
-            found.setdefault(name, []).append(idx)
+    for idx, stmt in enumerate(scope.body):
+        for name in bound_or_declared(file, stmt):
+            found.setdefault(_mangled(scope, name), []).append(idx)
     return found
 
 
 def _readers(
-    effects: list[ImportTimeNames], bound: dict[str, list[int]]
+    scope: ast.Module | ast.ClassDef,
+    effects: list[ImportTimeNames],
+    bound: dict[str, list[int]],
 ) -> dict[int, frozenset[int]]:
     """Return the statements that bind a name each statement reads when run."""
     return {
-        idx: frozenset(other for name in effect.reads for other in bound.get(name, []))
+        idx: frozenset(
+            other
+            for name in effect.reads
+            for other in bound.get(_mangled(scope, name), [])
+        )
         for idx, effect in enumerate(effects)
     }
+
+
+def _mangled(scope: ast.Module | ast.ClassDef, name: str) -> str:
+    """Return name as Python stores it in scope, private class names mangled."""
+    owner = scope.name.lstrip("_") if isinstance(scope, ast.ClassDef) else ""
+    is_private = name.startswith("__") and not name.endswith("__")
+    return f"_{owner}{name}" if owner and is_private else name

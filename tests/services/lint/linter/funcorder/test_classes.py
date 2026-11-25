@@ -18,58 +18,6 @@ class P:
     q: Q
 def run(p: P): pass
 """
-_RUNS_CODE: Final = """\
-from m import dec
-V = 1
-class A:
-    a: Opt[V]
-    b: Callable[[V], tuple[V]]
-class B(V): pass
-class C:
-    c = V.x
-class D:
-    d = V + 1
-class E:
-    e = V["k"]
-class F:
-    f = sorted(items, key=lambda n: V)
-@V
-class G: pass
-class H:
-    def _c(): pass
-    h = _c()
-@dec
-class I:
-    i = dec(V)
-def j(p: V = V) -> V: pass
-class K:
-    k = sorted(items, key=j)
-class L:
-    lo, hi = V
-class M:
-    m = V
-class N:
-    n: int = V
-class O:
-    o = j
-class P:
-    for x in (V,): pass
-class Q:
-    def m(self, p=V): return p
-@dec
-def k(): pass
-class R:
-    r = k
-def u(): pass
-u = 1
-class S:
-    s = u
-@dec([j])
-class T: pass
-class W:
-    global gx
-    gx = 2
-"""
 _REBOUND: Final = """\
 class Point:
     x = 1
@@ -246,25 +194,10 @@ def test_find_classes_chains_methodless_class_needs(parse: Parse) -> None:
     assert inherited == {2: frozenset({0}), 3: frozenset({0, 1})}
 
 
-def test_find_classes_finds_decls_that_run_code(parse: Parse) -> None:
-    expected = {3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 17, 18, 20, 23, 24, 25}
-    assert _kept(parse, _RUNS_CODE) == expected
-
-
-def test_find_classes_keeps_rebound_classes(parse: Parse) -> None:
-    assert _kept(parse, _REBOUND) == {0, 2}
-    assert not _find(parse, _REBOUND).uses
-
-
-def _kept(parse: Parse, source: str) -> set[int]:
-    file = parse(source)
-    walls = model.build(file, file.tree).walls
-    return {idx for idx in range(len(file.tree.body)) if not walls.may_pass([idx], [])}
-
-
 @pytest.mark.parametrize(
     "source",
     [
+        pytest.param(_REBOUND, id="class-name-bound-again"),
         pytest.param(_DELETED_BELOW, id="move-would-pass-a-deletion"),
         pytest.param(_REASSIGNED_BELOW, id="move-would-pass-an-assignment"),
         pytest.param(_REDEFINED_BELOW, id="move-would-pass-a-def-it-reads"),

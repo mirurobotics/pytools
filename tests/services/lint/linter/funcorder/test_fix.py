@@ -62,6 +62,24 @@ class Policy:
     def admin(self, user): return self._allow_guest(user)
 RULES = list(Policy.__dict__)
 """
+_ANNOTATIONS: Final = """\
+def _h(): pass
+x: int
+def _g(): pass
+def run(p: __annotations__["x"]): _h(); _g()
+"""
+_MANGLED: Final = """\
+class T:
+    def __h(self): return 1
+    def _T__h(self): return 2
+    def run(self): return self._T__h()
+"""
+_SAME_METHOD: Final = """\
+class A:
+    def __init__(self): pass
+class B:
+    def __init__(self): pass
+"""
 _NEAR_USER: Final = """\
 def main(): U()
 class P:
@@ -138,6 +156,8 @@ class T:
         pytest.param(_CLASS_STRING, id="string-would-become-class-docstring"),
         pytest.param(_NAMESPACE_ORDER, id="module-walks-its-namespace"),
         pytest.param(_CLASS_DICT, id="module-reads-a-dict-attribute"),
+        pytest.param(_ANNOTATIONS, id="module-reads-its-annotations"),
+        pytest.param(_MANGLED, id="private-name-bound-again"),
     ],
 )
 def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
@@ -220,6 +240,11 @@ def test_fix_skips_source_it_cannot_order(parse: Parse, source: str) -> None:
             id="placed-class-stays",
         ),
         pytest.param(_NEAR_USER, _NEAR_USER_FIXED, id="near-class-follows-its-user"),
+        pytest.param(
+            "def _h(): pass\n" + _SAME_METHOD + "def run(): _h()\n",
+            _SAME_METHOD + "def run(): _h()\ndef _h(): pass\n",
+            id="classes-with-the-same-method",
+        ),
         pytest.param(
             _SHARED_USER, _SHARED_USER_FIXED, id="near-class-whose-neighbour-moves"
         ),
