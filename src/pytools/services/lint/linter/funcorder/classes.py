@@ -49,7 +49,6 @@ def find_classes(
     decls: dict[int, Decl],
     refs: dict[int, list[int]],
     effects: list[ImportTimeNames],
-    needs: dict[int, frozenset[int]],
     walls: Walls,
 ) -> Classes:
     """Return where the classes in scope go, from the statements that use them."""
@@ -58,7 +57,7 @@ def find_classes(
     used = {cls: found for cls, found in users.items() if found}
     plain = _plain(decls, used)
     uses = _place(decls, plain, walls)
-    inherited = _inherited(plain, uses, needs)
+    inherited = _inherited(plain, uses, graph.above(walls.binders))
     staying = frozenset(plain.keys() - uses.keys())
     return Classes(uses, inherited, _tucked(decls, used), plain, staying)
 

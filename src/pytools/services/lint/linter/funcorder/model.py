@@ -47,7 +47,8 @@ class Model:
 
 def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     """Return the calls between the defs and classes directly in scope."""
-    stubs = _stubs(scope.body)
+    body = scope.body
+    stubs = _stubs(body)
     decls = _decls(file, scope, stubs)
     names = {decl.stmt.name: idx for idx, decl in decls.items()}
     refs = {idx: _refs(file, scope, decl, names) for idx, decl in decls.items()}
@@ -56,14 +57,11 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
         for idx, found in refs.items()
     }
     reach = {idx: graph.reachable(callees, idx) for idx in callees}
-    effects = [import_time_names(file, scope, stmt) for stmt in scope.body]
+    effects = [import_time_names(file, scope, stmt) for stmt in body]
     loads = [found.loads for found in effects]
     import_time = [graph.import_time_reach(found, names, refs) for found in loads]
     pinned = graph.pinned(import_time, reach)
-    calls = {
-        idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
-        for idx, found in callees.items()
-    }
+    calls = _enforced_calls(decls, callees, pinned)
     comps = graph.components(reach)
     callers = {
         idx: graph.callers_of(calls, comps, idx, in_cycle=False) for idx in decls
@@ -71,22 +69,12 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     cycles = {idx: graph.callers_of(calls, comps, idx, in_cycle=True) for idx in decls}
     used = frozenset(chain(*import_time, *callees.values()))
     waiting = _waiting(decls, callers, cycles, comps)
-    binders = _binders(file, scope.body, decls, loads)
+    binders = _binders(file, body, decls, loads)
     needs = graph.above(binders)
     walls = find_walls(file, scope, decls, effects, binders)
-    classes = find_classes(file, scope, decls, refs, effects, needs, walls)
+    classes = find_classes(file, scope, decls, refs, effects, walls)
     return Model(
-        scope.body,
-        decls,
-        stubs,
-        calls,
-        callers,
-        cycles,
-        used,
-        waiting,
-        needs,
-        walls,
-        classes,
+        body, decls, stubs, calls, callers, cycles, used, waiting, needs, walls, classes
     )
 
 
@@ -166,6 +154,16 @@ def _refs(
         if name in names
     ]
     return [idx for idx in dict.fromkeys(found) if idx != decl.idx]
+
+
+def _enforced_calls(
+    decls: dict[int, Decl], callees: dict[int, list[int]], pinned: set[int]
+) -> dict[int, list[int]]:
+    """Return each decl's callees, without the calls the rule doesn't enforce."""
+    return {
+        idx: [callee for callee in found if _is_enforced(decls, idx, callee, pinned)]
+        for idx, found in callees.items()
+    }
 
 
 def _is_enforced(
