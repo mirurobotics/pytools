@@ -25,6 +25,7 @@ class Walls:
         return found
 
 
+# Any statement but an inert decl that runs no scope code may run code or bind a name.
 def find_walls(
     scope: ast.Module | ast.ClassDef,
     decls: dict[int, Decl],
@@ -33,14 +34,7 @@ def find_walls(
     kept: frozenset[int],
     bindings: Counter[str],
 ) -> Walls:
-    """Return the statements each decl in a scope must not move past.
-
-    Its binders bind a name it reads when defined. Any statement but an inert
-    decl that runs no scope code may run code or bind a name, so a decl whose
-    definition may run code must not pass one, nor may one that reads a name the
-    scope may bind, nor, in a class scope, a class that reads a name its body
-    doesn't bind. A decl's stubs, such as overloads, count as part of it.
-    """
+    """Return the statements each decl in a scope must not move past."""
     classes = [idx for idx, decl in decls.items() if decl.kind is DeclKind.CLASS]
     active = {idx for idx, decl in decls.items() if not _is_inert_decl(scope, decl)}
     calm = {part for idx in decls.keys() - kept - active for part in decls[idx].span}

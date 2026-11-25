@@ -2,10 +2,7 @@ from pytools.services.lint.linter.funcorder.model import Model
 
 
 def tuck(model: Model, trees: list[list[int]], waits: dict[int, set[int]]) -> set[int]:
-    """Move each class with methods below the call tree of its last user above it.
-
-    Trees change in place. Return the classes moved, each now under that tree.
-    """
+    """Move each class with methods under its last user's tree; return those moved."""
     moved: set[int] = set()
     while (found := _next_tuck(model, trees, waits)) is not None:
         start, last = found
@@ -36,6 +33,7 @@ def _last_user_tree(model: Model, trees: list[list[int]], cls: int) -> int | Non
     return max(found, default=None)
 
 
+# Statements run in order at import time, so a tree holding one never moves.
 def _is_tuckable(
     model: Model,
     trees: list[list[int]],
@@ -43,14 +41,7 @@ def _is_tuckable(
     start: int,
     last: int,
 ) -> bool:
-    """Report whether the tree at start can move up under the tree at last.
-
-    It can't hold a statement, which runs in order at import time, a decl
-    whose definition may run scope code, or a class whose name is bound again,
-    and in the file the class must rise below that tree's end without passing
-    what it uses when defined. Nor can a tree it passes hold what it waits for,
-    a caller, or a statement the class must not move past.
-    """
+    """Report whether the tree at start can move up under the tree at last."""
     tree, end = trees[start], trees[last][-1]
     if any(idx not in model.decls and idx not in model.stubs for idx in tree):
         return False

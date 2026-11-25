@@ -2,16 +2,10 @@ from pytools.services.lint.linter.funcorder.model import Model, must_precede
 from pytools.services.lint.linter.funcorder.tuck import tuck
 
 
+# A statement above a def or class moves with it unless that would reorder
+# statements, which run in order at import time.
 def arrange(model: Model) -> tuple[list[int], set[int]]:
-    """Return the scope's statements in order, and those placed under a caller.
-
-    The second holds each def placed directly under a caller, with the
-    statements it carries, and each class tucked under its users. A statement
-    directly above a def or class moves with it, unless that would reorder
-    statements, which run in order at import time, or a later def or class uses
-    it when defined. Each class without methods that can move to its first user
-    is left out, since it goes directly above that user.
-    """
+    """Return the scope's statements in order, and those placed under a caller."""
     decls = model.decls
     blockers = {
         idx: {other for other in decls if must_precede(model, decls[other], decl)}
@@ -53,14 +47,9 @@ def _arrange(
     return [idx for tree in trees for idx in tree], below
 
 
+# Statements above the first def or class are the header, which never moves.
 def _units(model: Model, *, settled: bool) -> list[list[int]]:
-    """Split the scope into each def or class with the statements it carries.
-
-    A statement no def or class carries is a unit of its own, and so is each
-    statement above the first def or class: the header never moves. A class
-    without methods that can move to its first user moves there alone, so the
-    statements above it go with the next def or class.
-    """
+    """Split the scope into each def or class with the statements it carries."""
     first = min(model.decls, default=0)
     anchored = _anchored(model)
     units: list[list[int]] = []
@@ -81,11 +70,9 @@ def _units(model: Model, *, settled: bool) -> list[list[int]]:
     return units
 
 
+# Carrying such a statement could move it past that use, so it stays put.
 def _anchored(model: Model) -> set[int]:
-    """Return the statements a decl below the one that would carry them uses.
-
-    Carrying such a statement could move it past that use, so it stays put.
-    """
+    """Return the statements a decl below the one that would carry them uses."""
     return {
         stmt
         for idx, needed in model.needs.items()
@@ -95,10 +82,7 @@ def _anchored(model: Model) -> set[int]:
 
 
 def _inherited_needs(model: Model, unit: list[int]) -> set[int]:
-    """Return what the classes without methods unit uses need when defined.
-
-    One that can't move stays put, so no user waits for it.
-    """
+    """Return what the classes without methods unit uses need when defined."""
     inherited = model.classes.inherited
     return {need for idx in unit for need in inherited.get(idx, frozenset())}
 
@@ -116,11 +100,7 @@ def _pick(
     done: set[int],
     waits: dict[int, set[int]],
 ) -> tuple[int, bool]:
-    """Return the next unit, and whether it goes directly under a caller.
-
-    The walk follows calls depth-first. When no call leads on, it takes the
-    first unit left that is ready, or the first left if none is.
-    """
+    """Return the next unit, and whether it goes directly under a caller."""
     while stack:
         calls = model.calls.get(stack[-1], [])
         found = [
@@ -136,12 +116,7 @@ def _pick(
 def _is_ready(
     model: Model, idx: int, done: set[int], waits: dict[int, set[int]]
 ) -> bool:
-    """Report whether the unit ending at idx can be placed next.
-
-    A def waits for its callers, a waiting cycle member for one cycle caller,
-    a private def nothing calls for the public ones nothing calls, and a decl
-    for the statements it uses when defined.
-    """
+    """Report whether the unit ending at idx can be placed next."""
     decl = model.decls.get(idx)
     if decl is None or decl.exempt:
         return True

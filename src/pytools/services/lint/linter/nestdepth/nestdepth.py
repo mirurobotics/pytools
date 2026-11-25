@@ -48,12 +48,9 @@ def _nested_blocks(stmt: ast.stmt) -> list[list[ast.stmt]]:
     return []
 
 
+# A loop, not recursion, so a long elif chain can't hit the recursion limit.
 def _if_chain_blocks(stmt: ast.If) -> list[list[ast.stmt]]:
-    """Return the blocks of stmt and its elif chain, with the final else.
-
-    It loops rather than recursing, so a long elif chain can't hit the
-    recursion limit.
-    """
+    """Return the blocks of stmt and its elif chain, with the final else."""
     blocks = [stmt.body]
     while (branch := elif_branch(stmt)) is not None:
         stmt = branch

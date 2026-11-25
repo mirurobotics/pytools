@@ -22,14 +22,10 @@ from pytools.services.lint.linter.funcorder.refs import (
 _DECLS: Final = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
+# A class counts as one caller, through its methods' calls.
 @dataclass(frozen=True)
 class Model:
-    """The calls between the defs and classes directly in a scope.
-
-    A class counts as one caller, through its methods' calls. Calls out of or
-    into an exempt def, and into a def an import-time use reaches and a caller
-    below that use reaches too, are not enforced.
-    """
+    """The calls between the defs and classes directly in a scope."""
 
     stmts: list[ast.stmt]
     decls: dict[int, Decl]
@@ -77,11 +73,9 @@ def build(file: CheckInput, scope: ast.Module | ast.ClassDef) -> Model:
     )
 
 
+# Overloads and property getters are one function with the def they precede.
 def _stubs(stmts: list[ast.stmt]) -> frozenset[int]:
-    """Return the defs directly followed by a def of the same name.
-
-    Overloads and property getters are one function with the def they precede.
-    """
+    """Return the defs directly followed by a def of the same name."""
     pairs = enumerate(pairwise(stmts))
     return frozenset(idx for idx, pair in pairs if _is_redefined(*pair))
 
@@ -142,10 +136,7 @@ def _refs(
     decl: Decl,
     names: dict[str, int],
 ) -> list[int]:
-    """Return the decls decl calls or refers to, in the order it first does.
-
-    The stubs decl replaces, such as a property getter, call for it too.
-    """
+    """Return the decls decl calls or refers to, in the order it first does."""
     found = [
         names[name]
         for part in decl.span
@@ -168,10 +159,7 @@ def _waiting(
     cycle_callers: dict[int, list[int]],
     comps: dict[int, int],
 ) -> frozenset[int]:
-    """Return the cycle members that only cycle calls reach, except the opener.
-
-    A cycle's opener is its first member when nothing outside calls into it.
-    """
+    """Return the cycle members that only cycle calls reach, except the opener."""
     openers = _openers(decls, callers, comps)
     return frozenset(
         idx
@@ -200,10 +188,7 @@ def _binders(
     decls: dict[int, Decl],
     loads: list[set[str]],
 ) -> dict[int, frozenset[int]]:
-    """Return the statements that bind or delete a name each decl uses when defined.
-
-    The stubs merged into a decl are defined with it.
-    """
+    """Return the statements that bind or delete a name each decl uses when defined."""
     binds = [bound_names(file, stmt) for stmt in stmts]
     defined = {
         idx: {name for part in decl.span for name in loads[part]}
@@ -216,10 +201,7 @@ def _binders(
 
 
 def must_precede(model: Model, decl: Decl, other: Decl) -> bool:
-    """Report whether decl, a public def nothing calls, must sit above other.
-
-    It must when other is a private def nothing calls.
-    """
+    """Report whether decl, a public def nothing uses, must sit above a private one."""
     is_unused = decl.idx not in model.used and other.idx not in model.used
     is_ranked = not (decl.exempt or other.exempt) and is_unused
     return (decl.kind, other.kind) == (DeclKind.PUBLIC, DeclKind.PRIVATE) and is_ranked

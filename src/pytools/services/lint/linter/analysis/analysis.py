@@ -63,11 +63,7 @@ class CheckInput:
 
 
 def function_body_lines(file: CheckInput) -> set[int]:
-    """Return the lines inside any function's body, after its header.
-
-    A comment indented under a def after its last statement is still in its
-    body.
-    """
+    """Return the lines in any function's body, trailing indented comments included."""
     bodies = [_body_lines(file, func) for func in functions(file.tree)]
     return {number for body in bodies for number in body}
 
@@ -89,10 +85,7 @@ def _is_body_tail(file: CheckInput, number: int, indent: int) -> bool:
 def header_end(
     file: CheckInput, node: Function | ast.ClassDef | ast.ExceptHandler
 ) -> int:
-    """Return the last code line of node's header.
-
-    A body that starts after the colon shares the header's last line.
-    """
+    """Return the last code line of node's header."""
     first = node.body[0]
     if _follows_code(file, first):
         return first.lineno
@@ -128,11 +121,7 @@ def is_test_func(func: Function) -> bool:
 
 
 def module_header_end(file: CheckInput) -> int:
-    """Return the first statement's line, or the last line of a module without one.
-
-    Lines up to it are the module header: shebang, encoding, license and
-    file-wide directives.
-    """
+    """Return the first statement's line, or the last line of a module without one."""
     body = file.tree.body
     return start_line(body[0]) if body else len(file.lines)
 
@@ -144,11 +133,9 @@ def start_line(node: ast.stmt) -> int:
     return node.lineno
 
 
+# An elif sits at its if's column; an if under else is indented.
 def elif_branch(stmt: ast.If) -> ast.If | None:
-    """Return the if an elif after stmt parses to, or None if stmt has none.
-
-    An elif sits at its if's column; a block under else is indented.
-    """
+    """Return the if an elif after stmt parses to, or None if stmt has none."""
     branch = stmt.orelse[0] if stmt.orelse else None
     if isinstance(branch, ast.If) and branch.col_offset == stmt.col_offset:
         return branch
