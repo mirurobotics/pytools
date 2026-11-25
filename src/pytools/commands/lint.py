@@ -66,6 +66,18 @@ def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
         default=Config.max_nest_depth,
         help="maximum nesting depth within functions",
     )
+    _bind_doc_flags(parser)
+    rules = parser.add_mutually_exclusive_group()
+    rules.add_argument(
+        "--exclude",
+        type=_parse_rules,
+        default=Config.exclude,
+        help="comma-separated rules to exclude",
+    )
+    rules.add_argument("--rule", type=_parse_rule, help="only run a specific rule")
+
+
+def _bind_doc_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--max-doc-lines",
         type=_parse_limit,
@@ -78,14 +90,6 @@ def _bind_linter_config_flags(parser: argparse.ArgumentParser) -> None:
         default=Config.max_package_doc_lines,
         help="maximum lines in a package's __init__.py module docstring",
     )
-    rules = parser.add_mutually_exclusive_group()
-    rules.add_argument(
-        "--exclude",
-        type=_parse_rules,
-        default=Config.exclude,
-        help="comma-separated rules to exclude",
-    )
-    rules.add_argument("--rule", type=_parse_rule, help="only run a specific rule")
 
 
 def _parse_limit(raw: str) -> int:
