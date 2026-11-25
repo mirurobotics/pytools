@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from pytools.services.lint.linter.analysis.analysis import CheckInput, Diagnostic, Rule
 from pytools.services.lint.linter.commentedcode import commentedcode
+from pytools.services.lint.linter.doclen import doclen
 from pytools.services.lint.linter.fieldassert import fieldassert
 from pytools.services.lint.linter.filelen import filelen
 from pytools.services.lint.linter.funccomment import funccomment
@@ -22,6 +23,8 @@ class Config:
     max_func_len: int = 30
     max_file_len: int = 300
     max_nest_depth: int = 2
+    max_doc_lines: int = 8
+    max_package_doc_lines: int = 20
     exclude: frozenset[Rule] = frozenset()
 
 
@@ -49,4 +52,7 @@ def _rule_checkers(
         Rule.MUTABLEGLOBAL: mutableglobal.check,
         Rule.FUNCORDER: funcorder.check,
         Rule.FIELDASSERT: fieldassert.check,
+        Rule.DOCLEN: lambda file: doclen.check(
+            file, config.max_doc_lines, config.max_package_doc_lines
+        ),
     }

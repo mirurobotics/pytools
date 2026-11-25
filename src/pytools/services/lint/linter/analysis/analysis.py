@@ -26,6 +26,7 @@ class Rule(StrEnum):
     MUTABLEGLOBAL = "mutableglobal"
     FUNCORDER = "funcorder"
     FIELDASSERT = "fieldassert"
+    DOCLEN = "doclen"
 
 
 @dataclass(frozen=True)
