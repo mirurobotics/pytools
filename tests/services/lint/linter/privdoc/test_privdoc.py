@@ -158,7 +158,7 @@ def test_check_reports_docstrings_of_private_owners(parse: Parse) -> None:
     assert diags == [_diag(line) for line in [2, 5, 8, 11]]
 
 
-def test_check_reports_private_members_of_a_public_class(parse: Parse) -> None:
+def test_check_reports_private_members_of_public_class(parse: Parse) -> None:
     assert privdoc.check(parse(_PRIVATE_MEMBERS)) == [_diag(3), _diag(5)]
 
 
@@ -220,6 +220,10 @@ def test_check_skips_comments_on_public_bindings(parse: Parse, stmt: str) -> Non
     assert privdoc.check(parse(_binding(stmt))) == []
 
 
+def _binding(stmt: str) -> str:
+    return f"import os\n# Note.\n{stmt}\n"
+
+
 @pytest.mark.parametrize(
     ("source", "lines"),
     [
@@ -233,10 +237,6 @@ def test_check_skips_comments_on_public_bindings(parse: Parse, stmt: str) -> Non
 )
 def test_check_honors_nolint(parse: Parse, source: str, lines: list[int]) -> None:
     assert privdoc.check(parse(source)) == [_diag(line) for line in lines]
-
-
-def _binding(stmt: str) -> str:
-    return f"import os\n# Note.\n{stmt}\n"
 
 
 def _diag(line: int) -> Diagnostic:
