@@ -19,6 +19,10 @@ def _every_flag_argv() -> list[str]:
         "7",
         "--max-nest-depth",
         "3",
+        "--max-doc-lines",
+        "4",
+        "--max-package-doc-lines",
+        "9",
         "--exclude",
         "funclen",
     ]
@@ -29,6 +33,8 @@ def _every_flag_config() -> Config:
         max_func_len=5,
         max_file_len=7,
         max_nest_depth=3,
+        max_doc_lines=4,
+        max_package_doc_lines=9,
         exclude=frozenset({Rule.FUNCLEN}),
     )
 
