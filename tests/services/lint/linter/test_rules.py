@@ -24,6 +24,11 @@ def _g():
 assert x.a == 1
 assert x.b == 2
 assert x.c == 3
+
+def _documented():
+    '''Doc.
+    More.
+    '''
 """
 
 
@@ -35,7 +40,13 @@ assert x.c == 3
     ],
 )
 def test_run_checks_honors_exclude(parse: Parse, exclude: frozenset[Rule]) -> None:
-    config = Config(max_func_len=1, max_file_len=1, max_nest_depth=1, exclude=exclude)
+    config = Config(
+        max_func_len=1,
+        max_file_len=1,
+        max_nest_depth=1,
+        max_doc_lines=1,
+        exclude=exclude,
+    )
     expected = [diag for rule, diag in _diagnostics().items() if rule not in exclude]
     assert run_checks(parse(_SOURCE), config) == expected
 
@@ -43,7 +54,7 @@ def test_run_checks_honors_exclude(parse: Parse, exclude: frozenset[Rule]) -> No
 def _diagnostics() -> dict[Rule, Diagnostic]:
     return {
         Rule.FUNCLEN: Diagnostic("a.py", 1, "function f is 3 lines (limit 1)"),
-        Rule.FILELEN: Diagnostic("a.py", 1, "file is 10 lines (limit 1)"),
+        Rule.FILELEN: Diagnostic("a.py", 1, "file is 14 lines (limit 1)"),
         Rule.NESTDEPTH: Diagnostic(
             "a.py",
             3,
@@ -85,4 +96,5 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
             "3 asserts compare fields of x one at a time; compare the whole value"
             " in one assert, or move the checks into a helper that takes x",
         ),
+        Rule.DOCLEN: Diagnostic("a.py", 18, "docstring is 2 lines (limit 1)"),
     }
