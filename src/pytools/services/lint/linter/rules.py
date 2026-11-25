@@ -23,7 +23,7 @@ class Config:
     max_func_len: int = 30
     max_file_len: int = 300
     max_nest_depth: int = 2
-    max_doc_lines: int = 8
+    max_doc_lines: int = 1
     max_package_doc_lines: int = 20
     exclude: frozenset[Rule] = frozenset()
 
