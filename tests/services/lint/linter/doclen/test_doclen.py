@@ -61,6 +61,13 @@ def f():
     '''Split on "\\n" or "\\x0c".
     More.'''
 """
+_PARENTHESIZED: Final = """\
+def f():
+    (
+        '''Doc.
+        More.'''
+    )
+"""
 _NOT_DOCSTRINGS: Final = """\
 x = 1
 '''Not a
@@ -129,6 +136,11 @@ def test_check_reports_every_docstring_in_line_order(parse: Parse) -> None:
 def test_check_counts_source_lines(parse: Parse, source: str, count: int) -> None:
     diags = doclen.check(parse(source), 1, 20)
     assert diags == [Diagnostic("a.py", 2, f"docstring is {count} lines (limit 1)")]
+
+
+def test_check_counts_parenthesized_docstring(parse: Parse) -> None:
+    diags = doclen.check(parse(_PARENTHESIZED), 1, 20)
+    assert diags == [Diagnostic("a.py", 3, "docstring is 2 lines (limit 1)")]
 
 
 def test_check_skips_strings_that_are_not_docstrings(parse: Parse) -> None:

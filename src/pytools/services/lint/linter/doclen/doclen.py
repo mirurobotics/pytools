@@ -30,17 +30,17 @@ def check(file: CheckInput, max_lines: int, max_package_lines: int) -> list[Diag
 def _check_docstring(
     file: CheckInput, owner: ast.Module | Function | ast.ClassDef, limit: int
 ) -> Diagnostic | None:
-    if ast.get_docstring(owner) is None:
+    first = owner.body[0] if owner.body else None
+    if not isinstance(first, ast.Expr) or ast.get_docstring(owner) is None:
         return None
-    doc = owner.body[0]
-    count = _count_lines(file, doc)
+    count = _count_lines(file, first.value)
     if count <= limit:
         return None
     message = f"docstring is {count} lines (limit {limit})"
-    return Diagnostic(file.path, doc.lineno, message)
+    return Diagnostic(file.path, first.value.lineno, message)
 
 
-def _count_lines(file: CheckInput, doc: ast.stmt) -> int:
+def _count_lines(file: CheckInput, doc: ast.expr) -> int:
     """Count doc's source lines, so an escaped newline is not a line break."""
     lines = file.lines[doc.lineno - 1 : doc.end_lineno or doc.lineno]
     lines[-1] = lines[-1].encode()[: doc.end_col_offset].decode()
