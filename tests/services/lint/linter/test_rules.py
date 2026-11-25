@@ -56,14 +56,6 @@ def test_run_checks_honors_exclude(parse: Parse, exclude: frozenset[Rule]) -> No
     assert run_checks(parse(_SOURCE), config) == expected
 
 
-def test_run_checks_passes_the_package_doc_limit(parse: Parse) -> None:
-    file = dataclasses.replace(parse(_PACKAGE_DOC), path="pkg/__init__.py")
-    exclude = frozenset(Rule) - {Rule.DOCLEN}
-    config = Config(max_doc_lines=3, max_package_doc_lines=1, exclude=exclude)
-    diag = Diagnostic("pkg/__init__.py", 1, "docstring is 2 lines (limit 1)")
-    assert run_checks(file, config) == [diag]
-
-
 def _diagnostics() -> dict[Rule, Diagnostic]:
     return {
         Rule.FUNCLEN: Diagnostic("a.py", 1, "function f is 3 lines (limit 1)"),
@@ -111,3 +103,11 @@ def _diagnostics() -> dict[Rule, Diagnostic]:
         ),
         Rule.DOCLEN: Diagnostic("a.py", 18, "docstring is 2 lines (limit 1)"),
     }
+
+
+def test_run_checks_passes_the_package_doc_limit(parse: Parse) -> None:
+    file = dataclasses.replace(parse(_PACKAGE_DOC), path="pkg/__init__.py")
+    exclude = frozenset(Rule) - {Rule.DOCLEN}
+    config = Config(max_doc_lines=3, max_package_doc_lines=1, exclude=exclude)
+    diag = Diagnostic("pkg/__init__.py", 1, "docstring is 2 lines (limit 1)")
+    assert run_checks(file, config) == [diag]
