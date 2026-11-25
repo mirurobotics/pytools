@@ -165,14 +165,6 @@ def _constant_parts(expr: ast.expr, bindings: Bindings) -> list[ast.expr] | None
     return None
 
 
-def _base_text(attr: ast.Attribute) -> str | None:
-    """Return the value attr reads as text, or None if too deep to unparse."""
-    try:
-        return ast.unparse(attr.value)
-    except RecursionError:
-        return None
-
-
 def _close_changed(
     open_groups: dict[str, _Group],
     base: str | None,
@@ -188,6 +180,14 @@ def _close_changed(
         for key, group in open_groups.items()
         if group.deps.isdisjoint(unchecked if key == base else changed)
     }
+
+
+def _base_text(attr: ast.Attribute) -> str | None:
+    """Return the value attr reads as text, or None if too deep to unparse."""
+    try:
+        return ast.unparse(attr.value)
+    except RecursionError:
+        return None
 
 
 def _report(file: CheckInput, group: _Group) -> Diagnostic | None:
