@@ -210,7 +210,7 @@ def test_check_skips_other_word_forms(parse: Parse, name: str, doc: str) -> None
         pytest.param("copy", "Copied.", id="copied"),
         pytest.param("match", "Matches.", id="matches"),
         pytest.param("box", "Boxes.", id="boxes"),
-        pytest.param("pass", "Passes.", id="passes"),
+        pytest.param("miss", "Misses.", id="misses"),
         pytest.param("buzz", "Buzzes.", id="buzzes"),
         pytest.param("push", "Pushes.", id="pushes"),
         pytest.param("use", "Used.", id="used"),
