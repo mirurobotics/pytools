@@ -116,21 +116,15 @@ def test_add_lint_command_parses_max_doc_lines() -> None:
     assert _parse(["--max-doc-lines", "3"]).max_doc_lines == 3
 
 
-@pytest.mark.parametrize("raw", ["0", "-1", "ten"])
-def test_add_lint_command_rejects_bad_max_doc_lines(raw: str) -> None:
-    with pytest.raises(SystemExit) as excinfo:
-        _parse(["--max-doc-lines", raw])
-    assert excinfo.value.code == 2
-
-
 def test_add_lint_command_parses_max_package_doc_lines() -> None:
     assert _parse(["--max-package-doc-lines", "30"]).max_package_doc_lines == 30
 
 
+@pytest.mark.parametrize("flag", ["--max-doc-lines", "--max-package-doc-lines"])
 @pytest.mark.parametrize("raw", ["0", "-1", "ten"])
-def test_add_lint_command_rejects_bad_max_package_doc_lines(raw: str) -> None:
+def test_add_lint_command_rejects_bad_doc_limits(flag: str, raw: str) -> None:
     with pytest.raises(SystemExit) as excinfo:
-        _parse(["--max-package-doc-lines", raw])
+        _parse([flag, raw])
     assert excinfo.value.code == 2
 
 
