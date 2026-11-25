@@ -76,16 +76,16 @@ def _check_block(
     open_groups: dict[str, _Group] = {}
     pure = bindings.pure_builtins
     for stmt in stmts:
-        attr = _field(stmt, bindings)
-        base = None if attr is None else _base_text(attr)
         changed = changed_names(stmt, pure)
-        unchecked = changed if attr is None else _unchecked_changes(stmt, attr, pure)
+        found = _field(stmt, bindings)
+        if found is None:
+            open_groups = _close_changed(open_groups, None, changed, changed)
+            continue
+        attr, other = found
+        base = _base_text(attr)
+        unchecked = changed_names(other, pure)
         open_groups = _close_changed(open_groups, base, unchecked, changed)
-        if (
-            attr is None
-            or base is None
-            or not name_set(attr.value).isdisjoint(unchecked)
-        ):
+        if base is None or not name_set(attr.value).isdisjoint(unchecked):
             continue
         group = open_groups.get(base)
         if group is None:
@@ -104,16 +104,20 @@ def _check_block(
     return [diag for diag in diags if diag is not None]
 
 
-def _field(stmt: ast.stmt, bindings: Bindings) -> ast.Attribute | None:
-    """Return the field an assert a == b checks: a, or b when a is a constant."""
+def _field(stmt: ast.stmt, bindings: Bindings) -> tuple[ast.Attribute, ast.expr] | None:
+    """Return the field an assert a == b checks and the value it is compared to.
+
+    The field is a, or b when a is a constant.
+    """
     compared = _compared(stmt)
     if compared is None:
         return None
     actual, expected = compared
     found = _as_field(actual, bindings)
-    if found is not None or not _is_constant(actual, bindings):
-        return found
-    return _as_field(expected, bindings)
+    if found is None and _is_constant(actual, bindings):
+        actual, expected = expected, actual
+        found = _as_field(actual, bindings)
+    return None if found is None else (found, expected)
 
 
 def _compared(stmt: ast.stmt) -> tuple[ast.expr, ast.expr] | None:
@@ -167,16 +171,6 @@ def _base_text(attr: ast.Attribute) -> str | None:
         return ast.unparse(attr.value)
     except RecursionError:
         return None
-
-
-def _unchecked_changes(
-    stmt: ast.stmt, attr: ast.Attribute, pure: frozenset[str]
-) -> frozenset[str]:
-    """Return the names a field assert may change outside the field attr it checks."""
-    if not isinstance(stmt, ast.Assert):
-        return changed_names(stmt, pure)
-    parts = [part for part in ast.iter_child_nodes(stmt.test) if part is not attr]
-    return frozenset(name for part in parts for name in changed_names(part, pure))
 
 
 def _close_changed(
