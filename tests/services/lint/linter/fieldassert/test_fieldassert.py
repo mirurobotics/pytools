@@ -12,7 +12,7 @@ _THREE_FIELDS: Final = """\
 def test_build():
     got = build()
     assert got.a == 1
-    assert got.b == "b"
+    assert got.b == make("b")
     assert got.a == 1
     assert got.c == [3]
 """
